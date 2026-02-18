@@ -25,10 +25,6 @@
     </div>
     <nav class="header-actions" aria-label="Board Aktionen">
       <div class="header-btn-group">
-        <button id="add-project-btn" class="header-btn" type="button" title="Projekt anlegen">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg>
-          <span>Neu</span>
-        </button>
         <button id="share-project-btn" class="header-btn" type="button" title="Projekt teilen">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 8a3 3 0 1 0-2.9-3.8L7.9 6.7a3 3 0 1 0 0 4.6l4.2 2.5A3 3 0 1 0 13 12" /></svg>
           <span>Teilen</span>
@@ -46,6 +42,10 @@
         <button id="add-column-btn" class="header-btn" type="button" title="Spalte hinzufügen">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h8v14H3zM15 10v8m-4-4h8" /></svg>
           <span>Spalte</span>
+        </button>
+        <button id="activity-panel-btn" class="header-btn" type="button" title="Aktivitäten">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9Z" /></svg>
+          <span>Aktivität</span>
         </button>
       </div>
       <div class="header-btn-group">
@@ -66,18 +66,49 @@
         <span id="user-initials">--</span>
       </button>
       <div id="user-menu" class="user-menu" hidden>
+        <button id="locale-toggle-btn" class="user-menu-item" type="button">DE</button>
+        <div id="locale-options" class="locale-options" hidden>
+          <button id="locale-de-btn" class="user-menu-item locale-option" type="button">Deutsch</button>
+          <button id="locale-en-btn" class="user-menu-item locale-option" type="button">English</button>
+        </div>
         <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
       </div>
     </div>
   </header>
 
-  <section class="project-tabs-wrap" aria-label="Projekt Tabs">
-    <div id="project-tabs" class="project-tabs"></div>
-  </section>
+  <div class="app-layout">
+    <aside id="project-sidebar" class="project-sidebar" aria-label="Projekt Tabs">
+      <div class="project-sidebar-head">
+        <h2 id="project-sidebar-title">Projekte</h2>
+        <button id="project-sidebar-toggle" class="project-sidebar-toggle" type="button" title="Navigation einklappen" aria-label="Navigation einklappen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6" /></svg>
+        </button>
+      </div>
+      <nav id="project-tabs" class="project-tabs"></nav>
+      <div class="project-sidebar-foot">
+        <button id="add-project-btn" class="sidebar-new-btn" type="button" title="Projekt anlegen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg>
+          <span>Neu</span>
+        </button>
+      </div>
+    </aside>
 
-  <main class="board-area">
-    <section id="board" class="board" aria-label="Kanban Board"></section>
-  </main>
+    <main class="board-area">
+      <section id="board" class="board" aria-label="Kanban Board"></section>
+    </main>
+  </div>
+
+  <div id="activity-overlay" class="activity-overlay" hidden></div>
+  <aside id="activity-panel" class="activity-panel" aria-hidden="true">
+    <header class="activity-panel-header">
+      <div>
+        <h2 id="activity-panel-title">Letzte Aktivitäten</h2>
+        <p id="activity-panel-subtitle">Aktivitäten im aktuellen Board</p>
+      </div>
+      <button id="activity-panel-close-btn" class="icon-btn activity-panel-close" type="button" title="Schließen">×</button>
+    </header>
+    <div id="activity-list" class="activity-list"></div>
+  </aside>
 
   <dialog id="item-modal" class="item-modal">
     <form id="item-form" class="item-form" method="dialog">

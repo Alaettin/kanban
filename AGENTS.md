@@ -1,83 +1,125 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 ## Purpose
-This repository contains a local-first Kanban web app with Google login and SQLite persistence. Use this file as the default operating guide for any coding agent working in this project.
+This repository contains a multi-user Kanban app with Google login, shared projects, role-based access, SQLite persistence, and an activity feed.
+Use this file as the default operating guide for any coding agent working in this project.
 
 ## Project Snapshot
 - Runtime: Node.js
 - Backend: Express (`server.js`)
 - Frontend: Vanilla HTML/CSS/JS (`index.html`, `styles.css`, `app.js`)
-- Database: SQLite file at `data/kanban.db`
-- Authentication: Google OAuth 2.0 + cookie session
+- Database: SQLite (`data/kanban.db`)
+- Auth: Google OAuth 2.0 + cookie sessions
+- Collaboration: shared projects, invites, member roles (`owner`, `editor`, `viewer`)
 
 ## Important Files
-- `server.js`: API, auth flow, session handling, SQLite setup
-- `app.js`: full board UI logic, state management, drag/drop, filters, modal logic, remote sync
-- `index.html`: board UI structure and templates
+- `server.js`: API routes, auth/session flow, SQLite schema and maintenance jobs
+- `app.js`: board UI, project sync, invites, member management, role-aware UI, activity panel
+- `index.html`: board layout, share/member modals, activity panel, templates
+- `styles.css`: all UI styles including sync status, management modals, and activity overlay
 - `login.html`: login page
-- `styles.css`: all styling
-- `start-kanban.bat`: local startup helper (sets OAuth env vars and runs app)
-- `package.json`: dependencies and npm scripts
+- `package.json`: scripts and dependencies
+- `.env.example`: required env var template
+
+## Required Environment Variables
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_CALLBACK_URL` (local: `http://localhost:3000/auth/google/callback`)
 
 ## Runbook
 1. Install dependencies: `npm install`
-2. Start app: `npm start`
-3. Open: `http://localhost:3000`
+2. Configure environment variables (for example `.env`)
+3. Start app: `npm start`
+4. Open: `http://localhost:3000`
 
-Alternative:
-- Windows helper: `start-kanban.bat`
+## API Contract (Current)
+Auth/User:
+- `GET /api/me`
+- `POST /auth/logout`
+- `GET /auth/google`
+- `GET /auth/google/callback`
 
-## API Contract
-- `GET /api/me`: current authenticated user
-- `GET /api/state`: user board state
-- `PUT /api/state`: persist board state (`{ state: object }`)
-- `POST /auth/logout`: logout
-- `GET /auth/google`: start OAuth login
-- `GET /auth/google/callback`: OAuth callback
+Projects:
+- `GET /api/projects`
+- `GET /api/projects/summary` (lightweight polling)
+- `POST /api/projects`
+- `GET /api/projects/:projectId`
+- `PATCH /api/projects/:projectId` (rename)
+- `PUT /api/projects/:projectId/state`
+- `DELETE /api/projects/:projectId` (owner only)
 
-All `/api/*` board endpoints require a valid session cookie (`sid`).
+Invites:
+- `POST /api/projects/:projectId/invites`
+- `POST /api/invites/:token/accept`
+- `GET /invite/:token` (redirect helper)
+
+Members/Roles:
+- `GET /api/projects/:projectId/members`
+- `PATCH /api/projects/:projectId/members/:userId` (`editor`/`viewer`, owner only)
+- `DELETE /api/projects/:projectId/members/:userId` (owner only, owner cannot be removed)
+
+Activity:
+- `GET /api/projects/:projectId/activities`
+- `POST /api/projects/:projectId/activities`
 
 ## Data Model Notes
-- Main persisted board payload is JSON stored in `user_state.state_json`.
-- Frontend canonical shape:
-  - `state.activeProjectId`
-  - `state.projects[]`
-  - project: `{ id, name, columns[] }`
-  - column: `{ id, title, cards[] }`
-  - card includes fields like `title`, `description`, `priority`, `dueDate`, `assignee`, `tags`, `progress`, `checklist`
-- `app.js` already includes migration/normalization logic; keep it backward compatible when adding fields.
+Primary collaborative model:
+- `projects`
+- `project_members`
+- `project_invites`
+- `project_activities`
+- `sessions`
+- `oauth_states`
+- `users`
+
+Legacy table still present for migration compatibility:
+- `user_state`
+
+Frontend canonical state:
+- `state.activeProjectId`
+- `state.projects[]`
+- project: `{ id, name, columns[] }`
+- column: `{ id, title, cards[] }`
+- card fields: `title`, `description`, `priority`, `dueDate`, `assignee`, `tags`, `progress`, `checklist`
+
+## UX/Behavior Notes
+- Sync indicator is a circle near avatar (green/yellow/red states).
+- Project sharing uses a link-based modal.
+- Member management modal supports staged changes with explicit `Uebernehmen`.
+- Role changes/removals are owner-only.
+- Removed members lose project visibility on sync.
+- Activity panel opens from the right as an overlay (board layout does not shift).
 
 ## Coding Rules For Agents
-- Keep stack simple: no framework migration unless explicitly requested.
-- Prefer minimal, localized edits over rewrites.
-- When touching state shape:
-  - update normalizers/migrations in `app.js`
-  - ensure render paths tolerate old payloads
-- Preserve German UI copy style used in existing UI.
-- Keep endpoint behavior stable unless user asks for API changes.
+- Keep stack simple (no framework migration unless requested).
+- Prefer localized edits over rewrites.
+- Preserve German UI labels/copy style unless localization work is requested.
+- Keep API behavior backward-safe unless user requested breaking changes.
+- When changing roles/invites/projects, update both backend route and frontend handling.
 
 ## Security Rules
-- Never hardcode new credentials/secrets in committed code.
-- If changing auth/bootstrap, prefer environment variables over literals.
-- Treat `start-kanban.bat` secrets as local dev values; do not propagate them to docs or new files.
-- Keep cookies `HttpOnly`, `SameSite=Lax`, and `Secure` in production behavior.
+- Never commit secrets.
+- Keep `.env` local only; commit `.env.example` only.
+- Keep cookies `HttpOnly`, `SameSite=Lax`, `Secure` in production.
+- Do not re-introduce credentials into `start-kanban.bat`.
 
 ## Verification Checklist
-After meaningful changes, run:
-1. `npm start` boots without errors.
-2. Login page loads at `/` when not authenticated.
-3. Board loads at `/board` after login.
-4. Create/edit/move/delete cards works.
-5. Project and column operations still work.
-6. Reload persists board state.
-7. Logout returns to login page.
+After meaningful changes, verify:
+1. `node --check app.js` and `node --check server.js` succeed.
+2. `npm start` boots without runtime errors.
+3. Login flow works.
+4. Shared project edits sync to another user without manual page refresh.
+5. Member role update via `Uebernehmen` works.
+6. Member removal hides project for removed user.
+7. Owner cannot be removed.
+8. Share invite links can be generated and accepted.
+9. Activity panel loads and refreshes entries.
 
-## Out of Scope By Default
-- Replacing SQLite
-- Converting frontend to React/Vue/etc.
-- Changing auth provider away from Google
-- Large CSS redesign without explicit request
+## Deployment Notes
+- Recommended: Linux VPS + Nginx + PM2 + HTTPS.
+- Add production callback URI in Google OAuth settings.
+- SQLite file must be on persistent storage with backups.
 
 ## Notes
-- There is currently no formal automated test suite in this repo.
-- Favor small manual validations and clear change summaries.
+- No formal automated tests in repo yet.
+- Favor small manual validations and concise change summaries.

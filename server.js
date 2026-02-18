@@ -133,6 +133,21 @@ async function initDatabase() {
   `);
 
   await run(`
+    CREATE TABLE IF NOT EXISTS project_activities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL,
+      actor_user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL DEFAULT '',
+      entity_name TEXT NOT NULL DEFAULT '',
+      meta_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  await run(`
     CREATE TABLE IF NOT EXISTS sessions (
       sid TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -157,6 +172,8 @@ async function initDatabase() {
   await run("CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at)");
   await run("CREATE INDEX IF NOT EXISTS idx_project_invites_expires_at ON project_invites(expires_at)");
   await run("CREATE INDEX IF NOT EXISTS idx_project_invites_project_id ON project_invites(project_id)");
+  await run("CREATE INDEX IF NOT EXISTS idx_project_activities_project_id ON project_activities(project_id)");
+  await run("CREATE INDEX IF NOT EXISTS idx_project_activities_created_at ON project_activities(created_at)");
 }
 
 function randomId(size = 32) {
@@ -481,6 +498,20 @@ async function cleanupInviteTable() {
   await run("DELETE FROM project_invites WHERE expires_at < ?", [Date.now()]);
 }
 
+async function logProjectActivity(projectId, actorUserId, action, entityType = "", entityName = "", meta = {}) {
+  try {
+    await run(
+      `
+        INSERT INTO project_activities (project_id, actor_user_id, action, entity_type, entity_name, meta_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [projectId, actorUserId, action, entityType, entityName, JSON.stringify(meta || {})]
+    );
+  } catch {
+    // no-op: activity logging must not break primary flow
+  }
+}
+
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/styles.css", (req, res) => {
@@ -672,6 +703,34 @@ app.get("/api/projects", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/projects/summary", requireAuth, async (req, res) => {
+  try {
+    await ensureUserProjects(req.user.id);
+
+    const rows = await all(
+      `
+        SELECT p.id, p.name, p.updated_at, m.role
+        FROM projects p
+        JOIN project_members m ON m.project_id = p.id
+        WHERE m.user_id = ?
+        ORDER BY p.updated_at DESC
+      `,
+      [req.user.id]
+    );
+
+    res.json({
+      projects: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        updatedAt: row.updated_at,
+        role: row.role,
+      })),
+    });
+  } catch {
+    res.status(500).json({ error: "PROJECT_SUMMARY_FAILED" });
+  }
+});
+
 app.post("/api/projects", requireAuth, async (req, res) => {
   const { name } = req.body || {};
   const cleanName = typeof name === "string" && name.trim() ? name.trim() : "Neues Projekt";
@@ -681,6 +740,7 @@ app.post("/api/projects", requireAuth, async (req, res) => {
       name: cleanName,
       columns: createDefaultColumns(),
     });
+    await logProjectActivity(projectId, req.user.id, "project_created", "project", cleanName);
     const project = await getProjectForUser(projectId, req.user.id);
     res.status(201).json({ project });
   } catch {
@@ -730,6 +790,9 @@ app.patch("/api/projects/:projectId", requireAuth, async (req, res) => {
       "UPDATE projects SET name = ?, state_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [cleanName, JSON.stringify(nextState), project.id]
     );
+    await logProjectActivity(project.id, req.user.id, "project_renamed", "project", cleanName, {
+      previousName: project.name,
+    });
 
     const updated = await getProjectForUser(project.id, req.user.id);
     res.json({ ok: true, project: updated });
@@ -824,10 +887,91 @@ app.post("/api/projects/:projectId/invites", requireAuth, async (req, res) => {
     );
 
     const inviteUrl = `${getBaseUrl(req)}/invite/${token}`;
+    await logProjectActivity(project.id, req.user.id, "invite_created", "invite", role);
 
     res.status(201).json({ ok: true, inviteUrl, expiresAt, role });
   } catch {
     res.status(500).json({ error: "INVITE_CREATE_FAILED" });
+  }
+});
+
+app.get("/api/projects/:projectId/activities", requireAuth, async (req, res) => {
+  const requestedLimit = Number.parseInt(String(req.query?.limit || "60"), 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 200)) : 60;
+
+  try {
+    const project = await getProjectForUser(req.params.projectId, req.user.id);
+    if (!project) {
+      res.status(404).json({ error: "PROJECT_NOT_FOUND" });
+      return;
+    }
+
+    const rows = await all(
+      `
+        SELECT a.id, a.action, a.entity_type, a.entity_name, a.meta_json, a.created_at, u.id AS actor_id, u.name AS actor_name, u.email AS actor_email
+        FROM project_activities a
+        JOIN users u ON u.id = a.actor_user_id
+        WHERE a.project_id = ?
+        ORDER BY a.id DESC
+        LIMIT ?
+      `,
+      [project.id, limit]
+    );
+
+    res.json({
+      activities: rows.map((row) => {
+        let meta = {};
+        try {
+          meta = JSON.parse(row.meta_json || "{}");
+        } catch {
+          meta = {};
+        }
+        return {
+          id: row.id,
+          action: row.action,
+          entityType: row.entity_type,
+          entityName: row.entity_name,
+          createdAt: row.created_at,
+          actor: {
+            id: row.actor_id,
+            name: row.actor_name || row.actor_email || "Unknown",
+            email: row.actor_email || "",
+          },
+          meta,
+        };
+      }),
+    });
+  } catch {
+    res.status(500).json({ error: "ACTIVITY_READ_FAILED" });
+  }
+});
+
+app.post("/api/projects/:projectId/activities", requireAuth, async (req, res) => {
+  const action = typeof req.body?.action === "string" && req.body.action.trim() ? req.body.action.trim() : "";
+  const entityType = typeof req.body?.entityType === "string" ? req.body.entityType.trim() : "";
+  const entityName = typeof req.body?.entityName === "string" ? req.body.entityName.trim() : "";
+  const meta = req.body?.meta && typeof req.body.meta === "object" ? req.body.meta : {};
+
+  if (!action) {
+    res.status(400).json({ error: "INVALID_ACTIVITY_ACTION" });
+    return;
+  }
+
+  try {
+    const project = await getProjectForUser(req.params.projectId, req.user.id);
+    if (!project) {
+      res.status(404).json({ error: "PROJECT_NOT_FOUND" });
+      return;
+    }
+    if (!canWriteProject(project.role)) {
+      res.status(403).json({ error: "PROJECT_READ_ONLY" });
+      return;
+    }
+
+    await logProjectActivity(project.id, req.user.id, action, entityType, entityName, meta);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "ACTIVITY_WRITE_FAILED" });
   }
 });
 
@@ -901,6 +1045,10 @@ app.patch("/api/projects/:projectId/members/:userId", requireAuth, async (req, r
       "UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?",
       [nextRole, project.id, req.params.userId]
     );
+    await logProjectActivity(project.id, req.user.id, "member_role_updated", "member", req.params.userId, {
+      previousRole: target.role,
+      nextRole,
+    });
 
     const updated = await get(
       `
@@ -956,6 +1104,7 @@ app.delete("/api/projects/:projectId/members/:userId", requireAuth, async (req, 
       "DELETE FROM project_members WHERE project_id = ? AND user_id = ?",
       [project.id, req.params.userId]
     );
+    await logProjectActivity(project.id, req.user.id, "member_removed", "member", req.params.userId);
 
     res.json({ ok: true });
   } catch {
@@ -1000,6 +1149,9 @@ app.post("/api/invites/:token/accept", requireAuth, async (req, res) => {
         "INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)",
         [invite.project_id, req.user.id, invite.role]
       );
+      await logProjectActivity(invite.project_id, req.user.id, "invite_accepted", "member", req.user.id, {
+        role: invite.role,
+      });
     }
 
     await run("DELETE FROM project_invites WHERE token = ?", [invite.token]);

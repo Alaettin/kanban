@@ -4,8 +4,12 @@ const STORAGE_KEY = "kanban-v2";
 const board = document.getElementById("board");
 const projectTabs = document.getElementById("project-tabs");
 const addProjectBtn = document.getElementById("add-project-btn");
+const projectSidebar = document.getElementById("project-sidebar");
+const projectSidebarTitle = document.getElementById("project-sidebar-title");
+const projectSidebarToggle = document.getElementById("project-sidebar-toggle");
 const deleteProjectBtn = document.getElementById("delete-project-btn");
 const addColumnBtn = document.getElementById("add-column-btn");
+const activityPanelBtn = document.getElementById("activity-panel-btn");
 const shareProjectBtn = document.getElementById("share-project-btn");
 const manageMembersBtn = document.getElementById("manage-members-btn");
 const exportBtn = document.getElementById("export-btn");
@@ -16,6 +20,10 @@ const cardTemplate = document.getElementById("card-template");
 const userMenuToggle = document.getElementById("user-menu-toggle");
 const userMenu = document.getElementById("user-menu");
 const userInitials = document.getElementById("user-initials");
+const localeToggleBtn = document.getElementById("locale-toggle-btn");
+const localeOptions = document.getElementById("locale-options");
+const localeDeBtn = document.getElementById("locale-de-btn");
+const localeEnBtn = document.getElementById("locale-en-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const syncStatus = document.getElementById("sync-status");
 const boardFilterInput = document.getElementById("board-filter-input");
@@ -55,6 +63,523 @@ const membersForm = document.getElementById("members-form");
 const membersList = document.getElementById("members-list");
 const membersCloseBtn = document.getElementById("members-close-btn");
 const membersApplyBtn = document.getElementById("members-apply-btn");
+const activityOverlay = document.getElementById("activity-overlay");
+const activityPanel = document.getElementById("activity-panel");
+const activityPanelTitle = document.getElementById("activity-panel-title");
+const activityPanelSubtitle = document.getElementById("activity-panel-subtitle");
+const activityPanelCloseBtn = document.getElementById("activity-panel-close-btn");
+const activityList = document.getElementById("activity-list");
+
+const LOCALE_KEY = "kanban-locale";
+const SIDEBAR_COLLAPSED_KEY = "kanban-sidebar-collapsed";
+const FALLBACK_LOCALE = "de";
+const TRANSLATIONS = {
+  de: {
+    searchPlaceholder: "Tasks filtern...",
+    searchAria: "Tasks filtern",
+    clearSearch: "Suche leeren",
+    boardActions: "Board Aktionen",
+    tabsAria: "Projekt Tabs",
+    projectsTitle: "Projekte",
+    boardAria: "Kanban Board",
+    btnNew: "Neu",
+    btnShare: "Teilen",
+    btnRights: "Rechte",
+    btnDelete: "Löschen",
+    btnColumn: "Spalte",
+    btnActivity: "Aktivität",
+    btnExport: "Export",
+    btnImport: "Import",
+    titleNewProject: "Projekt anlegen",
+    titleShareProject: "Projekt teilen",
+    titleRights: "Rechte verwalten",
+    titleDeleteProject: "Projekt löschen",
+    titleAddColumn: "Spalte hinzufügen",
+    titleActivity: "Aktivitäten",
+    titleExport: "Exportieren",
+    titleImport: "Importieren",
+    sidebarCollapse: "Navigation einklappen",
+    sidebarExpand: "Navigation ausklappen",
+    syncIdle: "Bereit",
+    syncSyncing: "Synchronisiere...",
+    syncSynced: "Synchron",
+    syncSaving: "Speichere...",
+    syncOffline: "Offline",
+    syncError: "Sync-Fehler",
+    logout: "Logout",
+    localeDeShort: "DE",
+    localeEnShort: "EN",
+    localeDe: "Deutsch",
+    localeEn: "English",
+    defaultProjectName: "Standardprojekt",
+    newProjectPrompt: "Projektname:",
+    renameProjectPrompt: "Projektname ändern:",
+    projectDeleteOwnerOnly: "Nur der Projekt-Owner kann dieses Projekt löschen.",
+    atLeastOneProject: "Mindestens ein Projekt muss bestehen bleiben.",
+    deleteProjectTitle: "Projekt löschen",
+    deleteProjectMessage: "Projekt \"{name}\" wirklich entfernen?",
+    confirmDelete: "Löschen",
+    confirmProjectNameLabel: "Bitte den Projektnamen zur Bestätigung eingeben: \"{name}\"",
+    errorCreateProject: "Projekt konnte nicht erstellt werden.",
+    errorDeleteProject: "Projekt konnte nicht gelöscht werden.",
+    readOnlyProject: "Dieses Projekt ist schreibgeschützt.",
+    newColumnName: "Neue Spalte {n}",
+    exportFilePrefix: "kanban-export",
+    importError: "Import fehlgeschlagen. Bitte eine gültige Export-Datei auswählen.",
+    itemModalNewTitle: "Neuer Task",
+    itemModalEditTitle: "Task bearbeiten",
+    itemTitleLabel: "Titel",
+    itemDescriptionLabel: "Beschreibung",
+    itemPriorityLabel: "Priorität",
+    itemDateLabel: "Fälligkeitsdatum",
+    itemAssigneeLabel: "Zugewiesen an",
+    itemProgressLabel: "Fortschritt — ",
+    itemTagsLabel: "Tags ",
+    itemTagsHint: "(kommagetrennt)",
+    itemTagsPlaceholder: "z. B. Design, Backend, Bug …",
+    itemAssigneePlaceholder: "Name der Person …",
+    checklistLabel: "Checkliste",
+    checklistAdd: "Checklistenpunkt hinzufügen",
+    save: "Speichern",
+    close: "Schließen",
+    cancel: "Abbrechen",
+    add: "Hinzufügen",
+    untitled: "Ohne Titel",
+    cardDeleteTitle: "Task löschen",
+    cardDeleteMessage: "Task \"{name}\" wirklich löschen?",
+    columnDeleteTitle: "Spalte löschen",
+    columnDeleteMessage: "Spalte \"{name}\" wirklich entfernen?",
+    atLeastOneColumn: "Mindestens eine Spalte muss bestehen bleiben.",
+    collapseAll: "Alle einklappen",
+    expandAll: "Alle ausklappen",
+    priorityLow: "Niedrig",
+    priorityMedium: "Mittel",
+    priorityHigh: "Hoch",
+    priorityBadgeLow: "Niedrig",
+    priorityBadgeMedium: "Mittel",
+    priorityBadgeHigh: "Hoch",
+    checklistSummary: "Checkliste: {done}/{total}",
+    checklistItemPlaceholder: "Beschreibung...",
+    checklistRemove: "Checklistenpunkt entfernen",
+    membersOwnerOnly: "Nur der Projekt-Owner kann Rechte verwalten.",
+    membersLoad: "Lade Mitglieder...",
+    membersLoadError: "Fehler beim Laden.",
+    membersEmpty: "Keine Mitglieder gefunden.",
+    membersUnknown: "Unbekannt",
+    youSuffix: " (Du)",
+    roleOwner: "Owner",
+    roleEditor: "Editor",
+    roleViewer: "Viewer",
+    roleRemove: "Entfernen",
+    apply: "Übernehmen",
+    membersUpdateFailed: "Mindestens eine Rollenänderung ist fehlgeschlagen.",
+    memberLoadFailed: "Mitglieder konnten nicht geladen werden.",
+    shareCreateBusy: "Erstelle...",
+    shareCreateLink: "Link erstellen",
+    shareCopy: "Kopieren",
+    shareCopied: "Kopiert",
+    shareReadonlyError: "Dieses Projekt ist schreibgeschützt.",
+    shareCreateError: "Einladungslink konnte nicht erstellt werden.",
+    copyFailed: "Konnte nicht automatisch kopieren. Bitte Link manuell kopieren.",
+    inviteAcceptError: "Einladung konnte nicht angenommen werden.",
+    projectRenameError: "Projektname konnte nicht geändert werden.",
+    confirmDefaultTitle: "Bitte bestätigen",
+    confirmTypeLabel: "Zur Bestätigung Namen eingeben",
+    shareTitle: "Projekt teilen",
+    shareSubtitle: "Erstelle einen Link und teile ihn mit deinem Team.",
+    sharePermission: "Berechtigung",
+    shareLink: "Einladungslink",
+    shareLinkPlaceholder: "Noch kein Link erstellt",
+    shareEditorOption: "Editor (kann bearbeiten)",
+    shareViewerOption: "Viewer (nur lesen)",
+    membersTitle: "Mitglieder & Rechte",
+    membersSubtitle: "Rollen für das aktive Projekt verwalten.",
+    activityTitle: "Letzte Aktivitäten",
+    activitySubtitle: "Aktivitäten im aktuellen Board",
+    activityClose: "Schließen",
+    activityLoading: "Aktivitäten werden geladen...",
+    activityEmpty: "Noch keine Aktivitäten vorhanden.",
+    activityLoadError: "Aktivitäten konnten nicht geladen werden.",
+    activityAt: "{actor} · {time}",
+    activityProjectCreated: "{actor} hat das Projekt erstellt",
+    activityProjectRenamed: "{actor} hat das Projekt umbenannt",
+    activityColumnCreated: "{actor} hat eine Spalte erstellt: {name}",
+    activityColumnDeleted: "{actor} hat eine Spalte entfernt: {name}",
+    activityColumnMoved: "{actor} hat eine Spalte verschoben: {name}",
+    activityCardCreated: "{actor} hat eine Task erstellt: {name}",
+    activityCardUpdated: "{actor} hat eine Task bearbeitet: {name}",
+    activityCardDeleted: "{actor} hat eine Task gelöscht: {name}",
+    activityCardMoved: "{actor} hat eine Task verschoben: {name}",
+    activityMemberRoleUpdated: "{actor} hat eine Rolle geändert",
+    activityMemberRemoved: "{actor} hat ein Mitglied entfernt",
+    activityInviteCreated: "{actor} hat einen Einladungslink erstellt",
+    activityInviteAccepted: "{actor} hat eine Einladung angenommen",
+    activityGeneric: "{actor} hat eine Änderung vorgenommen",
+    sortLabel: "Sort",
+    sortName: "Name",
+    sortPriority: "Prio",
+    sortDate: "Datum",
+    addTask: "Hinzufügen",
+    editTask: "Task bearbeiten",
+    deleteTask: "Task löschen",
+    moveColumn: "Spalte verschieben",
+    deleteColumn: "Spalte löschen",
+    toggleCards: "Alle ein-/ausklappen",
+    addTaskTitle: "Task hinzufügen",
+  },
+  en: {
+    searchPlaceholder: "Filter tasks...",
+    searchAria: "Filter tasks",
+    clearSearch: "Clear search",
+    boardActions: "Board actions",
+    tabsAria: "Project tabs",
+    projectsTitle: "Projects",
+    boardAria: "Kanban board",
+    btnNew: "New",
+    btnShare: "Share",
+    btnRights: "Rights",
+    btnDelete: "Delete",
+    btnColumn: "Column",
+    btnActivity: "Activity",
+    btnExport: "Export",
+    btnImport: "Import",
+    titleNewProject: "Create project",
+    titleShareProject: "Share project",
+    titleRights: "Manage rights",
+    titleDeleteProject: "Delete project",
+    titleAddColumn: "Add column",
+    titleActivity: "Activity",
+    titleExport: "Export",
+    titleImport: "Import",
+    sidebarCollapse: "Collapse navigation",
+    sidebarExpand: "Expand navigation",
+    syncIdle: "Ready",
+    syncSyncing: "Syncing...",
+    syncSynced: "Synced",
+    syncSaving: "Saving...",
+    syncOffline: "Offline",
+    syncError: "Sync error",
+    logout: "Logout",
+    localeDeShort: "DE",
+    localeEnShort: "EN",
+    localeDe: "Deutsch",
+    localeEn: "English",
+    defaultProjectName: "Default project",
+    newProjectPrompt: "Project name:",
+    renameProjectPrompt: "Rename project:",
+    projectDeleteOwnerOnly: "Only the project owner can delete this project.",
+    atLeastOneProject: "At least one project must remain.",
+    deleteProjectTitle: "Delete project",
+    deleteProjectMessage: "Remove project \"{name}\"?",
+    confirmDelete: "Delete",
+    confirmProjectNameLabel: "Type the project name to confirm: \"{name}\"",
+    errorCreateProject: "Project could not be created.",
+    errorDeleteProject: "Project could not be deleted.",
+    readOnlyProject: "This project is read-only.",
+    newColumnName: "New column {n}",
+    exportFilePrefix: "kanban-export",
+    importError: "Import failed. Please choose a valid export file.",
+    itemModalNewTitle: "New task",
+    itemModalEditTitle: "Edit task",
+    itemTitleLabel: "Title",
+    itemDescriptionLabel: "Description",
+    itemPriorityLabel: "Priority",
+    itemDateLabel: "Due date",
+    itemAssigneeLabel: "Assigned to",
+    itemProgressLabel: "Progress — ",
+    itemTagsLabel: "Tags ",
+    itemTagsHint: "(comma-separated)",
+    itemTagsPlaceholder: "e.g. Design, Backend, Bug …",
+    itemAssigneePlaceholder: "Person name …",
+    checklistLabel: "Checklist",
+    checklistAdd: "Add checklist item",
+    save: "Save",
+    close: "Close",
+    cancel: "Cancel",
+    add: "Add",
+    untitled: "Untitled",
+    cardDeleteTitle: "Delete task",
+    cardDeleteMessage: "Delete task \"{name}\"?",
+    columnDeleteTitle: "Delete column",
+    columnDeleteMessage: "Remove column \"{name}\"?",
+    atLeastOneColumn: "At least one column must remain.",
+    collapseAll: "Collapse all",
+    expandAll: "Expand all",
+    priorityLow: "Low",
+    priorityMedium: "Medium",
+    priorityHigh: "High",
+    priorityBadgeLow: "Low",
+    priorityBadgeMedium: "Medium",
+    priorityBadgeHigh: "High",
+    checklistSummary: "Checklist: {done}/{total}",
+    checklistItemPlaceholder: "Description...",
+    checklistRemove: "Remove checklist item",
+    membersOwnerOnly: "Only the project owner can manage rights.",
+    membersLoad: "Loading members...",
+    membersLoadError: "Loading failed.",
+    membersEmpty: "No members found.",
+    membersUnknown: "Unknown",
+    youSuffix: " (You)",
+    roleOwner: "Owner",
+    roleEditor: "Editor",
+    roleViewer: "Viewer",
+    roleRemove: "Remove",
+    apply: "Apply",
+    membersUpdateFailed: "At least one role change failed.",
+    memberLoadFailed: "Members could not be loaded.",
+    shareCreateBusy: "Creating...",
+    shareCreateLink: "Create link",
+    shareCopy: "Copy",
+    shareCopied: "Copied",
+    shareReadonlyError: "This project is read-only.",
+    shareCreateError: "Invite link could not be created.",
+    copyFailed: "Could not copy automatically. Please copy the link manually.",
+    inviteAcceptError: "Invite could not be accepted.",
+    projectRenameError: "Project name could not be changed.",
+    confirmDefaultTitle: "Please confirm",
+    confirmTypeLabel: "Type name to confirm",
+    shareTitle: "Share project",
+    shareSubtitle: "Create a link and share it with your team.",
+    sharePermission: "Permission",
+    shareLink: "Invite link",
+    shareLinkPlaceholder: "No link created yet",
+    shareEditorOption: "Editor (can edit)",
+    shareViewerOption: "Viewer (read-only)",
+    membersTitle: "Members & rights",
+    membersSubtitle: "Manage roles for the active project.",
+    activityTitle: "Recent activity",
+    activitySubtitle: "Activity in the active board",
+    activityClose: "Close",
+    activityLoading: "Loading activity...",
+    activityEmpty: "No activity yet.",
+    activityLoadError: "Activity could not be loaded.",
+    activityAt: "{actor} · {time}",
+    activityProjectCreated: "{actor} created the project",
+    activityProjectRenamed: "{actor} renamed the project",
+    activityColumnCreated: "{actor} created a column: {name}",
+    activityColumnDeleted: "{actor} removed a column: {name}",
+    activityColumnMoved: "{actor} moved a column: {name}",
+    activityCardCreated: "{actor} created a task: {name}",
+    activityCardUpdated: "{actor} updated a task: {name}",
+    activityCardDeleted: "{actor} deleted a task: {name}",
+    activityCardMoved: "{actor} moved a task: {name}",
+    activityMemberRoleUpdated: "{actor} changed a role",
+    activityMemberRemoved: "{actor} removed a member",
+    activityInviteCreated: "{actor} created an invite link",
+    activityInviteAccepted: "{actor} accepted an invite",
+    activityGeneric: "{actor} made a change",
+    sortLabel: "Sort",
+    sortName: "Name",
+    sortPriority: "Priority",
+    sortDate: "Date",
+    addTask: "Add",
+    editTask: "Edit task",
+    deleteTask: "Delete task",
+    moveColumn: "Move column",
+    deleteColumn: "Delete column",
+    toggleCards: "Collapse/expand all",
+    addTaskTitle: "Add task",
+  },
+};
+
+function loadLocale() {
+  const stored = localStorage.getItem(LOCALE_KEY);
+  return stored === "en" ? "en" : FALLBACK_LOCALE;
+}
+
+let currentLocale = loadLocale();
+
+function t(key, params = {}) {
+  const bundle = TRANSLATIONS[currentLocale] || TRANSLATIONS[FALLBACK_LOCALE];
+  const fallback = TRANSLATIONS[FALLBACK_LOCALE];
+  let value = bundle[key] ?? fallback[key] ?? key;
+  Object.entries(params).forEach(([param, paramValue]) => {
+    value = value.replaceAll(`{${param}}`, String(paramValue));
+  });
+  return value;
+}
+
+function localeToHtmlLang(locale) {
+  return locale === "en" ? "en" : "de";
+}
+
+function isMobileSidebarLayout() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function loadSidebarCollapsedPreference() {
+  return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+}
+
+function persistSidebarCollapsedPreference(collapsed) {
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+}
+
+function syncSidebarToggleButton() {
+  if (!projectSidebarToggle) {
+    return;
+  }
+  const isExpanded = isMobileSidebarLayout()
+    ? document.body.classList.contains("sidebar-open-mobile")
+    : !document.body.classList.contains("sidebar-collapsed");
+  const title = isExpanded ? t("sidebarCollapse") : t("sidebarExpand");
+  projectSidebarToggle.title = title;
+  projectSidebarToggle.setAttribute("aria-label", title);
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = localeToHtmlLang(currentLocale);
+
+  boardFilterInput?.setAttribute("placeholder", t("searchPlaceholder"));
+  boardFilterInput?.setAttribute("aria-label", t("searchAria"));
+  boardFilterClearBtn?.setAttribute("title", t("clearSearch"));
+
+  const headerActions = document.querySelector(".header-actions");
+  headerActions?.setAttribute("aria-label", t("boardActions"));
+  projectSidebar?.setAttribute("aria-label", t("tabsAria"));
+  if (projectSidebarTitle) projectSidebarTitle.textContent = t("projectsTitle");
+  board?.setAttribute("aria-label", t("boardAria"));
+
+  const setBtnText = (id, text) => {
+    const btn = document.getElementById(id);
+    const span = btn?.querySelector("span");
+    if (span) {
+      span.textContent = text;
+    }
+  };
+
+  setBtnText("add-project-btn", t("btnNew"));
+  setBtnText("share-project-btn", t("btnShare"));
+  setBtnText("manage-members-btn", t("btnRights"));
+  setBtnText("delete-project-btn", t("btnDelete"));
+  setBtnText("add-column-btn", t("btnColumn"));
+  setBtnText("activity-panel-btn", t("btnActivity"));
+  setBtnText("export-btn", t("btnExport"));
+  setBtnText("import-btn", t("btnImport"));
+
+  addProjectBtn?.setAttribute("title", t("titleNewProject"));
+  shareProjectBtn?.setAttribute("title", t("titleShareProject"));
+  manageMembersBtn?.setAttribute("title", t("titleRights"));
+  deleteProjectBtn?.setAttribute("title", t("titleDeleteProject"));
+  addColumnBtn?.setAttribute("title", t("titleAddColumn"));
+  activityPanelBtn?.setAttribute("title", t("titleActivity"));
+  exportBtn?.setAttribute("title", t("titleExport"));
+  importBtn?.setAttribute("title", t("titleImport"));
+  syncSidebarToggleButton();
+
+  logoutBtn.textContent = t("logout");
+  localeToggleBtn.textContent = currentLocale.toUpperCase();
+  localeDeBtn.textContent = t("localeDe");
+  localeEnBtn.textContent = t("localeEn");
+  localeDeBtn.classList.toggle("active", currentLocale === "de");
+  localeEnBtn.classList.toggle("active", currentLocale === "en");
+
+  const shareTitle = document.querySelector("#share-form h2");
+  const shareSubtitle = document.querySelector("#share-form p");
+  const sharePermissionLabel = document.querySelector('label[for="share-role"] > span');
+  const shareLinkLabel = document.querySelector('label[for="share-link"] > span');
+  const shareEditorOption = shareRoleInput?.querySelector('option[value="editor"]');
+  const shareViewerOption = shareRoleInput?.querySelector('option[value="viewer"]');
+  shareTitle.textContent = t("shareTitle");
+  shareSubtitle.textContent = t("shareSubtitle");
+  if (sharePermissionLabel) sharePermissionLabel.textContent = t("sharePermission");
+  if (shareLinkLabel) shareLinkLabel.textContent = t("shareLink");
+  if (shareLinkInput) shareLinkInput.placeholder = t("shareLinkPlaceholder");
+  if (shareEditorOption) shareEditorOption.textContent = t("shareEditorOption");
+  if (shareViewerOption) shareViewerOption.textContent = t("shareViewerOption");
+
+  shareCloseBtn.textContent = t("close");
+  shareCopyBtn.textContent = shareCopyBtn.textContent === t("shareCopied") ? t("shareCopied") : t("shareCopy");
+  shareCreateBtn.textContent = t("shareCreateLink");
+
+  const membersTitle = document.querySelector("#members-form h2");
+  const membersSubtitle = document.querySelector("#members-form p");
+  membersTitle.textContent = t("membersTitle");
+  membersSubtitle.textContent = t("membersSubtitle");
+  membersCloseBtn.textContent = t("close");
+  membersApplyBtn.textContent = t("apply");
+
+  if (activityPanelTitle) activityPanelTitle.textContent = t("activityTitle");
+  if (activityPanelSubtitle) activityPanelSubtitle.textContent = t("activitySubtitle");
+  if (activityPanelCloseBtn) activityPanelCloseBtn.title = t("activityClose");
+
+  const confirmCancelBtn = document.getElementById("confirm-cancel-btn");
+  if (confirmTitle) confirmTitle.textContent = t("confirmDefaultTitle");
+  confirmCancelBtn.textContent = t("cancel");
+  confirmOkBtn.textContent = t("confirmDelete");
+  if (confirmInputLabel && confirmInputLabel.textContent === TRANSLATIONS[FALLBACK_LOCALE].confirmTypeLabel) {
+    confirmInputLabel.textContent = t("confirmTypeLabel");
+  }
+
+  const itemTitleLabel = document.querySelector('label[for="item-title"] > span');
+  const itemDescLabel = document.querySelector('label[for="item-description"] > span');
+  const itemPriorityLabel = document.querySelector('label[for="item-priority"] > span');
+  const itemDateLabel = document.querySelector('label[for="item-date"] > span');
+  const itemAssigneeLabel = document.querySelector('label[for="item-assignee"] > span');
+  const itemProgressLabel = document.querySelector('label[for="item-progress"] > span');
+  const itemTagsLabel = document.querySelector('label[for="item-tags"] > span');
+  const itemTagsHint = document.querySelector('label[for="item-tags"] .field-hint');
+  const checklistLabel = document.querySelector('#item-form .field > span');
+  if (itemTitleLabel) itemTitleLabel.textContent = t("itemTitleLabel");
+  if (itemDescLabel) itemDescLabel.textContent = t("itemDescriptionLabel");
+  if (itemPriorityLabel) itemPriorityLabel.textContent = t("itemPriorityLabel");
+  if (itemDateLabel) itemDateLabel.textContent = t("itemDateLabel");
+  if (itemAssigneeLabel) itemAssigneeLabel.textContent = t("itemAssigneeLabel");
+  if (itemProgressLabel) itemProgressLabel.childNodes[0].textContent = t("itemProgressLabel");
+  if (itemTagsLabel) itemTagsLabel.childNodes[0].textContent = t("itemTagsLabel");
+  if (itemTagsHint) itemTagsHint.textContent = t("itemTagsHint");
+  if (checklistLabel) checklistLabel.textContent = t("checklistLabel");
+  addChecklistItemBtn.textContent = t("checklistAdd");
+  itemAssigneeInput.placeholder = t("itemAssigneePlaceholder");
+  itemTagsInput.placeholder = t("itemTagsPlaceholder");
+  itemSecondaryBtn.textContent = t("cancel");
+
+  const priorityOptions = itemPriorityInput?.querySelectorAll("option");
+  if (priorityOptions?.[0]) priorityOptions[0].textContent = `🟢 ${t("priorityLow")}`;
+  if (priorityOptions?.[1]) priorityOptions[1].textContent = `🟡 ${t("priorityMedium")}`;
+  if (priorityOptions?.[2]) priorityOptions[2].textContent = `🔴 ${t("priorityHigh")}`;
+
+  const template = columnTemplate?.content;
+  if (template) {
+    template.querySelector(".column-drag")?.setAttribute("title", t("moveColumn"));
+    template.querySelector(".collapse-all-btn")?.setAttribute("title", t("toggleCards"));
+    template.querySelector(".delete-column")?.setAttribute("title", t("deleteColumn"));
+    const sortLabel = template.querySelector(".sort-bar-label");
+    if (sortLabel) sortLabel.textContent = t("sortLabel");
+    const sortName = template.querySelector('.sort-btn[data-field="name"]');
+    const sortPrio = template.querySelector('.sort-btn[data-field="priority"]');
+    const sortDate = template.querySelector('.sort-btn[data-field="date"]');
+    if (sortName) sortName.childNodes[0].textContent = t("sortName");
+    if (sortPrio) sortPrio.childNodes[0].textContent = t("sortPriority");
+    if (sortDate) sortDate.childNodes[0].textContent = t("sortDate");
+    const addItemBtnText = template.querySelector(".add-item-btn");
+    if (addItemBtnText) {
+      addItemBtnText.setAttribute("title", t("addTaskTitle"));
+      const trailingTextNode = Array.from(addItemBtnText.childNodes)
+        .reverse()
+        .find((node) => node.nodeType === Node.TEXT_NODE);
+      if (trailingTextNode) {
+        trailingTextNode.nodeValue = ` ${t("addTask")}`;
+      } else {
+        addItemBtnText.append(` ${t("addTask")}`);
+      }
+    }
+  }
+
+  const cardTpl = cardTemplate?.content;
+  if (cardTpl) {
+    cardTpl.querySelector(".edit-card")?.setAttribute("title", t("editTask"));
+    cardTpl.querySelector(".delete-card")?.setAttribute("title", t("deleteTask"));
+  }
+}
+
+function setLocale(nextLocale) {
+  const locale = nextLocale === "en" ? "en" : "de";
+  currentLocale = locale;
+  localStorage.setItem(LOCALE_KEY, locale);
+  applyStaticTranslations();
+  queueRender();
+}
 
 let state = createDefaultState();
 let dragCardId = null;
@@ -72,6 +597,11 @@ let activeFilterQuery = "";
 let syncTimerId = null;
 let syncInFlight = false;
 let syncFailCount = 0;
+let activityRefreshTimerId = null;
+let activityPanelOpen = false;
+let activityRefreshInFlight = false;
+let projectsSummaryFingerprint = "";
+let sidebarCollapsedPreferred = loadSidebarCollapsedPreference();
 let lastUserInteractionAt = Date.now();
 let renderQueued = false;
 const projectUpdatedAtMap = {};
@@ -82,8 +612,19 @@ const columnSortStates = {}; // { [columnId]: { field: "name"|"priority"|"date"|
 const columnExpandedStates = {}; // { [columnId]: true } means all cards expanded
 const cardExpandedStates = {}; // { [cardId]: true } means expanded
 
+if (!isMobileSidebarLayout() && sidebarCollapsedPreferred) {
+  document.body.classList.add("sidebar-collapsed");
+} else {
+  document.body.classList.remove("sidebar-collapsed");
+}
+document.body.classList.remove("sidebar-open-mobile");
+
+applyStaticTranslations();
 render();
+setupProjectSidebar();
 setupUserMenu();
+setupLocaleMenu();
+setupActivityPanel();
 setupConfirmModal();
 setupShareModal();
 setupMembersModal();
@@ -92,16 +633,16 @@ setupActivityTracking();
 init();
 
 addProjectBtn.addEventListener("click", async () => {
-  const name = prompt("Projektname:", `Projekt ${state.projects.length + 1}`);
+  const name = prompt(t("newProjectPrompt"), `Project ${state.projects.length + 1}`);
   if (name === null) {
     return;
   }
-  const cleanName = name.trim() || `Projekt ${state.projects.length + 1}`;
+  const cleanName = name.trim() || `Project ${state.projects.length + 1}`;
   setButtonBusy(addProjectBtn, true);
   try {
     const created = await createProjectOnServer(cleanName);
     if (!created) {
-      notifyError("Projekt konnte nicht erstellt werden.");
+      notifyError(t("errorCreateProject"));
       return;
     }
     await refreshProjectsFromServer(created.id, true);
@@ -116,19 +657,19 @@ deleteProjectBtn.addEventListener("click", async () => {
     return;
   }
   if (projectRoleMap[active.id] !== "owner") {
-    alert("Nur der Projekt-Owner kann dieses Projekt löschen.");
+    alert(t("projectDeleteOwnerOnly"));
     return;
   }
   if (state.projects.length === 1) {
-    alert("Mindestens ein Projekt muss bestehen bleiben.");
+    alert(t("atLeastOneProject"));
     return;
   }
   const shouldDelete = await confirmAction({
-    title: "Projekt löschen",
-    message: `Projekt "${active.name}" wirklich entfernen?`,
-    confirmText: "Löschen",
+    title: t("deleteProjectTitle"),
+    message: t("deleteProjectMessage", { name: active.name }),
+    confirmText: t("confirmDelete"),
     requireText: active.name,
-    requireTextLabel: `Bitte den Projektnamen zur Bestätigung eingeben: "${active.name}"`,
+    requireTextLabel: t("confirmProjectNameLabel", { name: active.name }),
   });
   if (!shouldDelete) {
     return;
@@ -140,7 +681,7 @@ deleteProjectBtn.addEventListener("click", async () => {
       retries: 1,
     });
     if (!result.ok) {
-      notifyError("Projekt konnte nicht gelöscht werden.");
+      notifyError(t("errorDeleteProject"));
       return;
     }
     await refreshProjectsFromServer(null, true);
@@ -151,7 +692,7 @@ deleteProjectBtn.addEventListener("click", async () => {
 
 addColumnBtn.addEventListener("click", () => {
   if (!canEditActiveProject()) {
-    alert("Dieses Projekt ist schreibgeschützt.");
+    alert(t("readOnlyProject"));
     return;
   }
   const project = getActiveProject();
@@ -160,10 +701,12 @@ addColumnBtn.addEventListener("click", () => {
   }
   project.columns.push({
     id: crypto.randomUUID(),
-    title: `Neue Spalte ${project.columns.length + 1}`,
+    title: t("newColumnName", { n: project.columns.length + 1 }),
     cards: [],
   });
   saveAndRender();
+  const createdColumn = project.columns[project.columns.length - 1];
+  recordActivity("column_created", "column", createdColumn?.title || "");
 });
 
 shareProjectBtn?.addEventListener("click", async () => {
@@ -172,7 +715,7 @@ shareProjectBtn?.addEventListener("click", async () => {
     return;
   }
   if (!canEditProject(project.id)) {
-    alert("Dieses Projekt ist schreibgeschützt.");
+    alert(t("shareReadonlyError"));
     return;
   }
   if (!shareModal) {
@@ -190,7 +733,7 @@ shareProjectBtn?.addEventListener("click", async () => {
   }
   if (shareCreateBtn) {
     shareCreateBtn.disabled = false;
-    shareCreateBtn.textContent = "Link erstellen";
+    shareCreateBtn.textContent = t("shareCreateLink");
   }
   shareModal.showModal();
 });
@@ -201,7 +744,7 @@ manageMembersBtn?.addEventListener("click", async () => {
     return;
   }
   if (projectRoleMap[project.id] !== "owner") {
-    alert("Nur der Projekt-Owner kann Rechte verwalten.");
+    alert(t("membersOwnerOnly"));
     return;
   }
   await openMembersModal(project.id);
@@ -214,7 +757,7 @@ exportBtn.addEventListener("click", () => {
   const link = document.createElement("a");
   const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
   link.href = url;
-  link.download = `kanban-export-${stamp}.json`;
+  link.download = `${t("exportFilePrefix")}-${stamp}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -244,7 +787,7 @@ importFileInput.addEventListener("change", async () => {
     active.columns = normalizeColumns(sourceProject.columns);
     saveAndRender();
   } catch {
-    alert("Import fehlgeschlagen. Bitte eine gueltige Export-Datei auswaehlen.");
+    alert(t("importError"));
   }
 });
 
@@ -263,7 +806,7 @@ addChecklistItemBtn?.addEventListener("click", () => {
 itemForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!canEditActiveProject()) {
-    alert("Dieses Projekt ist schreibgeschützt.");
+    alert(t("readOnlyProject"));
     itemModal.close();
     return;
   }
@@ -300,10 +843,12 @@ itemForm.addEventListener("submit", (event) => {
 
   if (modalContext.mode === "add") {
     column.cards.push({ id: crypto.randomUUID(), ...payload });
+    recordActivity("card_created", "card", payload.title);
   } else {
     const card = column.cards.find((entry) => entry.id === modalContext.cardId);
     if (card) {
       Object.assign(card, payload);
+      recordActivity("card_updated", "card", payload.title);
     }
   }
 
@@ -331,7 +876,7 @@ function createDefaultState() {
     projects: [
       {
         id: firstProjectId,
-        name: "Standardprojekt",
+        name: t("defaultProjectName"),
         columns: createDefaultColumns(),
       },
     ],
@@ -361,7 +906,7 @@ function normalizeState(candidate) {
     ? candidate.projects
         .map((project) => ({
           id: typeof project?.id === "string" && project.id ? project.id : crypto.randomUUID(),
-          name: typeof project?.name === "string" && project.name.trim() ? project.name.trim() : "Projekt",
+          name: typeof project?.name === "string" && project.name.trim() ? project.name.trim() : t("defaultProjectName"),
           columns: normalizeColumns(project?.columns),
         }))
         .filter((project) => project.columns.length > 0)
@@ -383,7 +928,7 @@ function normalizeColumns(columns) {
     ? columns
         .map((column) => ({
           id: typeof column?.id === "string" && column.id ? column.id : crypto.randomUUID(),
-          title: typeof column?.title === "string" && column.title.trim() ? column.title.trim() : "Ohne Titel",
+          title: typeof column?.title === "string" && column.title.trim() ? column.title.trim() : t("untitled"),
           cards: normalizeCards(column?.cards),
         }))
         .filter((column) => column.title)
@@ -488,20 +1033,20 @@ function setSyncStatus(mode, detail = "") {
     return;
   }
   const labels = {
-    idle: "Bereit",
-    syncing: "Synchronisiere...",
-    synced: "Synchron",
-    saving: "Speichere...",
-    offline: "Offline",
-    error: "Sync-Fehler",
+    idle: t("syncIdle"),
+    syncing: t("syncSyncing"),
+    synced: t("syncSynced"),
+    saving: t("syncSaving"),
+    offline: t("syncOffline"),
+    error: t("syncError"),
   };
-  const nextText = detail || labels[mode] || "Bereit";
+  const nextText = detail || labels[mode] || t("syncIdle");
   if (syncStatus.dataset.mode === mode && syncStatus.title === nextText) {
     return;
   }
   syncStatus.dataset.mode = mode;
   syncStatus.title = nextText;
-  syncStatus.setAttribute("aria-label", `Synchronstatus: ${nextText}`);
+  syncStatus.setAttribute("aria-label", `${currentLocale === "de" ? "Synchronstatus" : "Sync status"}: ${nextText}`);
 }
 
 function notifyError(message) {
@@ -527,6 +1072,22 @@ function getProjectFingerprint(projectLike) {
     name: projectLike?.name || "",
     columns: Array.isArray(projectLike?.columns) ? projectLike.columns : [],
   });
+}
+
+function buildProjectsSummaryFingerprint(projects) {
+  if (!Array.isArray(projects) || !projects.length) {
+    return "";
+  }
+  return projects
+    .map((project) => {
+      const id = project?.id || "";
+      const name = project?.name || "";
+      const updatedAt = project?.updatedAt || "";
+      const role = project?.role || "";
+      return `${id}|${name}|${updatedAt}|${role}`;
+    })
+    .sort()
+    .join(";");
 }
 
 function getAdaptiveSyncDelay() {
@@ -584,6 +1145,7 @@ function scheduleNextSync(delay = getAdaptiveSyncDelay()) {
   }
   syncTimerId = setTimeout(async () => {
     await syncActiveProjectFromServer();
+    await syncProjectListFromServer();
     scheduleNextSync(getAdaptiveSyncDelay());
   }, delay);
 }
@@ -595,7 +1157,7 @@ function saveAndRender() {
 }
 
 async function init() {
-  setSyncStatus("syncing", "Initialisiere...");
+  setSyncStatus("syncing", currentLocale === "de" ? "Initialisiere..." : "Initializing...");
   currentUser = await loadCurrentUser();
   if (!currentUser) {
     redirectToLogin();
@@ -629,6 +1191,7 @@ async function refreshProjectsFromServer(preferredProjectId = null, shouldRender
 
     const payload = result.payload;
     const remoteProjects = Array.isArray(payload?.projects) ? payload.projects : [];
+    projectsSummaryFingerprint = buildProjectsSummaryFingerprint(remoteProjects);
 
     Object.keys(projectUpdatedAtMap).forEach((key) => delete projectUpdatedAtMap[key]);
     Object.keys(projectRoleMap).forEach((key) => delete projectRoleMap[key]);
@@ -809,6 +1372,207 @@ async function removeProjectMember(projectId, userId) {
   return result.payload;
 }
 
+async function loadProjectActivities(projectId, limit = 60) {
+  const result = await apiRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/activities?limit=${encodeURIComponent(limit)}`,
+    {
+      cache: "no-store",
+      retries: 1,
+    }
+  );
+  if (!result.ok) {
+    return null;
+  }
+  return result.payload?.activities || [];
+}
+
+async function loadProjectsSummary() {
+  const result = await apiRequest("/api/projects/summary", {
+    cache: "no-store",
+    retries: 1,
+  });
+  if (!result.ok) {
+    return null;
+  }
+  return Array.isArray(result.payload?.projects) ? result.payload.projects : [];
+}
+
+async function postProjectActivity(projectId, action, entityType = "", entityName = "", meta = {}) {
+  const result = await apiRequest(`/api/projects/${encodeURIComponent(projectId)}/activities`, {
+    method: "POST",
+    body: { action, entityType, entityName, meta },
+    retries: 0,
+  });
+  return Boolean(result.ok);
+}
+
+function toActivityTimeLabel(timestampValue) {
+  const date = new Date(timestampValue);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const dateLocale = currentLocale === "en" ? "en-US" : "de-DE";
+  return date.toLocaleString(dateLocale, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildActivityMessage(activity) {
+  const actor = activity?.actor?.name || activity?.actor?.email || t("membersUnknown");
+  const name = activity?.entityName || "";
+  const action = activity?.action || "";
+  const byActionKey = {
+    project_created: "activityProjectCreated",
+    project_renamed: "activityProjectRenamed",
+    column_created: "activityColumnCreated",
+    column_deleted: "activityColumnDeleted",
+    column_moved: "activityColumnMoved",
+    card_created: "activityCardCreated",
+    card_updated: "activityCardUpdated",
+    card_deleted: "activityCardDeleted",
+    card_moved: "activityCardMoved",
+    member_role_updated: "activityMemberRoleUpdated",
+    member_removed: "activityMemberRemoved",
+    invite_created: "activityInviteCreated",
+    invite_accepted: "activityInviteAccepted",
+  };
+  const key = byActionKey[action] || "activityGeneric";
+  return t(key, { actor, name });
+}
+
+function renderActivityItems(items) {
+  if (!activityList) {
+    return;
+  }
+  activityList.replaceChildren();
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "activity-item";
+    empty.innerHTML = `<div class="activity-item-main">${t("activityEmpty")}</div>`;
+    activityList.appendChild(empty);
+    return;
+  }
+
+  items.forEach((entry) => {
+    const item = document.createElement("article");
+    item.className = "activity-item";
+
+    const main = document.createElement("div");
+    main.className = "activity-item-main";
+    main.textContent = buildActivityMessage(entry);
+
+    const meta = document.createElement("div");
+    meta.className = "activity-item-meta";
+    const actor = entry?.actor?.name || entry?.actor?.email || t("membersUnknown");
+    meta.textContent = t("activityAt", {
+      actor,
+      time: toActivityTimeLabel(entry.createdAt),
+    });
+
+    item.appendChild(main);
+    item.appendChild(meta);
+    activityList.appendChild(item);
+  });
+}
+
+async function refreshActivityPanel() {
+  if (!activityPanelOpen || activityRefreshInFlight) {
+    return;
+  }
+  const activeProject = getActiveProject();
+  if (!activeProject) {
+    return;
+  }
+
+  activityRefreshInFlight = true;
+  try {
+    const entries = await loadProjectActivities(activeProject.id, 80);
+    if (!entries) {
+      if (activityList) {
+        activityList.innerHTML = `<div class="activity-item"><div class="activity-item-main">${t("activityLoadError")}</div></div>`;
+      }
+      return;
+    }
+    renderActivityItems(entries);
+  } finally {
+    activityRefreshInFlight = false;
+  }
+}
+
+function startActivityPanelRefreshLoop() {
+  if (activityRefreshTimerId) {
+    clearInterval(activityRefreshTimerId);
+  }
+  activityRefreshTimerId = setInterval(() => {
+    refreshActivityPanel();
+  }, 3500);
+}
+
+function stopActivityPanelRefreshLoop() {
+  if (activityRefreshTimerId) {
+    clearInterval(activityRefreshTimerId);
+    activityRefreshTimerId = null;
+  }
+}
+
+function openActivityPanel() {
+  if (!activityPanel || !activityOverlay || !activityList) {
+    return;
+  }
+  activityPanelOpen = true;
+  activityOverlay.hidden = false;
+  activityPanel.classList.add("open");
+  activityPanel.setAttribute("aria-hidden", "false");
+  activityList.innerHTML = `<div class="activity-item"><div class="activity-item-main">${t("activityLoading")}</div></div>`;
+  refreshActivityPanel();
+  startActivityPanelRefreshLoop();
+}
+
+function closeActivityPanel() {
+  if (!activityPanel || !activityOverlay) {
+    return;
+  }
+  activityPanelOpen = false;
+  activityOverlay.hidden = true;
+  activityPanel.classList.remove("open");
+  activityPanel.setAttribute("aria-hidden", "true");
+  stopActivityPanelRefreshLoop();
+}
+
+function setupActivityPanel() {
+  activityPanelBtn?.addEventListener("click", () => {
+    if (activityPanelOpen) {
+      closeActivityPanel();
+    } else {
+      openActivityPanel();
+    }
+  });
+
+  activityPanelCloseBtn?.addEventListener("click", () => {
+    closeActivityPanel();
+  });
+
+  activityOverlay?.addEventListener("click", () => {
+    closeActivityPanel();
+  });
+}
+
+function recordActivity(action, entityType = "", entityName = "", meta = {}) {
+  const activeProject = getActiveProject();
+  if (!activeProject) {
+    return;
+  }
+  postProjectActivity(activeProject.id, action, entityType, entityName, meta).then(() => {
+    if (activityPanelOpen) {
+      refreshActivityPanel();
+    }
+  });
+}
+
 function getInviteTokenFromUrl() {
   const url = new URL(window.location.href);
   return url.searchParams.get("invite");
@@ -833,7 +1597,7 @@ async function handleInviteFromUrl() {
     });
     clearInviteTokenFromUrl();
     if (!response.ok) {
-      notifyError("Einladung konnte nicht angenommen werden.");
+      notifyError(t("inviteAcceptError"));
       return null;
     }
     return response.payload?.projectId || null;
@@ -930,6 +1694,21 @@ async function syncActiveProjectFromServer() {
   }
 }
 
+async function syncProjectListFromServer() {
+  if (!currentUser || saveInFlight || pendingStatePayload) {
+    return;
+  }
+  const summary = await loadProjectsSummary();
+  if (!summary) {
+    return;
+  }
+  const nextFingerprint = buildProjectsSummaryFingerprint(summary);
+  if (nextFingerprint === projectsSummaryFingerprint) {
+    return;
+  }
+  await refreshProjectsFromServer(state.activeProjectId, true);
+}
+
 function render() {
   renderProjectTabs();
   syncToolbarPermissions();
@@ -955,6 +1734,9 @@ function syncToolbarPermissions() {
   if (manageMembersBtn) {
     manageMembersBtn.disabled = !canDeleteProject;
   }
+  if (activityPanelBtn) {
+    activityPanelBtn.disabled = !activeProject;
+  }
 }
 
 function renderProjectTabs() {
@@ -972,13 +1754,16 @@ function renderProjectTabs() {
       state.activeProjectId = project.id;
       persistLocalState();
       queueRender();
+      if (activityPanelOpen) {
+        refreshActivityPanel();
+      }
     });
     tab.addEventListener("dblclick", async () => {
       if (!canEditProject(project.id)) {
-        alert("Dieses Projekt ist schreibgeschützt.");
+        alert(t("readOnlyProject"));
         return;
       }
-      const name = prompt("Projektname aendern:", project.name);
+      const name = prompt(t("renameProjectPrompt"), project.name);
       if (name === null) {
         return;
       }
@@ -993,7 +1778,7 @@ function renderProjectTabs() {
         retries: 1,
       });
       if (!response.ok) {
-        notifyError("Projektname konnte nicht geändert werden.");
+        notifyError(t("projectRenameError"));
         return;
       }
       const updated = response.payload?.project;
@@ -1030,7 +1815,7 @@ function renderBoard() {
 
     const allExpanded = !!columnExpandedStates[column.id];
     collapseAllBtn.classList.toggle("expanded", allExpanded);
-    collapseAllBtn.title = allExpanded ? "Alle einklappen" : "Alle ausklappen";
+    collapseAllBtn.title = allExpanded ? t("collapseAll") : t("expandAll");
 
     collapseAllBtn.addEventListener("click", () => {
       columnExpandedStates[column.id] = !columnExpandedStates[column.id];
@@ -1043,7 +1828,7 @@ function renderBoard() {
       if (!canEdit) {
         return;
       }
-      column.title = titleInput.value.trim() || "Ohne Titel";
+      column.title = titleInput.value.trim() || t("untitled");
       saveAndRender();
     });
 
@@ -1059,13 +1844,13 @@ function renderBoard() {
         return;
       }
       if (project.columns.length === 1) {
-        alert("Mindestens eine Spalte muss bestehen bleiben.");
+        alert(t("atLeastOneColumn"));
         return;
       }
       const shouldDelete = await confirmAction({
-        title: "Spalte löschen",
-        message: `Spalte "${column.title}" wirklich entfernen?`,
-        confirmText: "Löschen",
+        title: t("columnDeleteTitle"),
+        message: t("columnDeleteMessage", { name: column.title }),
+        confirmText: t("confirmDelete"),
         requireText: null,
       });
       if (!shouldDelete) {
@@ -1073,6 +1858,7 @@ function renderBoard() {
       }
       project.columns = project.columns.filter((entry) => entry.id !== column.id);
       saveAndRender();
+      recordActivity("column_deleted", "column", column.title);
     });
 
     addItemBtn.addEventListener("click", () => {
@@ -1110,6 +1896,7 @@ function renderBoard() {
       column.cards.push(moved);
       dragCardId = null;
       saveAndRender();
+      recordActivity("card_moved", "card", moved.title || "");
     });
 
     columnDragHandle.addEventListener("dragstart", () => {
@@ -1144,9 +1931,11 @@ function renderBoard() {
         return;
       }
       event.preventDefault();
+      const movedColumn = project.columns.find((entry) => entry.id === dragColumnId);
       moveColumn(project, dragColumnId, column.id);
       dragColumnId = null;
       saveAndRender();
+      recordActivity("column_moved", "column", movedColumn?.title || "");
     });
 
     // Sort buttons
@@ -1201,13 +1990,14 @@ function renderBoard() {
         descNode.textContent = card.description;
       }
       if (priorityBadge) {
-        const labels = { low: "Low", medium: "Medium", high: "High" };
+        const labels = { low: t("priorityBadgeLow"), medium: t("priorityBadgeMedium"), high: t("priorityBadgeHigh") };
         priorityBadge.textContent = labels[priority];
         priorityBadge.className = `card-priority-badge priority-badge-${priority}`;
       }
       if (dateNode && card.dueDate) {
         const d = new Date(card.dueDate + "T12:00:00");
-        dateNode.textContent = d.toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
+        const dateLocale = currentLocale === "en" ? "en-US" : "de-DE";
+        dateNode.textContent = d.toLocaleDateString(dateLocale, { day: "2-digit", month: "short" });
         if (new Date(card.dueDate + "T23:59:59") < new Date()) {
           dateNode.classList.add("overdue");
         }
@@ -1235,7 +2025,7 @@ function renderBoard() {
 
         const summary = document.createElement("div");
         summary.className = "card-checklist-summary";
-        summary.textContent = `Checkliste: ${doneCount}/${card.checklist.length}`;
+        summary.textContent = t("checklistSummary", { done: doneCount, total: card.checklist.length });
         checklistEl.appendChild(summary);
 
         card.checklist.forEach((item) => {
@@ -1300,9 +2090,9 @@ function renderBoard() {
           return;
         }
         const shouldDelete = await confirmAction({
-          title: "Task löschen",
-          message: `Task "${card.title}" wirklich löschen?`,
-          confirmText: "Löschen",
+          title: t("cardDeleteTitle"),
+          message: t("cardDeleteMessage", { name: card.title }),
+          confirmText: t("confirmDelete"),
           requireText: null,
         });
         if (!shouldDelete) {
@@ -1310,6 +2100,7 @@ function renderBoard() {
         }
         column.cards = column.cards.filter((entry) => entry.id !== card.id);
         saveAndRender();
+        recordActivity("card_deleted", "card", card.title);
       });
 
       cardsWrap.appendChild(cardNode);
@@ -1335,9 +2126,9 @@ function openItemModal(context) {
   const card = column?.cards.find((entry) => entry.id === context.cardId);
 
   if (context.mode === "add") {
-    itemModalTitle.textContent = "Neuer Task";
-    itemPrimaryBtn.textContent = "Hinzufügen";
-    itemSecondaryBtn.textContent = "Abbrechen";
+    itemModalTitle.textContent = t("itemModalNewTitle");
+    itemPrimaryBtn.textContent = t("add");
+    itemSecondaryBtn.textContent = t("cancel");
     itemTitleInput.value = "";
     itemDescriptionInput.value = "";
     itemPriorityInput.value = "medium";
@@ -1348,9 +2139,9 @@ function openItemModal(context) {
     document.getElementById("progress-display").textContent = "0";
     resetChecklistEditor([]);
   } else {
-    itemModalTitle.textContent = "Task bearbeiten";
-    itemPrimaryBtn.textContent = "Speichern";
-    itemSecondaryBtn.textContent = "Schließen";
+    itemModalTitle.textContent = t("itemModalEditTitle");
+    itemPrimaryBtn.textContent = t("save");
+    itemSecondaryBtn.textContent = t("close");
     itemTitleInput.value = card?.title || "";
     itemDescriptionInput.value = card?.description || "";
     itemPriorityInput.value = sanitizePriority(card?.priority);
@@ -1416,7 +2207,7 @@ function appendChecklistEditorRow(item = null) {
   const text = document.createElement("input");
   text.type = "text";
   text.className = "checklist-editor-text";
-  text.placeholder = "Beschreibung...";
+  text.placeholder = t("checklistItemPlaceholder");
   text.maxLength = 240;
   text.value = typeof item?.text === "string" ? item.text : "";
 
@@ -1424,8 +2215,8 @@ function appendChecklistEditorRow(item = null) {
   removeBtn.type = "button";
   removeBtn.className = "checklist-editor-remove";
   removeBtn.textContent = "×";
-  removeBtn.title = "Checklistenpunkt entfernen";
-  removeBtn.setAttribute("aria-label", "Checklistenpunkt entfernen");
+  removeBtn.title = t("checklistRemove");
+  removeBtn.setAttribute("aria-label", t("checklistRemove"));
   removeBtn.addEventListener("click", () => {
     row.remove();
   });
@@ -1480,7 +2271,7 @@ function getSortedCards(column) {
 
   cards.sort((a, b) => {
     if (sort.field === "name") {
-      return mult * a.title.localeCompare(b.title, "de");
+      return mult * a.title.localeCompare(b.title, currentLocale === "en" ? "en" : "de");
     }
     if (sort.field === "priority") {
       const order = { high: 0, medium: 1, low: 2 };
@@ -1539,7 +2330,7 @@ function setupConfirmModal() {
       confirmInputWrap.hidden = true;
     }
     if (confirmInputLabel) {
-      confirmInputLabel.textContent = "Zur Bestätigung Namen eingeben";
+      confirmInputLabel.textContent = t("confirmTypeLabel");
     }
     if (confirmOkBtn) {
       confirmOkBtn.disabled = false;
@@ -1566,19 +2357,19 @@ function setupShareModal() {
       return;
     }
     if (!canEditProject(projectId)) {
-      alert("Dieses Projekt ist schreibgeschützt.");
+      alert(t("shareReadonlyError"));
       return;
     }
 
     shareCreateBtn.disabled = true;
-    shareCreateBtn.textContent = "Erstelle...";
+    shareCreateBtn.textContent = t("shareCreateBusy");
     const role = shareRoleInput.value === "viewer" ? "viewer" : "editor";
     const invite = await createInviteForProject(projectId, { role });
     shareCreateBtn.disabled = false;
-    shareCreateBtn.textContent = "Link erstellen";
+    shareCreateBtn.textContent = t("shareCreateLink");
 
     if (!invite?.inviteUrl) {
-      alert("Einladungslink konnte nicht erstellt werden.");
+      alert(t("shareCreateError"));
       return;
     }
 
@@ -1594,14 +2385,14 @@ function setupShareModal() {
     }
     try {
       await navigator.clipboard.writeText(shareLinkInput.value);
-      shareCopyBtn.textContent = "Kopiert";
+      shareCopyBtn.textContent = t("shareCopied");
       setTimeout(() => {
-        shareCopyBtn.textContent = "Kopieren";
+        shareCopyBtn.textContent = t("shareCopy");
       }, 1200);
     } catch {
       shareLinkInput.focus();
       shareLinkInput.select();
-      alert("Konnte nicht automatisch kopieren. Bitte Link manuell kopieren.");
+      alert(t("copyFailed"));
     }
   });
 
@@ -1614,8 +2405,8 @@ function setupShareModal() {
     shareLinkInput.value = "";
     shareCopyBtn.disabled = true;
     shareCreateBtn.disabled = false;
-    shareCreateBtn.textContent = "Link erstellen";
-    shareCopyBtn.textContent = "Kopieren";
+    shareCreateBtn.textContent = t("shareCreateLink");
+    shareCopyBtn.textContent = t("shareCopy");
   });
 
   shareForm.addEventListener("submit", (event) => {
@@ -1640,15 +2431,15 @@ async function refreshMembersModal() {
     return;
   }
   if (membersList) {
-    membersList.innerHTML = '<div class="member-row"><div class="member-meta"><div class="member-name">Lade Mitglieder...</div></div></div>';
+    membersList.innerHTML = `<div class="member-row"><div class="member-meta"><div class="member-name">${t("membersLoad")}</div></div></div>`;
   }
 
   const payload = await loadProjectMembers(membersProjectId);
   if (!payload) {
-    notifyError("Mitglieder konnten nicht geladen werden.");
+    notifyError(t("memberLoadFailed"));
     if (membersList) {
       membersList.innerHTML =
-        '<div class="member-row"><div class="member-meta"><div class="member-name">Fehler beim Laden.</div></div></div>';
+        `<div class="member-row"><div class="member-meta"><div class="member-name">${t("membersLoadError")}</div></div></div>`;
     }
     return;
   }
@@ -1667,7 +2458,7 @@ function renderMembersList(projectId, members, canManage, currentUserId) {
   if (!members.length) {
     const empty = document.createElement("div");
     empty.className = "member-row";
-    empty.innerHTML = '<div class="member-meta"><div class="member-name">Keine Mitglieder gefunden.</div></div>';
+    empty.innerHTML = `<div class="member-meta"><div class="member-name">${t("membersEmpty")}</div></div>`;
     membersList.appendChild(empty);
     return;
   }
@@ -1685,9 +2476,9 @@ function renderMembersList(projectId, members, canManage, currentUserId) {
 
     const nameEl = document.createElement("div");
     nameEl.className = "member-name";
-    nameEl.textContent = member.name || member.email || "Unbekannt";
+    nameEl.textContent = member.name || member.email || t("membersUnknown");
     if (member.userId === currentUserId) {
-      nameEl.textContent += " (Du)";
+      nameEl.textContent += t("youSuffix");
     }
 
     const emailEl = document.createElement("div");
@@ -1701,10 +2492,10 @@ function renderMembersList(projectId, members, canManage, currentUserId) {
     roleControl.className = "member-role-select";
 
     [
-      { value: "owner", label: "Owner" },
-      { value: "editor", label: "Editor" },
-      { value: "viewer", label: "Viewer" },
-      { value: "remove", label: "Entfernen" },
+      { value: "owner", label: t("roleOwner") },
+      { value: "editor", label: t("roleEditor") },
+      { value: "viewer", label: t("roleViewer") },
+      { value: "remove", label: t("roleRemove") },
     ].forEach((entry) => {
       const option = document.createElement("option");
       option.value = entry.value;
@@ -1765,7 +2556,7 @@ function setupMembersModal() {
     setButtonBusy(membersApplyBtn, false);
 
     if (failed) {
-      notifyError("Mindestens eine Rollenänderung ist fehlgeschlagen.");
+      notifyError(t("membersUpdateFailed"));
       return;
     }
 
@@ -1797,15 +2588,15 @@ function syncMembersApplyButton() {
 function confirmAction({
   title,
   message,
-  confirmText = "Löschen",
+  confirmText = t("confirmDelete"),
   requireText = null,
-  requireTextLabel = "Zur Bestätigung Namen eingeben",
+  requireTextLabel = t("confirmTypeLabel"),
 }) {
   if (!confirmModal || !confirmTitle || !confirmMessage || !confirmOkBtn) {
     return Promise.resolve(confirm(message));
   }
 
-  confirmTitle.textContent = title || "Bitte bestaetigen";
+  confirmTitle.textContent = title || t("confirmDefaultTitle");
   confirmMessage.textContent = message || "";
   confirmOkBtn.textContent = confirmText;
 
@@ -1866,6 +2657,41 @@ function setupSearchFilter() {
   syncClearButton();
 }
 
+function setupProjectSidebar() {
+  if (!projectSidebarToggle) {
+    return;
+  }
+
+  const applySidebarMode = () => {
+    if (isMobileSidebarLayout()) {
+      document.body.classList.remove("sidebar-collapsed");
+      document.body.classList.remove("sidebar-open-mobile");
+    } else {
+      document.body.classList.remove("sidebar-open-mobile");
+      document.body.classList.toggle("sidebar-collapsed", sidebarCollapsedPreferred);
+    }
+    syncSidebarToggleButton();
+  };
+
+  projectSidebarToggle.addEventListener("click", () => {
+    if (isMobileSidebarLayout()) {
+      const nextOpen = !document.body.classList.contains("sidebar-open-mobile");
+      document.body.classList.toggle("sidebar-open-mobile", nextOpen);
+    } else {
+      sidebarCollapsedPreferred = !document.body.classList.contains("sidebar-collapsed");
+      document.body.classList.toggle("sidebar-collapsed", sidebarCollapsedPreferred);
+      persistSidebarCollapsedPreference(sidebarCollapsedPreferred);
+    }
+    syncSidebarToggleButton();
+  });
+
+  window.addEventListener("resize", () => {
+    applySidebarMode();
+  });
+
+  applySidebarMode();
+}
+
 function normalizeFilterQuery(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -1913,7 +2739,7 @@ function setupActivityTracking() {
 }
 
 function setupUserMenu() {
-  if (!userMenuToggle || !userMenu || !logoutBtn) {
+  if (!userMenuToggle || !userMenu || !logoutBtn || !localeOptions) {
     return;
   }
 
@@ -1921,12 +2747,16 @@ function setupUserMenu() {
     event.stopPropagation();
     const isHidden = userMenu.hidden;
     userMenu.hidden = !isHidden;
+    if (isHidden) {
+      localeOptions.hidden = true;
+    }
     userMenuToggle.setAttribute("aria-expanded", isHidden ? "true" : "false");
   });
 
   document.addEventListener("click", (event) => {
     if (!userMenu.hidden && !userMenu.contains(event.target) && !userMenuToggle.contains(event.target)) {
       userMenu.hidden = true;
+      localeOptions.hidden = true;
       userMenuToggle.setAttribute("aria-expanded", "false");
     }
   });
@@ -1941,6 +2771,27 @@ function setupUserMenu() {
       // no-op
     }
     redirectToLogin();
+  });
+}
+
+function setupLocaleMenu() {
+  if (!localeToggleBtn || !localeOptions || !localeDeBtn || !localeEnBtn) {
+    return;
+  }
+
+  localeToggleBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    localeOptions.hidden = !localeOptions.hidden;
+  });
+
+  localeDeBtn.addEventListener("click", () => {
+    setLocale("de");
+    localeOptions.hidden = true;
+  });
+
+  localeEnBtn.addEventListener("click", () => {
+    setLocale("en");
+    localeOptions.hidden = true;
   });
 }
 
