@@ -694,6 +694,16 @@ function mountRoutes(router) {
     }
   });
 
+  router.get("/api/v1/:apiKey/Product/hierarchies", async (req, res) => {
+    try {
+      const conn = await resolveApiKey(req.params.apiKey);
+      if (!conn) return res.status(401).json({ error: "Invalid API key" });
+      res.json([]);
+    } catch {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   router.get("/api/v1/:apiKey/Product/hierarchy/levels", async (req, res) => {
     try {
       const conn = await resolveApiKey(req.params.apiKey);

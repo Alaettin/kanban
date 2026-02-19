@@ -425,6 +425,33 @@
       </div>
     </div>
 
+    <!-- GET /Product/hierarchies -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/Product/hierarchies</span>
+        <span class="endpoint-summary">List hierarchies</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns an empty array. Reserved for future use.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>[]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="try-section">
+          <button id="try-hierarchies-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-hierarchies-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
     <!-- GET /Product/hierarchy/levels -->
     <div class="endpoint-card">
       <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
@@ -659,6 +686,7 @@
         const baseUrl = window.location.origin + APP_BASE + "/api/v1/" + apiKey;
         baseUrlDisplay.innerHTML = '<div class="base-url-value">' + baseUrl + '</div>';
         document.getElementById("try-product-ids-btn").disabled = false;
+        document.getElementById("try-hierarchies-btn").disabled = false;
         document.getElementById("try-hierarchy-btn").disabled = false;
         document.getElementById("try-model-btn").disabled = false;
         document.getElementById("try-item-hierarchy-btn").disabled = false;
@@ -676,6 +704,32 @@
       const resultDiv = document.getElementById("try-product-ids-result");
       btn.disabled = true;
       const url = APP_BASE + "/api/v1/" + apiKey + "/Product/ids";
+      try {
+        const res = await fetch(url);
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">GET ' + escapeHtml(url) + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById("try-hierarchies-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const btn = document.getElementById("try-hierarchies-btn");
+      const resultDiv = document.getElementById("try-hierarchies-result");
+      btn.disabled = true;
+      const url = APP_BASE + "/api/v1/" + apiKey + "/Product/hierarchies";
       try {
         const res = await fetch(url);
         const status = res.status;
