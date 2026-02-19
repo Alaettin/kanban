@@ -799,7 +799,7 @@ addColumnBtn.addEventListener("click", () => {
     return;
   }
   project.columns.push({
-    id: crypto.randomUUID(),
+    id: generateId(),
     title: t("newColumnName", { n: project.columns.length + 1 }),
     cards: [],
   });
@@ -941,7 +941,7 @@ itemForm.addEventListener("submit", (event) => {
   }
 
   if (modalContext.mode === "add") {
-    column.cards.push({ id: crypto.randomUUID(), ...payload });
+    column.cards.push({ id: generateId(), ...payload });
     recordActivity("card_created", "card", payload.title);
   } else {
     const card = column.cards.find((entry) => entry.id === modalContext.cardId);
@@ -960,16 +960,35 @@ itemModal.addEventListener("close", () => {
   modalContext = null;
 });
 
+function generateId() {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") {
+    return c.randomUUID();
+  }
+
+  if (c && typeof c.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    c.getRandomValues(bytes);
+    // RFC4122 v4 style bits
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function createDefaultColumns() {
   return DEFAULT_COLUMNS.map((title) => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     title,
     cards: [],
   }));
 }
 
 function createDefaultState() {
-  const firstProjectId = crypto.randomUUID();
+  const firstProjectId = generateId();
   return {
     activeProjectId: firstProjectId,
     projects: [
@@ -1004,7 +1023,7 @@ function normalizeState(candidate) {
   const projects = Array.isArray(candidate?.projects)
     ? candidate.projects
         .map((project) => ({
-          id: typeof project?.id === "string" && project.id ? project.id : crypto.randomUUID(),
+          id: typeof project?.id === "string" && project.id ? project.id : generateId(),
           name: typeof project?.name === "string" && project.name.trim() ? project.name.trim() : t("defaultProjectName"),
           columns: normalizeColumns(project?.columns),
         }))
@@ -1026,7 +1045,7 @@ function normalizeColumns(columns) {
   const normalized = Array.isArray(columns)
     ? columns
         .map((column) => ({
-          id: typeof column?.id === "string" && column.id ? column.id : crypto.randomUUID(),
+          id: typeof column?.id === "string" && column.id ? column.id : generateId(),
           title: typeof column?.title === "string" && column.title.trim() ? column.title.trim() : t("untitled"),
           cards: normalizeCards(column?.cards),
         }))
@@ -1050,7 +1069,7 @@ function normalizeCards(cards) {
       }
 
       return {
-        id: typeof card?.id === "string" && card.id ? card.id : crypto.randomUUID(),
+        id: typeof card?.id === "string" && card.id ? card.id : generateId(),
         title: titleValue,
         description: typeof card?.description === "string" ? card.description.trim() : "",
         priority: sanitizePriority(card?.priority),
@@ -1078,7 +1097,7 @@ function normalizeChecklist(checklist) {
       }
 
       return {
-        id: typeof item?.id === "string" && item.id ? item.id : crypto.randomUUID(),
+        id: typeof item?.id === "string" && item.id ? item.id : generateId(),
         text,
         done: Boolean(item?.done),
       };
@@ -2302,7 +2321,7 @@ function appendChecklistEditorRow(item = null) {
 
   const row = document.createElement("div");
   row.className = "checklist-editor-row";
-  row.dataset.itemId = typeof item?.id === "string" && item.id ? item.id : crypto.randomUUID();
+  row.dataset.itemId = typeof item?.id === "string" && item.id ? item.id : generateId();
 
   const done = document.createElement("input");
   done.type = "checkbox";
@@ -2359,7 +2378,7 @@ function getChecklistDraftValues() {
         return null;
       }
       return {
-        id: row.dataset.itemId || crypto.randomUUID(),
+        id: row.dataset.itemId || generateId(),
         text,
         done: Boolean(doneInput?.checked),
       };
