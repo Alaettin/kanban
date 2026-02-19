@@ -1,4 +1,5 @@
-﻿const DEFAULT_COLUMNS = ["Backlog", "In Arbeit", "Review", "Erledigt"];
+﻿const APP_BASE = "/apps/kanban";
+const DEFAULT_COLUMNS = ["Backlog", "In Arbeit", "Review", "Erledigt"];
 const STORAGE_KEY = "kanban-v2";
 
 const board = document.getElementById("board");
@@ -20,8 +21,7 @@ const cardTemplate = document.getElementById("card-template");
 const userMenuToggle = document.getElementById("user-menu-toggle");
 const userMenu = document.getElementById("user-menu");
 const userInitials = document.getElementById("user-initials");
-const localeToggleBtn = document.getElementById("locale-toggle-btn");
-const localeOptions = document.getElementById("locale-options");
+const userInfo = document.getElementById("user-info");
 const localeDeBtn = document.getElementById("locale-de-btn");
 const localeEnBtn = document.getElementById("locale-en-btn");
 const logoutBtn = document.getElementById("logout-btn");
@@ -63,6 +63,15 @@ const membersForm = document.getElementById("members-form");
 const membersList = document.getElementById("members-list");
 const membersCloseBtn = document.getElementById("members-close-btn");
 const membersApplyBtn = document.getElementById("members-apply-btn");
+const projectNameModal = document.getElementById("project-name-modal");
+const projectNameForm = document.getElementById("project-name-form");
+const projectNameModalTitle = document.getElementById("project-name-modal-title");
+const projectNameMessage = document.getElementById("project-name-message");
+const projectNameField = document.getElementById("project-name-field");
+const projectNameLabel = document.getElementById("project-name-label");
+const projectNameInput = document.getElementById("project-name-input");
+const projectNameOkBtn = document.getElementById("project-name-ok-btn");
+const projectNameCancelBtn = document.getElementById("project-name-cancel-btn");
 const activityOverlay = document.getElementById("activity-overlay");
 const activityPanel = document.getElementById("activity-panel");
 const activityPanelTitle = document.getElementById("activity-panel-title");
@@ -112,8 +121,12 @@ const TRANSLATIONS = {
     localeDe: "Deutsch",
     localeEn: "English",
     defaultProjectName: "Standardprojekt",
-    newProjectPrompt: "Projektname:",
-    renameProjectPrompt: "Projektname ändern:",
+    newProjectTitle: "Neues Projekt",
+    newProjectLabel: "Projektname",
+    newProjectOk: "Erstellen",
+    renameProjectTitle: "Projekt umbenennen",
+    renameProjectLabel: "Projektname",
+    renameProjectOk: "Speichern",
     projectDeleteOwnerOnly: "Nur der Projekt-Owner kann dieses Projekt löschen.",
     atLeastOneProject: "Mindestens ein Projekt muss bestehen bleiben.",
     deleteProjectTitle: "Projekt löschen",
@@ -215,7 +228,6 @@ const TRANSLATIONS = {
     activityInviteCreated: "{actor} hat einen Einladungslink erstellt",
     activityInviteAccepted: "{actor} hat eine Einladung angenommen",
     activityGeneric: "{actor} hat eine Änderung vorgenommen",
-    sortLabel: "Sort",
     sortName: "Name",
     sortPriority: "Prio",
     sortDate: "Datum",
@@ -265,8 +277,12 @@ const TRANSLATIONS = {
     localeDe: "Deutsch",
     localeEn: "English",
     defaultProjectName: "Default project",
-    newProjectPrompt: "Project name:",
-    renameProjectPrompt: "Rename project:",
+    newProjectTitle: "New Project",
+    newProjectLabel: "Project name",
+    newProjectOk: "Create",
+    renameProjectTitle: "Rename Project",
+    renameProjectLabel: "Project name",
+    renameProjectOk: "Save",
     projectDeleteOwnerOnly: "Only the project owner can delete this project.",
     atLeastOneProject: "At least one project must remain.",
     deleteProjectTitle: "Delete project",
@@ -368,7 +384,6 @@ const TRANSLATIONS = {
     activityInviteCreated: "{actor} created an invite link",
     activityInviteAccepted: "{actor} accepted an invite",
     activityGeneric: "{actor} made a change",
-    sortLabel: "Sort",
     sortName: "Name",
     sortPriority: "Priority",
     sortDate: "Date",
@@ -468,9 +483,6 @@ function applyStaticTranslations() {
   syncSidebarToggleButton();
 
   logoutBtn.textContent = t("logout");
-  localeToggleBtn.textContent = currentLocale.toUpperCase();
-  localeDeBtn.textContent = t("localeDe");
-  localeEnBtn.textContent = t("localeEn");
   localeDeBtn.classList.toggle("active", currentLocale === "de");
   localeEnBtn.classList.toggle("active", currentLocale === "en");
 
@@ -544,14 +556,12 @@ function applyStaticTranslations() {
     template.querySelector(".column-drag")?.setAttribute("title", t("moveColumn"));
     template.querySelector(".collapse-all-btn")?.setAttribute("title", t("toggleCards"));
     template.querySelector(".delete-column")?.setAttribute("title", t("deleteColumn"));
-    const sortLabel = template.querySelector(".sort-bar-label");
-    if (sortLabel) sortLabel.textContent = t("sortLabel");
-    const sortName = template.querySelector('.sort-btn[data-field="name"]');
-    const sortPrio = template.querySelector('.sort-btn[data-field="priority"]');
-    const sortDate = template.querySelector('.sort-btn[data-field="date"]');
-    if (sortName) sortName.childNodes[0].textContent = t("sortName");
-    if (sortPrio) sortPrio.childNodes[0].textContent = t("sortPriority");
-    if (sortDate) sortDate.childNodes[0].textContent = t("sortDate");
+    const sortName = template.querySelector('.sort-btn[data-field="name"] .sort-btn-label');
+    const sortPrio = template.querySelector('.sort-btn[data-field="priority"] .sort-btn-label');
+    const sortDate = template.querySelector('.sort-btn[data-field="date"] .sort-btn-label');
+    if (sortName) sortName.textContent = t("sortName");
+    if (sortPrio) sortPrio.textContent = t("sortPriority");
+    if (sortDate) sortDate.textContent = t("sortDate");
     const addItemBtnText = template.querySelector(".add-item-btn");
     if (addItemBtnText) {
       addItemBtnText.setAttribute("title", t("addTaskTitle"));
@@ -632,12 +642,101 @@ setupSearchFilter();
 setupActivityTracking();
 init();
 
+function openProjectNameModal({
+  title,
+  label,
+  okText,
+  defaultValue = "",
+  message = "",
+  showInput = true,
+  danger = false,
+}) {
+  return new Promise((resolve) => {
+    projectNameModalTitle.textContent = title;
+    if (projectNameMessage) {
+      projectNameMessage.textContent = message || "";
+      projectNameMessage.hidden = !message;
+    }
+    if (projectNameLabel) {
+      projectNameLabel.textContent = label || "";
+      projectNameLabel.hidden = !showInput;
+    }
+    if (projectNameField) {
+      projectNameField.hidden = !showInput;
+    }
+    if (projectNameInput) {
+      projectNameInput.required = showInput;
+      projectNameInput.hidden = !showInput;
+    }
+    projectNameOkBtn.textContent = okText;
+    projectNameOkBtn.classList.toggle("btn-danger", Boolean(danger));
+    projectNameCancelBtn.textContent = t("cancel");
+    projectNameInput.value = defaultValue;
+    projectNameModal.showModal();
+    if (showInput) {
+      requestAnimationFrame(() => {
+        projectNameInput.focus();
+        projectNameInput.select();
+      });
+    }
+
+    const cleanup = () => {
+      projectNameForm.removeEventListener("submit", onSubmit);
+      projectNameCancelBtn.removeEventListener("click", onCancel);
+      projectNameModal.removeEventListener("cancel", onCancel);
+      if (projectNameMessage) {
+        projectNameMessage.textContent = "";
+        projectNameMessage.hidden = true;
+      }
+      if (projectNameLabel) {
+        projectNameLabel.hidden = false;
+      }
+      if (projectNameField) {
+        projectNameField.hidden = false;
+      }
+      if (projectNameInput) {
+        projectNameInput.required = true;
+        projectNameInput.hidden = false;
+      }
+      projectNameOkBtn.classList.remove("btn-danger");
+      projectNameModal.close();
+    };
+    const onSubmit = (e) => {
+      e.preventDefault();
+      cleanup();
+      resolve(showInput ? projectNameInput.value : true);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(null);
+    };
+    projectNameForm.addEventListener("submit", onSubmit);
+    projectNameCancelBtn.addEventListener("click", onCancel);
+    projectNameModal.addEventListener("cancel", onCancel);
+  });
+}
+
+async function openProjectStyleConfirm({ title, message, confirmText = t("confirmDelete"), danger = true }) {
+  const result = await openProjectNameModal({
+    title,
+    message,
+    okText: confirmText,
+    showInput: false,
+    danger,
+  });
+  return Boolean(result);
+}
+
 addProjectBtn.addEventListener("click", async () => {
-  const name = prompt(t("newProjectPrompt"), `Project ${state.projects.length + 1}`);
-  if (name === null) {
-    return;
-  }
-  const cleanName = name.trim() || `Project ${state.projects.length + 1}`;
+  const defaultName = `Project ${state.projects.length + 1}`;
+  const name = await openProjectNameModal({
+    title: t("newProjectTitle"),
+    label: t("newProjectLabel"),
+    okText: t("newProjectOk"),
+    defaultValue: defaultName,
+  });
+  if (name === null) return;
+  const cleanName = name.trim() || defaultName;
   setButtonBusy(addProjectBtn, true);
   try {
     const created = await createProjectOnServer(cleanName);
@@ -1111,10 +1210,16 @@ async function apiRequest(path, options = {}) {
     retryBaseMs = 250,
   } = options;
 
+  // Route /api/* through the app base path, keep /auth/* and /api/me central
+  let resolvedPath = path;
+  if (path.startsWith("/api/") && path !== "/api/me") {
+    resolvedPath = APP_BASE + path;
+  }
+
   let attempt = 0;
   while (attempt <= retries) {
     try {
-      const response = await fetch(path, {
+      const response = await fetch(resolvedPath, {
         method,
         headers: { "Content-Type": "application/json" },
         cache,
@@ -1164,6 +1269,7 @@ async function init() {
     return;
   }
   userInitials.textContent = getUserInitials(currentUser.name || currentUser.email || "User");
+  if (userInfo) userInfo.textContent = currentUser.name || currentUser.email || "";
 
   const acceptedProjectId = await handleInviteFromUrl();
   await refreshProjectsFromServer(acceptedProjectId, true);
@@ -1763,14 +1869,15 @@ function renderProjectTabs() {
         alert(t("readOnlyProject"));
         return;
       }
-      const name = prompt(t("renameProjectPrompt"), project.name);
-      if (name === null) {
-        return;
-      }
+      const name = await openProjectNameModal({
+        title: t("renameProjectTitle"),
+        label: t("renameProjectLabel"),
+        okText: t("renameProjectOk"),
+        defaultValue: project.name,
+      });
+      if (name === null) return;
       const cleanName = name.trim();
-      if (!cleanName || cleanName === project.name) {
-        return;
-      }
+      if (!cleanName || cleanName === project.name) return;
 
       const response = await apiRequest(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: "PATCH",
@@ -1847,11 +1954,10 @@ function renderBoard() {
         alert(t("atLeastOneColumn"));
         return;
       }
-      const shouldDelete = await confirmAction({
+      const shouldDelete = await openProjectStyleConfirm({
         title: t("columnDeleteTitle"),
         message: t("columnDeleteMessage", { name: column.title }),
         confirmText: t("confirmDelete"),
-        requireText: null,
       });
       if (!shouldDelete) {
         return;
@@ -2089,11 +2195,10 @@ function renderBoard() {
         if (!canEdit) {
           return;
         }
-        const shouldDelete = await confirmAction({
+        const shouldDelete = await openProjectStyleConfirm({
           title: t("cardDeleteTitle"),
           message: t("cardDeleteMessage", { name: card.title }),
           confirmText: t("confirmDelete"),
-          requireText: null,
         });
         if (!shouldDelete) {
           return;
@@ -2739,7 +2844,7 @@ function setupActivityTracking() {
 }
 
 function setupUserMenu() {
-  if (!userMenuToggle || !userMenu || !logoutBtn || !localeOptions) {
+  if (!userMenuToggle || !userMenu || !logoutBtn) {
     return;
   }
 
@@ -2747,16 +2852,12 @@ function setupUserMenu() {
     event.stopPropagation();
     const isHidden = userMenu.hidden;
     userMenu.hidden = !isHidden;
-    if (isHidden) {
-      localeOptions.hidden = true;
-    }
     userMenuToggle.setAttribute("aria-expanded", isHidden ? "true" : "false");
   });
 
   document.addEventListener("click", (event) => {
     if (!userMenu.hidden && !userMenu.contains(event.target) && !userMenuToggle.contains(event.target)) {
       userMenu.hidden = true;
-      localeOptions.hidden = true;
       userMenuToggle.setAttribute("aria-expanded", "false");
     }
   });
@@ -2775,23 +2876,16 @@ function setupUserMenu() {
 }
 
 function setupLocaleMenu() {
-  if (!localeToggleBtn || !localeOptions || !localeDeBtn || !localeEnBtn) {
+  if (!localeDeBtn || !localeEnBtn) {
     return;
   }
 
-  localeToggleBtn.addEventListener("click", (event) => {
-    event.stopPropagation();
-    localeOptions.hidden = !localeOptions.hidden;
-  });
-
   localeDeBtn.addEventListener("click", () => {
     setLocale("de");
-    localeOptions.hidden = true;
   });
 
   localeEnBtn.addEventListener("click", () => {
     setLocale("en");
-    localeOptions.hidden = true;
   });
 }
 

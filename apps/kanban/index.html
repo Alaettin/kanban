@@ -1,14 +1,17 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kanban Board</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Kanban Board – Workspace</title>
+  <link rel="stylesheet" href="/apps/kanban/styles.css" />
 </head>
 <body>
   <header class="app-header">
-    <div class="brand">Kanban</div>
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand"><svg class="brand-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>Kanban Board</div>
     <div class="header-search-wrap">
       <div class="header-search">
         <input
@@ -66,10 +69,12 @@
         <span id="user-initials">--</span>
       </button>
       <div id="user-menu" class="user-menu" hidden>
-        <button id="locale-toggle-btn" class="user-menu-item" type="button">DE</button>
-        <div id="locale-options" class="locale-options" hidden>
-          <button id="locale-de-btn" class="user-menu-item locale-option" type="button">Deutsch</button>
-          <button id="locale-en-btn" class="user-menu-item locale-option" type="button">English</button>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
         </div>
         <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
       </div>
@@ -226,6 +231,21 @@
     </form>
   </dialog>
 
+  <dialog id="project-name-modal" class="project-name-modal">
+    <form id="project-name-form" class="project-name-form" method="dialog">
+      <h2 id="project-name-modal-title">Neues Projekt</h2>
+      <p id="project-name-message" class="project-name-message" hidden></p>
+      <label id="project-name-field" class="field" for="project-name-input">
+        <span id="project-name-label">Projektname</span>
+        <input id="project-name-input" type="text" maxlength="60" required autocomplete="off" />
+      </label>
+      <div class="project-name-actions">
+        <button id="project-name-cancel-btn" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="project-name-ok-btn" class="btn" type="submit">Erstellen</button>
+      </div>
+    </form>
+  </dialog>
+
   <template id="column-template">
     <article class="column">
       <header class="column-header">
@@ -242,10 +262,9 @@
         </button>
       </header>
       <div class="sort-bar">
-        <span class="sort-bar-label">Sort</span>
-        <button class="sort-btn" data-field="name" type="button">Name<span class="sort-icon"></span></button>
-        <button class="sort-btn" data-field="priority" type="button">Prio<span class="sort-icon"></span></button>
-        <button class="sort-btn" data-field="date" type="button">Datum<span class="sort-icon"></span></button>
+        <button class="sort-btn" data-field="name" type="button"><span class="sort-btn-label">Name</span><span class="sort-icon"></span></button>
+        <button class="sort-btn" data-field="priority" type="button"><span class="sort-btn-label">Prio</span><span class="sort-icon"></span></button>
+        <button class="sort-btn" data-field="date" type="button"><span class="sort-btn-label">Datum</span><span class="sort-icon"></span></button>
       </div>
       <div class="cards"></div>
       <div class="column-footer">
@@ -289,6 +308,6 @@
     </div>
   </template>
 
-  <script src="app.js"></script>
+  <script src="/apps/kanban/app.js"></script>
 </body>
 </html>

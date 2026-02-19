@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workspace</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <header class="dash-header">
+    <div class="dash-brand">
+      <span class="dash-brand-icon"></span>
+      Workspace
+    </div>
+    <div class="dash-header-spacer"></div>
+    <div class="dash-user-wrap">
+      <button id="user-menu-toggle" class="dash-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="dash-user-menu" hidden>
+        <div id="user-info" class="dash-user-info"></div>
+        <div class="dash-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="dash-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <section class="dash-hero">
+      <h1 id="dash-greeting">Willkommen</h1>
+      <p class="dash-subtitle">Waehle eine App, um loszulegen.</p>
+    </section>
+
+    <section id="app-grid" class="app-grid" aria-label="Apps"></section>
+  </main>
+
+  <template id="app-tile-template">
+    <a class="app-tile" href="#">
+      <div class="app-tile-icon"></div>
+      <div class="app-tile-content">
+        <h2 class="app-tile-name"></h2>
+        <p class="app-tile-desc"></p>
+      </div>
+    </a>
+  </template>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
