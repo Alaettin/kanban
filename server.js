@@ -20,8 +20,10 @@ const db = require("./shared/db");
 const auth = require("./shared/auth");
 const registry = require("./shared/app-registry");
 const kanbanRoutes = require("./apps/kanban/routes");
+const dtiRoutes = require("./apps/dti-connector/routes");
 
 const app = express();
+const dtiDir = path.join(__dirname, "apps", "dti-connector");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -38,6 +40,15 @@ registry.register({
   icon: "kanban",
   path: "/apps/kanban",
   color: "#2563eb",
+});
+
+registry.register({
+  id: "dti-connector",
+  name: "DTI Connector",
+  description: "Daten erstellen und bereitstellen",
+  icon: "dti-connector",
+  path: "/apps/dti-connector",
+  color: "#0891b2",
 });
 
 // --- Middleware ---
@@ -73,6 +84,19 @@ app.get("/dashboard", auth.requireAuthPage, (req, res) => {
   res.sendFile(path.join(platformDir, "dashboard.html"));
 });
 
+// --- App access guard ---
+function requireAppAccess(appId) {
+  return async (req, res, next) => {
+    if (req.user.isSuperadmin) return next();
+    const row = await db.get(
+      "SELECT 1 FROM user_app_access WHERE user_id = ? AND app_id = ?",
+      [req.user.id, appId]
+    );
+    if (row) return next();
+    res.redirect("/dashboard");
+  };
+}
+
 // --- Central API ---
 app.get("/api/me", auth.requireAuth, (req, res) => {
   res.json({
@@ -80,11 +104,22 @@ app.get("/api/me", auth.requireAuth, (req, res) => {
     email: req.user.email,
     name: req.user.name,
     picture: req.user.picture,
+    role: req.user.role,
+    isAdmin: req.user.isAdmin,
   });
 });
 
-app.get("/api/apps", auth.requireAuth, (req, res) => {
-  res.json({ apps: registry.getApps() });
+app.get("/api/apps", auth.requireAuth, async (req, res) => {
+  const allApps = registry.getApps();
+  if (req.user.isSuperadmin) {
+    return res.json({ apps: allApps });
+  }
+  const rows = await db.all(
+    "SELECT app_id FROM user_app_access WHERE user_id = ?",
+    [req.user.id]
+  );
+  const allowed = new Set(rows.map((r) => r.app_id));
+  res.json({ apps: allApps.filter((a) => allowed.has(a.id)) });
 });
 
 // --- Kanban App ---
@@ -99,7 +134,7 @@ app.get("/apps/kanban/app.js", (req, res) => {
 });
 
 // Kanban page
-app.get("/apps/kanban", auth.requireAuthPage, (req, res) => {
+app.get("/apps/kanban", auth.requireAuthPage, requireAppAccess("kanban"), (req, res) => {
   res.sendFile(path.join(kanbanDir, "index.html"));
 });
 
@@ -113,6 +148,158 @@ const kanbanRouter = express.Router();
 kanbanRoutes.mountRoutes(kanbanRouter);
 app.use("/apps/kanban", kanbanRouter);
 
+// --- DTI Connector App ---
+
+app.get("/apps/dti-connector/styles.css", (req, res) => {
+  res.sendFile(path.join(dtiDir, "styles.css"));
+});
+
+app.get("/apps/dti-connector/app.js", (req, res) => {
+  res.sendFile(path.join(dtiDir, "app.js"));
+});
+
+app.get("/apps/dti-connector", auth.requireAuthPage, requireAppAccess("dti-connector"), (req, res) => {
+  res.sendFile(path.join(dtiDir, "index.html"));
+});
+
+app.get("/apps/dti-connector/docs", auth.requireAuthPage, requireAppAccess("dti-connector"), (req, res) => {
+  res.sendFile(path.join(dtiDir, "docs.html"));
+});
+
+// DTI API routes (mounted under /apps/dti-connector)
+const dtiRouter = express.Router();
+dtiRoutes.mountRoutes(dtiRouter);
+app.use("/apps/dti-connector", dtiRouter);
+
+// --- Admin ---
+const adminDir = path.join(platformDir, "admin");
+
+app.get("/admin/admin.css", (req, res) => {
+  res.sendFile(path.join(adminDir, "admin.css"));
+});
+
+app.get("/admin/admin.js", (req, res) => {
+  res.sendFile(path.join(adminDir, "admin.js"));
+});
+
+app.get("/admin", auth.requireAdminPage, (req, res) => {
+  res.sendFile(path.join(adminDir, "admin.html"));
+});
+
+// Admin API
+app.get("/api/admin/users", auth.requireAdmin, async (req, res) => {
+  try {
+    const users = await db.all(
+      `SELECT u.id, u.email, u.name, u.picture, u.created_at,
+              COALESCE(ur.role, 'user') AS role
+       FROM users u
+       LEFT JOIN user_roles ur ON ur.user_id = u.id
+       ORDER BY u.created_at ASC`
+    );
+    const access = await db.all("SELECT user_id, app_id FROM user_app_access");
+    const accessMap = {};
+    for (const a of access) {
+      if (!accessMap[a.user_id]) accessMap[a.user_id] = [];
+      accessMap[a.user_id].push(a.app_id);
+    }
+    const result = users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      picture: u.picture,
+      createdAt: u.created_at,
+      role: u.email === auth.SUPERADMIN_EMAIL ? "superadmin" : u.role,
+      isSuperadmin: u.email === auth.SUPERADMIN_EMAIL,
+      apps: accessMap[u.id] || [],
+    }));
+    res.json({ users: result });
+  } catch (err) {
+    res.status(500).json({ error: "LOAD_USERS_FAILED" });
+  }
+});
+
+app.put("/api/admin/users/:userId/role", auth.requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body || {};
+    if (!role || !["user", "admin"].includes(role)) {
+      return res.status(400).json({ error: "INVALID_ROLE" });
+    }
+    // Cannot edit superadmin
+    const target = await db.get("SELECT email FROM users WHERE id = ?", [userId]);
+    if (!target) return res.status(404).json({ error: "USER_NOT_FOUND" });
+    if (target.email === auth.SUPERADMIN_EMAIL) {
+      return res.status(403).json({ error: "CANNOT_EDIT_SUPERADMIN" });
+    }
+    await db.run(
+      `INSERT INTO user_roles (user_id, role) VALUES (?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET role = excluded.role`,
+      [userId, role]
+    );
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "UPDATE_ROLE_FAILED" });
+  }
+});
+
+app.put("/api/admin/users/:userId/access", auth.requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { appId, granted } = req.body || {};
+    if (!appId || typeof granted !== "boolean") {
+      return res.status(400).json({ error: "INVALID_PARAMS" });
+    }
+    const target = await db.get("SELECT email FROM users WHERE id = ?", [userId]);
+    if (!target) return res.status(404).json({ error: "USER_NOT_FOUND" });
+    if (target.email === auth.SUPERADMIN_EMAIL) {
+      return res.status(403).json({ error: "CANNOT_EDIT_SUPERADMIN" });
+    }
+    if (granted) {
+      await db.run(
+        "INSERT OR IGNORE INTO user_app_access (user_id, app_id) VALUES (?, ?)",
+        [userId, appId]
+      );
+    } else {
+      await db.run(
+        "DELETE FROM user_app_access WHERE user_id = ? AND app_id = ?",
+        [userId, appId]
+      );
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "UPDATE_ACCESS_FAILED" });
+  }
+});
+
+app.delete("/api/admin/users/:userId", auth.requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const target = await db.get("SELECT email FROM users WHERE id = ?", [userId]);
+    if (!target) return res.status(404).json({ error: "USER_NOT_FOUND" });
+    if (target.email === auth.SUPERADMIN_EMAIL) {
+      return res.status(403).json({ error: "CANNOT_DELETE_SUPERADMIN" });
+    }
+    if (userId === req.user.id) {
+      return res.status(403).json({ error: "CANNOT_DELETE_SELF" });
+    }
+    // 1. Delete physical files
+    const userFilesDir = path.join(dataDir, "dti-files", userId);
+    if (fs.existsSync(userFilesDir)) {
+      fs.rmSync(userFilesDir, { recursive: true, force: true });
+    }
+    // 2. Delete DTI connectors (CASCADE handles all data tables)
+    await db.run("DELETE FROM dti_connectors WHERE user_id = ?", [userId]);
+    // 3. Delete platform access tables
+    await db.run("DELETE FROM user_app_access WHERE user_id = ?", [userId]);
+    await db.run("DELETE FROM user_roles WHERE user_id = ?", [userId]);
+    // 4. Delete user (CASCADE: sessions, user_state, projects, project_members, project_invites, project_activities)
+    await db.run("DELETE FROM users WHERE id = ?", [userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "DELETE_USER_FAILED" });
+  }
+});
+
 // --- 404 fallback ---
 app.use((req, res) => {
   res.status(404).send("Not Found");
@@ -123,6 +310,7 @@ async function start() {
   db.open(dbPath);
   await auth.initAuthTables();
   await kanbanRoutes.initKanbanTables();
+  await dtiRoutes.initDtiTables();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically

@@ -1,8 +1,9 @@
 const crypto = require("crypto");
-const { run, get } = require("./db");
+const { run, get, all } = require("./db");
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
+const SUPERADMIN_EMAIL = "alaettin87@gmail.com";
 
 function randomId(size = 32) {
   return crypto.randomBytes(size).toString("hex");
@@ -91,8 +92,11 @@ async function getSessionUser(req) {
     return null;
   }
   const row = await get(
-    `SELECT sessions.sid, sessions.expires_at, users.id, users.email, users.name, users.picture
-     FROM sessions JOIN users ON users.id = sessions.user_id
+    `SELECT sessions.sid, sessions.expires_at, users.id, users.email, users.name, users.picture,
+            COALESCE(user_roles.role, 'user') AS role
+     FROM sessions
+     JOIN users ON users.id = sessions.user_id
+     LEFT JOIN user_roles ON user_roles.user_id = users.id
      WHERE sessions.sid = ?`,
     [sid]
   );
@@ -103,6 +107,8 @@ async function getSessionUser(req) {
     await run("DELETE FROM sessions WHERE sid = ?", [sid]);
     return null;
   }
+  const isSuperadmin = row.email === SUPERADMIN_EMAIL;
+  const isAdmin = isSuperadmin || row.role === "admin";
   return {
     sid: row.sid,
     expiresAt: row.expires_at,
@@ -110,6 +116,9 @@ async function getSessionUser(req) {
     email: row.email,
     name: row.name,
     picture: row.picture,
+    role: isSuperadmin ? "superadmin" : row.role,
+    isSuperadmin,
+    isAdmin,
   };
 }
 
@@ -132,6 +141,42 @@ async function requireAuthPage(req, res, next) {
     const user = await getSessionUser(req);
     if (!user) {
       res.redirect("/");
+      return;
+    }
+    req.user = user;
+    next();
+  } catch {
+    res.redirect("/");
+  }
+}
+
+async function requireAdmin(req, res, next) {
+  try {
+    const user = await getSessionUser(req);
+    if (!user) {
+      res.status(401).json({ error: "UNAUTHORIZED" });
+      return;
+    }
+    if (!user.isAdmin) {
+      res.status(403).json({ error: "FORBIDDEN" });
+      return;
+    }
+    req.user = user;
+    next();
+  } catch {
+    res.status(500).json({ error: "AUTH_CHECK_FAILED" });
+  }
+}
+
+async function requireAdminPage(req, res, next) {
+  try {
+    const user = await getSessionUser(req);
+    if (!user) {
+      res.redirect("/");
+      return;
+    }
+    if (!user.isAdmin) {
+      res.redirect("/dashboard");
       return;
     }
     req.user = user;
@@ -187,6 +232,33 @@ async function initAuthTables() {
   `);
   await run("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)");
   await run("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)");
+  await run(`
+    CREATE TABLE IF NOT EXISTS user_roles (
+      user_id TEXT PRIMARY KEY,
+      role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  await run(`
+    CREATE TABLE IF NOT EXISTS user_app_access (
+      user_id TEXT NOT NULL,
+      app_id TEXT NOT NULL,
+      PRIMARY KEY (user_id, app_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  // Migration: if user_app_access is empty but users exist, grant all existing users access to all apps
+  const accessCount = await get("SELECT COUNT(*) AS cnt FROM user_app_access");
+  const userCount = await get("SELECT COUNT(*) AS cnt FROM users");
+  if (accessCount.cnt === 0 && userCount.cnt > 0) {
+    const users = await all("SELECT id FROM users");
+    const appIds = ["kanban", "dti-connector"];
+    for (const u of users) {
+      for (const appId of appIds) {
+        await run("INSERT OR IGNORE INTO user_app_access (user_id, app_id) VALUES (?, ?)", [u.id, appId]);
+      }
+    }
+  }
 }
 
 function mountAuthRoutes(app) {
@@ -330,6 +402,8 @@ module.exports = {
   getSessionUser,
   requireAuth,
   requireAuthPage,
+  requireAdmin,
+  requireAdminPage,
   upsertUserFromGoogle,
   oauthConfigured,
   initAuthTables,
@@ -339,4 +413,5 @@ module.exports = {
   startMaintenanceJobs,
   isProduction,
   SESSION_TTL_MS,
+  SUPERADMIN_EMAIL,
 };

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Workspace</title>
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <header class="admin-header">
+    <a href="/dashboard" class="admin-back">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+    </a>
+    <h1 class="admin-title" id="admin-title">Benutzerverwaltung</h1>
+    <div class="admin-header-spacer"></div>
+    <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+      <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+      <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <div class="admin-toolbar">
+      <input type="text" id="search-input" class="admin-search" placeholder="Suchen..." autocomplete="off" />
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th id="th-user">Benutzer</th>
+            <th id="th-role">Rolle</th>
+            <th id="th-apps">App-Zugang</th>
+            <th id="th-created">Erstellt</th>
+            <th id="th-actions">Aktionen</th>
+          </tr>
+        </thead>
+        <tbody id="user-tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <div id="save-bar" class="save-bar">
+    <span id="save-bar-text">Ungespeicherte Änderungen</span>
+    <div class="save-bar-actions">
+      <button id="save-discard" class="btn btn-secondary" type="button">Verwerfen</button>
+      <button id="save-confirm" class="btn btn-primary" type="button">Übernehmen</button>
+    </div>
+  </div>
+
+  <div id="delete-modal" class="modal-overlay" hidden>
+    <div class="modal-dialog">
+      <h2 id="modal-title">Benutzer entfernen?</h2>
+      <p id="modal-text">Alle Daten dieses Benutzers werden unwiderruflich gelöscht.</p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="modal-confirm" class="btn btn-danger" type="button">Entfernen</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

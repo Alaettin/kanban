@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DTI Connector – Workspace</title>
+  <link rel="stylesheet" href="/apps/dti-connector/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <path d="M4 6h6M4 12h6M4 18h6" />
+        <path d="M14 6h6M14 12h6M14 18h6" />
+        <path d="M10 6l4 6-4 6" />
+      </svg>
+      <span id="brand-text">DTI Connector</span>
+    </div>
+    <div class="header-spacer"></div>
+    <a id="docs-link" href="/apps/dti-connector/docs" class="header-swagger-btn" target="_blank" title="API Docs">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <span id="swagger-btn-label">API Docs</span>
+    </a>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Connector List View -->
+  <div id="connector-list-view" class="connector-list-container">
+    <div class="connector-list-inner">
+      <div class="page-header">
+        <h2 id="connector-list-title">Konnektoren</h2>
+      </div>
+      <div class="connector-toolbar">
+        <button id="connector-add-btn" class="btn btn-secondary btn-sm-text" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span id="connector-add-label">Neuer Connector</span>
+        </button>
+      </div>
+      <div id="connector-grid" class="connector-grid"></div>
+      <div id="connector-hint" class="hierarchy-hint" hidden></div>
+    </div>
+  </div>
+
+  <!-- Connector Detail View -->
+  <div id="connector-detail-view" class="app-layout" style="display:none">
+    <aside id="sidebar" class="sidebar" aria-label="Navigation">
+      <nav id="sidebar-nav" class="sidebar-nav">
+        <button class="sidebar-item active" data-page="hierarchy" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/>
+          </svg>
+          <span class="sidebar-label">Hierarchie</span>
+        </button>
+        <button class="sidebar-item" data-page="model" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="sidebar-label">Modell</span>
+        </button>
+        <button class="sidebar-item" data-page="files" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="sidebar-label">Dateien</span>
+        </button>
+        <button class="sidebar-item" data-page="assets" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 7h-4V3H8v4H4a2 2 0 0 0-2 2v11h20V9a2 2 0 0 0-2-2z"/>
+          </svg>
+          <span class="sidebar-label">Assets</span>
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="sidebar-item" data-page="settings" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span class="sidebar-label">Einstellungen</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="Navigation einklappen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main id="page-content" class="page-content">
+      <!-- Hierarchy Page -->
+      <section id="page-hierarchy" class="page-section active">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="hierarchy-title">Hierarchie-Level</h2>
+            <p id="hierarchy-desc">Definiere die Ebenen der Produkthierarchie.</p>
+            <div class="allowed-chars-box" id="hierarchy-chars-box">
+              <span id="hierarchy-chars-label">Erlaubte Zeichen:</span>
+              <code>A-Z a-z 0-9 _ -</code>
+            </div>
+          </div>
+          <div id="hierarchy-list" class="hierarchy-list"></div>
+          <div class="hierarchy-actions">
+            <button id="hierarchy-add-btn" class="btn btn-secondary" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span id="hierarchy-add-label">Level hinzufügen</span>
+            </button>
+            <button id="hierarchy-save-btn" class="btn btn-primary" type="button">
+              <span id="hierarchy-save-label">Übernehmen</span>
+            </button>
+          </div>
+          <div id="hierarchy-hint" class="hierarchy-hint" hidden></div>
+        </div>
+      </section>
+
+      <!-- Model Page -->
+      <section id="page-model" class="page-section">
+        <div class="page-inner page-inner-wide">
+          <div class="page-header">
+            <h2 id="model-title">Datenmodell</h2>
+            <p id="model-desc">Definiere die Datenpunkte, die der Connector bereitstellt. Jeder Datenpunkt hat eine eindeutige ID, einen optionalen Namen und einen Typ.</p>
+          </div>
+
+          <div class="model-toolbar">
+            <div class="model-search-wrap">
+              <svg class="model-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input id="model-search" class="model-search" type="text" placeholder="Suchen…" />
+            </div>
+            <span id="model-count" class="model-count"></span>
+            <button id="model-add-btn" class="btn btn-secondary btn-sm-text" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span id="model-add-label">Hinzufügen</span>
+            </button>
+          </div>
+
+          <div class="model-table-wrap">
+            <div class="model-table-header">
+              <span class="model-col-num">#</span>
+              <span class="model-col-id">ID</span>
+              <span class="model-col-name">Name</span>
+              <span class="model-col-type">Typ</span>
+              <span class="model-col-del"></span>
+            </div>
+            <div id="model-table-body" class="model-table-body"></div>
+          </div>
+
+          <div class="model-actions">
+            <button id="model-save-btn" class="btn btn-primary" type="button">
+              <span id="model-save-label">Übernehmen</span>
+            </button>
+          </div>
+          <div id="model-hint" class="hierarchy-hint" hidden></div>
+        </div>
+      </section>
+      <!-- Files Page -->
+      <section id="page-files" class="page-section">
+        <div class="page-inner page-inner-wide">
+          <div class="page-header">
+            <h2 id="files-title">Dateien</h2>
+            <p id="files-desc">Lade Dateien hoch und verknüpfe sie mit einer eindeutigen ID. Die Dateien werden sofort gespeichert.</p>
+          </div>
+
+          <div class="model-toolbar">
+            <div class="model-search-wrap">
+              <svg class="model-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input id="files-search" class="model-search" type="text" placeholder="Suchen…" />
+            </div>
+            <span id="files-count" class="model-count"></span>
+            <button id="files-add-btn" class="btn btn-secondary btn-sm-text" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span id="files-add-label">Hinzufügen</span>
+            </button>
+          </div>
+
+          <div class="model-table-wrap">
+            <div class="files-table-header">
+              <span class="files-col-num">#</span>
+              <span class="files-col-id">ID</span>
+              <span class="files-col-lang">EN</span>
+              <span class="files-col-lang">DE</span>
+              <span class="files-col-del"></span>
+            </div>
+            <div id="files-table-body" class="model-table-body"></div>
+          </div>
+
+          <div id="files-hint" class="hierarchy-hint" hidden></div>
+        </div>
+      </section>
+
+      <section id="page-assets" class="page-section">
+        <!-- List View -->
+        <div id="assets-list-view" class="page-inner page-inner-wide">
+          <div class="page-header">
+            <h2 id="assets-title">Assets</h2>
+            <p id="assets-desc">Verwalte deine Assets. Jedes Asset erhält eine eindeutige Item ID.</p>
+            <div class="allowed-chars-box" id="assets-chars-box">
+              <span id="assets-chars-label">Erlaubte Zeichen:</span>
+              <code>A-Z a-z 0-9</code>
+            </div>
+          </div>
+
+          <div class="model-toolbar">
+            <div class="model-search-wrap">
+              <svg class="model-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input id="assets-search" class="model-search" type="text" placeholder="Suchen…" />
+            </div>
+            <span id="assets-count" class="model-count"></span>
+            <button id="assets-add-btn" class="btn btn-secondary btn-sm-text" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span id="assets-add-label">Hinzufügen</span>
+            </button>
+          </div>
+
+          <div class="model-table-wrap">
+            <div class="assets-table-header">
+              <span class="assets-col-num">#</span>
+              <span class="assets-col-id" id="assets-col-id-label">Item ID</span>
+              <span class="assets-col-del"></span>
+            </div>
+            <div id="assets-table-body" class="model-table-body"></div>
+          </div>
+
+          <div id="assets-list-hint" class="hierarchy-hint" hidden></div>
+        </div>
+
+        <!-- Detail View -->
+        <div id="assets-detail-view" class="page-inner page-inner-wide" style="display:none">
+          <div class="assets-detail-header">
+            <button id="assets-back-btn" class="btn btn-secondary btn-sm-text" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              <span id="assets-back-label">Zurück</span>
+            </button>
+            <label id="assets-detail-id-label" class="assets-detail-id-label">Item ID</label>
+            <input id="assets-detail-id" class="assets-detail-id-input" type="text" />
+          </div>
+
+          <div id="assets-hierarchy-section">
+            <h3 id="assets-hierarchy-section-title" class="assets-section-title">Hierarchie</h3>
+            <div id="assets-hierarchy-fields" class="assets-fields"></div>
+          </div>
+
+          <div id="assets-props-section">
+            <h3 id="assets-props-section-title" class="assets-section-title">Eigenschaften</h3>
+            <div class="model-toolbar">
+              <div class="model-search-wrap">
+                <svg class="model-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input id="assets-props-search" class="model-search" type="text" placeholder="Suchen…" />
+              </div>
+              <span id="assets-props-count" class="model-count"></span>
+            </div>
+            <div class="model-table-wrap">
+              <div class="assets-props-table-header">
+                <span>#</span>
+                <span id="assets-props-col-id">ID</span>
+                <span>EN</span>
+                <span>DE</span>
+              </div>
+              <div id="assets-props-body" class="model-table-body"></div>
+            </div>
+          </div>
+
+          <div id="assets-files-section">
+            <h3 id="assets-files-section-title" class="assets-section-title">Dateien</h3>
+            <div class="model-table-wrap">
+              <div class="assets-files-table-header">
+                <span>#</span>
+                <span id="assets-files-col-id">ID</span>
+                <span>File</span>
+              </div>
+              <div id="assets-files-body" class="model-table-body"></div>
+            </div>
+          </div>
+
+          <div class="model-actions">
+            <button id="assets-save-btn" class="btn btn-primary" type="button">
+              <span id="assets-save-label">Übernehmen</span>
+            </button>
+          </div>
+          <div id="assets-detail-hint" class="hierarchy-hint" hidden></div>
+        </div>
+      </section>
+
+      <!-- Settings Page -->
+      <section id="page-settings" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="settings-title">Einstellungen</h2>
+            <p id="settings-desc">Verwalte deinen API-Schlüssel für den Zugriff auf die DTI Connector API.</p>
+          </div>
+
+          <div class="settings-card">
+            <h3 id="settings-apikey-title">API-Schlüssel</h3>
+            <p id="settings-apikey-desc" class="settings-card-desc">Dein persönlicher Schlüssel wird als Teil der API-URL verwendet. Ohne Schlüssel ist kein Zugriff auf die API möglich.</p>
+            <div class="api-key-row">
+              <input id="api-key-display" class="api-key-input" type="text" readonly placeholder="Noch kein Schlüssel generiert" />
+              <button id="api-key-copy-btn" class="btn btn-secondary btn-sm" type="button" title="Kopieren">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <div class="settings-actions">
+              <button id="api-key-generate-btn" class="btn btn-secondary" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span id="api-key-generate-label">Generieren</span>
+              </button>
+              <button id="api-key-save-btn" class="btn btn-primary" type="button" disabled>
+                <span id="api-key-save-label">Übernehmen</span>
+              </button>
+            </div>
+            <div id="settings-hint" class="hierarchy-hint" hidden></div>
+          </div>
+
+          <div class="settings-card" id="settings-endpoint-card" style="display:none">
+            <h3 id="settings-endpoint-title">Dein API-Endpunkt</h3>
+            <div class="api-endpoint-preview">
+              <code id="api-endpoint-url"></code>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Confirm dialog -->
+    <dialog id="dti-confirm-modal" class="dti-confirm-modal">
+      <form id="dti-confirm-form" method="dialog" class="dti-confirm-form">
+        <h2 id="dti-confirm-title">Änderungen übernehmen</h2>
+        <p id="dti-confirm-message">Die Hierarchie-Level werden gespeichert und sind sofort über die API verfügbar. Fortfahren?</p>
+        <div class="dti-confirm-actions">
+          <button id="dti-confirm-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+          <button id="dti-confirm-ok" class="btn btn-primary" type="submit" value="confirm">Übernehmen</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+
+  <!-- Connector delete modal -->
+  <dialog id="connector-delete-modal" class="dti-confirm-modal">
+    <form id="connector-delete-form" method="dialog" class="dti-confirm-form">
+      <h2 id="connector-delete-title">Connector löschen?</h2>
+      <p id="connector-delete-message">Alle Daten dieses Connectors werden unwiderruflich gelöscht.</p>
+      <div class="dti-confirm-actions">
+        <button id="connector-delete-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="connector-delete-ok" class="btn btn-danger" type="submit" value="confirm">Löschen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/apps/dti-connector/app.js"></script>
+</body>
+</html>

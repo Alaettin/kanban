@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DTI Connector – API Documentation</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --bg: #f0f4f9;
+      --surface: #ffffff;
+      --surface-2: #f8fafb;
+      --surface-3: #eef2f6;
+      --text: #0f1d2e;
+      --text-2: #3d5468;
+      --muted: #7a92a6;
+      --accent: #0891b2;
+      --accent-light: rgba(8, 145, 178, 0.08);
+      --border: #dde4ed;
+      --radius: 12px;
+      --transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+      --green: #16a34a;
+      --green-bg: #f0fdf4;
+      --green-border: #86efac;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .docs-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 2rem;
+      height: 58px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(221, 228, 237, 0.7);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .docs-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--accent-light);
+      color: var(--accent);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .docs-back:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .docs-back svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .docs-brand {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.03em;
+    }
+
+    .docs-container {
+      max-width: 80%;
+      margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.3rem;
+    }
+
+    .docs-subtitle {
+      color: var(--text-2);
+      font-size: 0.88rem;
+      margin-bottom: 2rem;
+    }
+
+    h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 2rem 0 0.75rem;
+      color: var(--text);
+    }
+
+    .base-url-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .base-url-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .base-url-value {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      word-break: break-all;
+    }
+
+    .base-url-none {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.82rem;
+      color: #b45309;
+    }
+
+    .base-url-none a {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .endpoint-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.9rem 1.1rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--transition);
+    }
+
+    .endpoint-card.open .endpoint-header {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .endpoint-header:hover {
+      background: var(--surface-2);
+    }
+
+    .endpoint-chevron {
+      width: 16px;
+      height: 16px;
+      stroke: var(--muted);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+      margin-left: 0.25rem;
+    }
+
+    .endpoint-card.open .endpoint-chevron {
+      transform: rotate(90deg);
+    }
+
+    .endpoint-body {
+      display: none;
+      padding: 1rem 1.1rem;
+    }
+
+    .endpoint-card.open .endpoint-body {
+      display: block;
+    }
+
+    .method-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+
+    .method-get {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid var(--green-border);
+    }
+
+    .method-post {
+      background: #eff6ff;
+      color: #2563eb;
+      border: 1px solid #93c5fd;
+    }
+
+    .endpoint-path {
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .endpoint-summary {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+
+    .endpoint-body p {
+      margin: 0 0 0.75rem;
+      font-size: 0.82rem;
+      color: var(--text-2);
+    }
+
+    .response-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+      margin-top: 0.75rem;
+    }
+
+    code, pre {
+      font-family: 'Courier New', monospace;
+    }
+
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .status-code {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.4rem;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: 'Courier New', monospace;
+    }
+
+    .status-200 { background: var(--green-bg); color: var(--green); }
+    .status-401 { background: #fef2f2; color: #dc2626; }
+    .status-404 { background: #fffbeb; color: #b45309; }
+
+    .try-section {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .try-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      background: linear-gradient(135deg, var(--accent) 0%, #0e7490 100%);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+    }
+
+    .try-btn:hover {
+      box-shadow: 0 4px 16px rgba(8, 145, 178, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .try-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .try-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .try-result {
+      margin-top: 0.75rem;
+    }
+
+    .try-result-status {
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+
+    .try-result pre {
+      margin: 0;
+    }
+
+    .auth-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .auth-section h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .auth-section p {
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--text-2);
+    }
+  </style>
+</head>
+<body>
+  <header class="docs-header">
+    <a id="back-link" href="/apps/dti-connector" class="docs-back">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <span class="docs-brand">DTI Connector API</span>
+  </header>
+
+  <div class="docs-container">
+    <h1>API Documentation</h1>
+    <p class="docs-subtitle">Public REST API for the DTI Connector.</p>
+
+    <div class="base-url-card">
+      <div class="base-url-label">Base URL</div>
+      <div id="base-url-display"></div>
+    </div>
+
+    <div class="auth-section">
+      <h3>Authentication</h3>
+      <p>
+        Your personal API key (UUID) is part of the base URL. Generate and save your key on the
+        <strong>Settings</strong> page of the DTI Connector app.
+        Each API key is unique per user — your data is fully isolated.
+      </p>
+    </div>
+
+    <h2>Endpoints</h2>
+
+    <!-- GET /Product/ids -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/Product/ids</span>
+        <span class="endpoint-summary">List all item IDs</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns an array of all asset (item) IDs.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>["CBL001", "CBL002", "DISH001", "DISH002"]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="try-section">
+          <button id="try-product-ids-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-product-ids-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /Product/hierarchy/levels -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/Product/hierarchy/levels</span>
+        <span class="endpoint-summary">List hierarchy levels</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns all defined hierarchy levels, ordered by level number.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  { "level": 1, "name": "ProductType" },
+  { "level": 2, "name": "Manufacturer" },
+  { "level": 3, "name": "Series" }
+]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="try-section">
+          <button id="try-hierarchy-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-hierarchy-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /model -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/model</span>
+        <span class="endpoint-summary">List model datapoints</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns all defined datapoints with their ID, name, and type (0 = Property, 1 = File).</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  { "id": "manufacturer", "name": "Manufacturer", "type": 0 },
+  { "id": "datasheet", "name": "Datasheet", "type": 1 }
+]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="try-section">
+          <button id="try-model-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-model-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /Product/{itemId}/hierarchy -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/Product/{itemId}/hierarchy</span>
+        <span class="endpoint-summary">Get hierarchy values for an asset</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns the hierarchy level values for a specific asset. Each level shows the configured value as <code>name</code>.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  { "level": 1, "name": "Electric engineering" },
+  { "level": 2, "name": "Cable, wire" },
+  { "level": 3, "name": "Energy cable" }
+]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="response-label">Error <span class="status-code status-404">404 Not Found</span></div>
+<pre>{ "error": "Asset not found" }</pre>
+
+        <div class="try-section">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--muted)">Item ID</label>
+            <input id="try-item-hierarchy-id" type="text" placeholder="assetId" style="font-family:'Courier New',monospace;font-size:0.8rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);width:200px" />
+          </div>
+          <button id="try-item-hierarchy-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-item-hierarchy-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST /Product/{itemId}/values -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-post">POST</span>
+        <span class="endpoint-path">/Product/{itemId}/values</span>
+        <span class="endpoint-summary">Get property values for an asset</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns property values for a specific asset. Use the request body to filter by language and/or property IDs. Send empty arrays to get all values.</p>
+
+        <div class="response-label">Request Body</div>
+<pre>{
+  "propertiesWithLanguage": {
+    "languages": ["en", "de"],
+    "propertyIds": ["dp.color"]
+  },
+  "propertiesWithoutLanguage": {
+    "propertyIds": ["dp.weight"]
+  }
+}</pre>
+
+        <div class="response-label">Response — all empty arrays <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  {
+    "propertyId": "dp.color",
+    "value": "Red",
+    "valueLanguage": "en",
+    "needsResolve": false
+  },
+  {
+    "propertyId": "dp.color",
+    "value": "Rot",
+    "valueLanguage": "de",
+    "needsResolve": false
+  },
+  {
+    "propertyId": "PIM_Thumbnail",
+    "value": "iVBORw0KGgoAAAANS...",
+    "valueLanguage": "en",
+    "mimeType": "image/png",
+    "filename": "logo",
+    "needsResolve": false
+  },
+  {
+    "propertyId": "PIM_Thumbnail",
+    "value": "iVBORw0KGgoAAAANS...",
+    "valueLanguage": "de",
+    "mimeType": "image/png",
+    "filename": "logo_de",
+    "needsResolve": false
+  }
+]</pre>
+
+        <div class="response-label">Response — languages: ["de"] <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  {
+    "propertyId": "DMS_Title1",
+    "value": "Spezifikation für Energie-Kabel",
+    "valueLanguage": "de",
+    "needsResolve": false
+  }
+]</pre>
+
+        <div class="response-label">Response — propertiesWithoutLanguage <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  {
+    "propertyId": "dp.weight",
+    "value": "1.5kg",
+    "valueLanguage": "en",
+    "needsResolve": false
+  }
+]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="response-label">Error <span class="status-code status-404">404 Not Found</span></div>
+<pre>{ "error": "Asset not found" }</pre>
+
+        <div class="try-section">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--muted)">Item ID</label>
+            <input id="try-item-values-id" type="text" placeholder="assetId" style="font-family:'Courier New',monospace;font-size:0.8rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);width:200px" />
+          </div>
+          <div style="margin-bottom:0.5rem">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--muted);display:block;margin-bottom:0.3rem">Request Body</label>
+            <textarea id="try-item-values-body" rows="8" style="width:100%;font-family:'Courier New',monospace;font-size:0.78rem;padding:0.6rem 0.8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);resize:vertical;line-height:1.5">{
+  "propertiesWithLanguage": {
+    "languages": [],
+    "propertyIds": []
+  },
+  "propertiesWithoutLanguage": {
+    "propertyIds": []
+  }
+}</textarea>
+          </div>
+          <button id="try-item-values-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-item-values-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const APP_BASE = "/apps/dti-connector";
+    let apiKey = null;
+
+    async function init() {
+      const baseUrlDisplay = document.getElementById("base-url-display");
+      const connectorId = new URLSearchParams(window.location.search).get("connector");
+
+      if (connectorId) {
+        document.getElementById("back-link").href = APP_BASE + "?connector=" + connectorId;
+      }
+
+      try {
+        const keyUrl = connectorId
+          ? APP_BASE + "/api/connectors/" + connectorId + "/key"
+          : APP_BASE + "/api/key";
+        const res = await fetch(keyUrl, {
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        apiKey = data.apiKey;
+      } catch {}
+
+      if (apiKey) {
+        const baseUrl = window.location.origin + APP_BASE + "/api/v1/" + apiKey;
+        baseUrlDisplay.innerHTML = '<div class="base-url-value">' + baseUrl + '</div>';
+        document.getElementById("try-product-ids-btn").disabled = false;
+        document.getElementById("try-hierarchy-btn").disabled = false;
+        document.getElementById("try-model-btn").disabled = false;
+        document.getElementById("try-item-hierarchy-btn").disabled = false;
+        document.getElementById("try-item-values-btn").disabled = false;
+      } else {
+        baseUrlDisplay.innerHTML =
+          '<div class="base-url-none">Kein API-Schl\u00fcssel gespeichert. ' +
+          '<a href="/apps/dti-connector">Erstelle einen in den Einstellungen.</a></div>';
+      }
+    }
+
+    document.getElementById("try-product-ids-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const btn = document.getElementById("try-product-ids-btn");
+      const resultDiv = document.getElementById("try-product-ids-result");
+      btn.disabled = true;
+      const url = APP_BASE + "/api/v1/" + apiKey + "/Product/ids";
+      try {
+        const res = await fetch(url);
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">GET ' + escapeHtml(url) + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById("try-hierarchy-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const btn = document.getElementById("try-hierarchy-btn");
+      const resultDiv = document.getElementById("try-hierarchy-result");
+      btn.disabled = true;
+
+      const url = APP_BASE + "/api/v1/" + apiKey + "/Product/hierarchy/levels";
+
+      try {
+        const res = await fetch(url);
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">GET ' + url + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+
+      btn.disabled = false;
+    });
+
+    document.getElementById("try-model-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const btn = document.getElementById("try-model-btn");
+      const resultDiv = document.getElementById("try-model-result");
+      btn.disabled = true;
+
+      const url = APP_BASE + "/api/v1/" + apiKey + "/model";
+
+      try {
+        const res = await fetch(url);
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">GET ' + url + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+
+      btn.disabled = false;
+    });
+
+    document.getElementById("try-item-hierarchy-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const itemId = document.getElementById("try-item-hierarchy-id").value.trim();
+      if (!itemId) return;
+      const btn = document.getElementById("try-item-hierarchy-btn");
+      const resultDiv = document.getElementById("try-item-hierarchy-result");
+      btn.disabled = true;
+
+      const url = APP_BASE + "/api/v1/" + apiKey + "/Product/" + encodeURIComponent(itemId) + "/hierarchy";
+
+      try {
+        const res = await fetch(url);
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : status === 404 ? 'status-404' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">GET ' + escapeHtml(url) + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+
+      btn.disabled = false;
+    });
+
+    document.getElementById("try-item-values-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const itemId = document.getElementById("try-item-values-id").value.trim();
+      if (!itemId) return;
+      const btn = document.getElementById("try-item-values-btn");
+      const resultDiv = document.getElementById("try-item-values-result");
+      btn.disabled = true;
+
+      const url = APP_BASE + "/api/v1/" + apiKey + "/Product/" + encodeURIComponent(itemId) + "/values";
+      let bodyText = document.getElementById("try-item-values-body").value;
+
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: bodyText
+        });
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : status === 404 ? 'status-404' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">POST ' + escapeHtml(url) + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+
+      btn.disabled = false;
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    init();
+  </script>
+</body>
+</html>

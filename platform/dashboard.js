@@ -9,30 +9,42 @@ const greeting = document.getElementById("dash-greeting");
 const subtitle = document.querySelector(".dash-subtitle");
 const localeDeBtn = document.getElementById("locale-de-btn");
 const localeEnBtn = document.getElementById("locale-en-btn");
+const adminLink = document.getElementById("admin-link");
+const adminLinkLabel = document.getElementById("admin-link-label");
 
 const APP_ICONS = {
   kanban: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>',
+  "dti-connector": '<svg viewBox="0 0 24 24"><path d="M4 6h6M4 12h6M4 18h6"/><path d="M14 6h6M14 12h6M14 18h6"/><path d="M10 6l4 6-4 6"/></svg>',
 };
 
 const I18N = {
   de: {
-    subtitle: "Waehle eine App, um loszulegen.",
+    subtitle: "Wähle eine App, um loszulegen.",
     logout: "Logout",
+    admin: "Admin",
     morgen: "Guten Morgen",
     tag: "Guten Tag",
     abend: "Guten Abend",
+    noApps: "Kein Zugang freigeschaltet. Bitte kontaktiere einen Administrator.",
+    "app.kanban": "Projekte und Tasks verwalten",
+    "app.dti-connector": "Daten erstellen und bereitstellen",
   },
   en: {
     subtitle: "Choose an app to get started.",
     logout: "Logout",
+    admin: "Admin",
     morgen: "Good morning",
     tag: "Good afternoon",
     abend: "Good evening",
+    noApps: "No access granted. Please contact an administrator.",
+    "app.kanban": "Manage projects and tasks",
+    "app.dti-connector": "Create and provide data",
   },
 };
 
 let currentUser = null;
 let locale = localStorage.getItem("kanban-locale") || "de";
+let cachedApps = [];
 
 async function apiRequest(path, options = {}) {
   const { method = "GET", body } = options;
@@ -87,13 +99,22 @@ function applyLocaleToUI() {
   const t = I18N[locale];
   subtitle.textContent = t.subtitle;
   logoutBtn.textContent = t.logout;
+  adminLinkLabel.textContent = t.admin;
   if (currentUser) {
     greeting.textContent = `${getGreeting()}, ${(currentUser.name || "").split(" ")[0] || "User"}`;
   }
+  renderApps(cachedApps);
 }
 
 function renderApps(apps) {
   appGrid.innerHTML = "";
+  if (!apps.length) {
+    const notice = document.createElement("div");
+    notice.className = "dash-no-apps";
+    notice.textContent = I18N[locale].noApps;
+    appGrid.appendChild(notice);
+    return;
+  }
   for (const app of apps) {
     const clone = tileTemplate.content.cloneNode(true);
     const tile = clone.querySelector(".app-tile");
@@ -103,7 +124,8 @@ function renderApps(apps) {
 
     tile.href = app.path;
     name.textContent = app.name;
-    desc.textContent = app.description || "";
+    const localizedDesc = (I18N[locale] && I18N[locale]["app." + app.id]) || app.description || "";
+    desc.textContent = localizedDesc;
 
     icon.style.background = `linear-gradient(135deg, ${app.color || "#2563eb"}, ${shiftColor(app.color || "#2563eb")})`;
     icon.innerHTML = APP_ICONS[app.icon] || APP_ICONS.kanban;
@@ -150,6 +172,9 @@ async function init() {
     userInitials.textContent = getInitials(currentUser.name);
     userInfo.textContent = currentUser.name || currentUser.email || "";
     greeting.textContent = `${getGreeting()}, ${(currentUser.name || "").split(" ")[0] || "User"}`;
+    if (currentUser.isAdmin) {
+      adminLink.hidden = false;
+    }
   }
 
   // Init locale
@@ -158,7 +183,8 @@ async function init() {
   // Load apps
   const appsResult = await apiRequest("/api/apps");
   if (appsResult.ok && appsResult.payload?.apps) {
-    renderApps(appsResult.payload.apps);
+    cachedApps = appsResult.payload.apps;
+    renderApps(cachedApps);
   }
 }
 
