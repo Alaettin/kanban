@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
+const archiver = require("archiver");
+const unzipper = require("unzipper");
 const db = require("../../shared/db");
 const auth = require("../../shared/auth");
 
@@ -552,6 +554,125 @@ function mountRoutes(router) {
     }
   });
 
+  // ======================= FILES EXPORT (ZIP) =======================
+
+  router.get("/api/connectors/:connectorId/files/export", auth.requireAuth, resolveConnector, async (req, res) => {
+    const cid = req.connector.connector_id;
+    try {
+      const rows = await db.all(
+        "SELECT file_id, lang, original_name, size, mime_type, created_at FROM dti_files WHERE connector_id = ? ORDER BY file_id, lang",
+        [cid]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: "No files to export" });
+
+      const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+      const manifest = [];
+
+      const archive = archiver("zip", { zlib: { level: 5 } });
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="files_${cid}.zip"`);
+      archive.pipe(res);
+
+      for (const row of rows) {
+        const ext = path.extname(row.original_name);
+        const diskName = row.file_id + "_" + row.lang + ext;
+        const filePath = path.join(connDir, diskName);
+        if (fs.existsSync(filePath)) {
+          archive.file(filePath, { name: diskName });
+          manifest.push({
+            file_id: row.file_id,
+            lang: row.lang,
+            original_name: row.original_name,
+            disk_name: diskName,
+            size: row.size,
+            mime_type: row.mime_type,
+          });
+        }
+      }
+
+      archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
+      await archive.finalize();
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: "Failed to export files" });
+    }
+  });
+
+  // ======================= FILES IMPORT (ZIP) =======================
+
+  const zipTmpDir = path.join(UPLOADS_DIR, "_tmp");
+  fs.mkdirSync(zipTmpDir, { recursive: true });
+  const zipUpload = multer({ dest: zipTmpDir, limits: { fileSize: 500 * 1024 * 1024 } });
+
+  router.post("/api/connectors/:connectorId/files/import", auth.requireAuth, resolveConnector, zipUpload.single("zip"), async (req, res) => {
+    const cid = req.connector.connector_id;
+    const tmpPath = req.file && req.file.path;
+    if (!tmpPath) return res.status(400).json({ error: "No file uploaded" });
+
+    const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+    fs.mkdirSync(connDir, { recursive: true });
+
+    let imported = 0;
+    let skipped = 0;
+
+    try {
+      const directory = await unzipper.Open.file(tmpPath);
+      const manifestEntry = directory.files.find(f => f.path === "manifest.json");
+      if (!manifestEntry) {
+        fs.unlink(tmpPath, () => {});
+        return res.status(400).json({ error: "ZIP contains no manifest.json" });
+      }
+
+      const manifestBuf = await manifestEntry.buffer();
+      const manifest = JSON.parse(manifestBuf.toString("utf-8"));
+
+      for (const entry of manifest) {
+        const fileId = (entry.file_id || "").trim();
+        const lang = (entry.lang || "").trim().toLowerCase();
+        const originalName = entry.original_name || entry.disk_name || "";
+        const diskName = entry.disk_name || "";
+        const mimeType = entry.mime_type || "";
+
+        if (!fileId || !ID_PATTERN.test(fileId) || !VALID_LANGS.includes(lang) || !diskName) {
+          skipped++;
+          continue;
+        }
+
+        const zipFile = directory.files.find(f => f.path === diskName);
+        if (!zipFile) { skipped++; continue; }
+
+        // Remove existing file with same id+lang if present
+        const existingLang = await db.get(
+          "SELECT original_name FROM dti_files WHERE connector_id = ? AND file_id = ? AND lang = ?",
+          [cid, fileId, lang]
+        );
+        if (existingLang) {
+          const oldExt = path.extname(existingLang.original_name);
+          const oldPath = path.join(connDir, fileId + "_" + lang + oldExt);
+          try { fs.unlinkSync(oldPath); } catch {}
+          await db.run("DELETE FROM dti_files WHERE connector_id = ? AND file_id = ? AND lang = ?", [cid, fileId, lang]);
+        }
+
+        // Write file to disk
+        const buf = await zipFile.buffer();
+        const destPath = path.join(connDir, diskName);
+        fs.writeFileSync(destPath, buf);
+
+        // Insert DB record
+        await db.run(
+          "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
+          [cid, fileId, lang, originalName, buf.length, mimeType]
+        );
+        imported++;
+      }
+
+      fs.unlink(tmpPath, () => {});
+      res.json({ ok: true, imported, skipped });
+    } catch (err) {
+      fs.unlink(tmpPath, () => {});
+      res.status(500).json({ error: "Failed to import ZIP" });
+    }
+  });
+
   // ======================= ASSETS (INTERNAL) =======================
 
   router.get("/api/connectors/:connectorId/assets/internal", auth.requireAuth, resolveConnector, async (req, res) => {
@@ -670,6 +791,303 @@ function mountRoutes(router) {
       res.json({ asset_id: assetId, values: saved });
     } catch {
       res.status(500).json({ error: "Failed to save asset values" });
+    }
+  });
+
+  // ======================= ASSETS EXPORT =======================
+
+  router.get("/api/connectors/:connectorId/assets/export", auth.requireAuth, resolveConnector, async (req, res) => {
+    const cid = req.connector.connector_id;
+    try {
+      const assets = await db.all("SELECT asset_id FROM dti_assets WHERE connector_id = ? ORDER BY asset_id", [cid]);
+      if (assets.length === 0) return res.status(404).json({ error: "No assets to export" });
+
+      const levels = await db.all("SELECT name FROM dti_hierarchy_levels WHERE connector_id = ? ORDER BY level", [cid]);
+      const datapoints = await db.all("SELECT dp_id, name, type FROM dti_model_datapoints WHERE connector_id = ? ORDER BY sort_order", [cid]);
+      const allValues = await db.all("SELECT asset_id, key, lang, value FROM dti_asset_values WHERE connector_id = ?", [cid]);
+
+      // Build lookup: asset_id -> { key -> { lang -> value } }
+      const valMap = {};
+      for (const v of allValues) {
+        if (!valMap[v.asset_id]) valMap[v.asset_id] = {};
+        if (!valMap[v.asset_id][v.key]) valMap[v.asset_id][v.key] = {};
+        valMap[v.asset_id][v.key][v.lang] = v.value;
+      }
+
+      res.json({
+        hierarchy_levels: levels.map(l => l.name),
+        datapoints: datapoints.map(d => ({ id: d.dp_id, name: d.name, type: d.type })),
+        assets: assets.map(a => ({
+          asset_id: a.asset_id,
+          values: valMap[a.asset_id] || {},
+        })),
+      });
+    } catch {
+      res.status(500).json({ error: "Failed to export assets" });
+    }
+  });
+
+  // ======================= ASSETS IMPORT =======================
+
+  router.post("/api/connectors/:connectorId/assets/import", auth.requireAuth, resolveConnector, async (req, res) => {
+    const cid = req.connector.connector_id;
+    try {
+      const { assets: importAssets } = req.body || {};
+      if (!Array.isArray(importAssets) || importAssets.length === 0) {
+        return res.status(400).json({ error: "No assets in request" });
+      }
+
+      // Load existing hierarchy level names, datapoint IDs, and file IDs as valid keys
+      const levels = await db.all("SELECT name FROM dti_hierarchy_levels WHERE connector_id = ?", [cid]);
+      const datapoints = await db.all("SELECT dp_id, type FROM dti_model_datapoints WHERE connector_id = ?", [cid]);
+      const files = await db.all("SELECT DISTINCT file_id FROM dti_files WHERE connector_id = ?", [cid]);
+
+      const validLevelKeys = new Set(levels.map(l => l.name));
+      const validDpKeys = {};
+      for (const d of datapoints) validDpKeys[d.dp_id] = d.type;
+      const validFileIds = new Set(files.map(f => f.file_id));
+      const allValidKeys = new Set([...validLevelKeys, ...Object.keys(validDpKeys)]);
+
+      let imported = 0;
+      let skipped = 0;
+
+      for (const item of importAssets) {
+        const assetId = (item.asset_id || "").trim();
+        if (!assetId || !ASSET_ID_PATTERN.test(assetId) || assetId.length > 120) { skipped++; continue; }
+
+        // Check if asset already exists (case-insensitive)
+        const existing = await db.get(
+          "SELECT asset_id FROM dti_assets WHERE connector_id = ? AND LOWER(asset_id) = LOWER(?)", [cid, assetId]
+        );
+        if (existing) { skipped++; continue; }
+
+        // Insert the asset
+        await db.run("INSERT INTO dti_assets (connector_id, asset_id) VALUES (?, ?)", [cid, assetId]);
+
+        // Insert values — only for keys that exist in current hierarchy/model
+        const values = item.values || {};
+        for (const [key, langObj] of Object.entries(values)) {
+          if (!allValidKeys.has(key)) continue;
+
+          // If it's a file-type datapoint, validate that the referenced file_id exists
+          const isFileType = validDpKeys[key] === 1;
+
+          for (const [lang, value] of Object.entries(langObj)) {
+            const l = lang.toLowerCase();
+            if (l !== "en" && l !== "de") continue;
+            if (!value && value !== "") continue;
+
+            if (isFileType && value && !validFileIds.has(value)) continue;
+
+            await db.run(
+              "INSERT INTO dti_asset_values (connector_id, asset_id, key, lang, value) VALUES (?, ?, ?, ?, ?)",
+              [cid, assetId, key, l, value || ""]
+            );
+          }
+        }
+        imported++;
+      }
+
+      res.json({ ok: true, imported, skipped });
+    } catch {
+      res.status(500).json({ error: "Failed to import assets" });
+    }
+  });
+
+  // ======================= FULL CONNECTOR EXPORT (ZIP) =======================
+
+  router.get("/api/connectors/:connectorId/export-full", auth.requireAuth, resolveConnector, async (req, res) => {
+    const cid = req.connector.connector_id;
+    try {
+      // Gather all data
+      const hierarchy = await db.all("SELECT level, name FROM dti_hierarchy_levels WHERE connector_id = ? ORDER BY level", [cid]);
+      const model = await db.all("SELECT dp_id, name, type, sort_order FROM dti_model_datapoints WHERE connector_id = ? ORDER BY sort_order", [cid]);
+      const filesMeta = await db.all("SELECT file_id, lang, original_name, size, mime_type FROM dti_files WHERE connector_id = ? ORDER BY file_id, lang", [cid]);
+      const assets = await db.all("SELECT asset_id FROM dti_assets WHERE connector_id = ? ORDER BY asset_id", [cid]);
+      const assetValues = await db.all("SELECT asset_id, key, lang, value FROM dti_asset_values WHERE connector_id = ?", [cid]);
+
+      const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+
+      const archive = archiver("zip", { zlib: { level: 5 } });
+      const connName = req.connector.name || cid;
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(connName)}.zip"`);
+      archive.pipe(res);
+
+      // hierarchy.json
+      archive.append(JSON.stringify(hierarchy, null, 2), { name: "hierarchy.json" });
+
+      // model.json
+      archive.append(JSON.stringify(model, null, 2), { name: "model.json" });
+
+      // assets.json (assets + values)
+      const valMap = {};
+      for (const v of assetValues) {
+        if (!valMap[v.asset_id]) valMap[v.asset_id] = {};
+        if (!valMap[v.asset_id][v.key]) valMap[v.asset_id][v.key] = {};
+        valMap[v.asset_id][v.key][v.lang] = v.value;
+      }
+      const assetsExport = assets.map(a => ({ asset_id: a.asset_id, values: valMap[a.asset_id] || {} }));
+      archive.append(JSON.stringify(assetsExport, null, 2), { name: "assets.json" });
+
+      // files/ directory with actual files + manifest
+      const filesManifest = [];
+      for (const row of filesMeta) {
+        const ext = path.extname(row.original_name);
+        const diskName = row.file_id + "_" + row.lang + ext;
+        const filePath = path.join(connDir, diskName);
+        if (fs.existsSync(filePath)) {
+          archive.file(filePath, { name: "files/" + diskName });
+          filesManifest.push({
+            file_id: row.file_id,
+            lang: row.lang,
+            original_name: row.original_name,
+            disk_name: diskName,
+            size: row.size,
+            mime_type: row.mime_type,
+          });
+        }
+      }
+      archive.append(JSON.stringify(filesManifest, null, 2), { name: "files/manifest.json" });
+
+      await archive.finalize();
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: "Failed to export connector" });
+    }
+  });
+
+  // ======================= FULL CONNECTOR IMPORT (ZIP) =======================
+
+  router.post("/api/connectors/:connectorId/import-full", auth.requireAuth, resolveConnector, zipUpload.single("zip"), async (req, res) => {
+    const cid = req.connector.connector_id;
+    const tmpPath = req.file && req.file.path;
+    if (!tmpPath) return res.status(400).json({ error: "No file uploaded" });
+
+    const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+    fs.mkdirSync(connDir, { recursive: true });
+
+    try {
+      const directory = await unzipper.Open.file(tmpPath);
+
+      function findFile(name) {
+        return directory.files.find(f => f.path === name || f.path === name.replace(/\//g, "\\"));
+      }
+
+      // --- 1. Hierarchy ---
+      const hierarchyEntry = findFile("hierarchy.json");
+      if (hierarchyEntry) {
+        const hierarchyData = JSON.parse((await hierarchyEntry.buffer()).toString("utf-8"));
+        if (Array.isArray(hierarchyData)) {
+          await db.run("DELETE FROM dti_hierarchy_levels WHERE connector_id = ?", [cid]);
+          for (const h of hierarchyData) {
+            if (typeof h.level === "number" && typeof h.name === "string") {
+              await db.run("INSERT INTO dti_hierarchy_levels (connector_id, level, name) VALUES (?, ?, ?)", [cid, h.level, h.name]);
+            }
+          }
+        }
+      }
+
+      // --- 2. Model ---
+      const modelEntry = findFile("model.json");
+      if (modelEntry) {
+        const modelData = JSON.parse((await modelEntry.buffer()).toString("utf-8"));
+        if (Array.isArray(modelData)) {
+          await db.run("DELETE FROM dti_model_datapoints WHERE connector_id = ?", [cid]);
+          for (const m of modelData) {
+            if (typeof m.dp_id === "string" && m.dp_id) {
+              await db.run(
+                "INSERT INTO dti_model_datapoints (connector_id, dp_id, name, type, sort_order) VALUES (?, ?, ?, ?, ?)",
+                [cid, m.dp_id, m.name || "", m.type || 0, m.sort_order ?? 0]
+              );
+            }
+          }
+        }
+      }
+
+      // --- 3. Files ---
+      const manifestEntry = findFile("files/manifest.json");
+      if (manifestEntry) {
+        const manifest = JSON.parse((await manifestEntry.buffer()).toString("utf-8"));
+
+        // Delete existing files from disk and DB
+        const existingFiles = await db.all("SELECT file_id, lang, original_name FROM dti_files WHERE connector_id = ?", [cid]);
+        for (const ef of existingFiles) {
+          const ext = path.extname(ef.original_name);
+          const fp = path.join(connDir, ef.file_id + "_" + ef.lang + ext);
+          try { fs.unlinkSync(fp); } catch {}
+        }
+        await db.run("DELETE FROM dti_files WHERE connector_id = ?", [cid]);
+
+        // Import files from ZIP
+        for (const entry of manifest) {
+          const fileId = (entry.file_id || "").trim();
+          const lang = (entry.lang || "").trim().toLowerCase();
+          const originalName = entry.original_name || entry.disk_name || "";
+          const diskName = entry.disk_name || "";
+          const mimeType = entry.mime_type || "";
+          if (!fileId || !ID_PATTERN.test(fileId) || !VALID_LANGS.includes(lang) || !diskName) continue;
+
+          const zipFile = findFile("files/" + diskName);
+          if (!zipFile) continue;
+
+          const buf = await zipFile.buffer();
+          fs.writeFileSync(path.join(connDir, diskName), buf);
+          await db.run(
+            "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
+            [cid, fileId, lang, originalName, buf.length, mimeType]
+          );
+        }
+      }
+
+      // --- 4. Assets ---
+      const assetsEntry = findFile("assets.json");
+      if (assetsEntry) {
+        const assetsData = JSON.parse((await assetsEntry.buffer()).toString("utf-8"));
+        if (Array.isArray(assetsData)) {
+          // Load new valid keys (from freshly imported hierarchy + model)
+          const levels = await db.all("SELECT name FROM dti_hierarchy_levels WHERE connector_id = ?", [cid]);
+          const dps = await db.all("SELECT dp_id, type FROM dti_model_datapoints WHERE connector_id = ?", [cid]);
+          const files = await db.all("SELECT DISTINCT file_id FROM dti_files WHERE connector_id = ?", [cid]);
+          const validKeys = new Set([...levels.map(l => l.name), ...dps.map(d => d.dp_id)]);
+          const dpTypeMap = {};
+          for (const d of dps) dpTypeMap[d.dp_id] = d.type;
+          const validFileIds = new Set(files.map(f => f.file_id));
+
+          // Clear existing assets
+          await db.run("DELETE FROM dti_asset_values WHERE connector_id = ?", [cid]);
+          await db.run("DELETE FROM dti_assets WHERE connector_id = ?", [cid]);
+
+          for (const item of assetsData) {
+            const assetId = (item.asset_id || "").trim();
+            if (!assetId || !ASSET_ID_PATTERN.test(assetId) || assetId.length > 120) continue;
+
+            await db.run("INSERT INTO dti_assets (connector_id, asset_id) VALUES (?, ?)", [cid, assetId]);
+
+            const values = item.values || {};
+            for (const [key, langObj] of Object.entries(values)) {
+              if (!validKeys.has(key)) continue;
+              const isFileType = dpTypeMap[key] === 1;
+
+              for (const [lang, value] of Object.entries(langObj)) {
+                const l = lang.toLowerCase();
+                if (l !== "en" && l !== "de") continue;
+                if (isFileType && value && !validFileIds.has(value)) continue;
+
+                await db.run(
+                  "INSERT INTO dti_asset_values (connector_id, asset_id, key, lang, value) VALUES (?, ?, ?, ?, ?)",
+                  [cid, assetId, key, l, value || ""]
+                );
+              }
+            }
+          }
+        }
+      }
+
+      fs.unlink(tmpPath, () => {});
+      res.json({ ok: true });
+    } catch (err) {
+      fs.unlink(tmpPath, () => {});
+      res.status(500).json({ error: "Failed to import connector data" });
     }
   });
 

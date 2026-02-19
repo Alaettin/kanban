@@ -21,12 +21,23 @@ const connectorHint = document.getElementById("connector-hint");
 const connectorDeleteModal = document.getElementById("connector-delete-modal");
 const connectorDeleteForm = document.getElementById("connector-delete-form");
 const connectorDeleteCancel = document.getElementById("connector-delete-cancel");
+const connectorImportModal = document.getElementById("connector-import-modal");
+const connectorImportForm = document.getElementById("connector-import-form");
+const connectorImportCancel = document.getElementById("connector-import-cancel");
+const connectorImportFileInput = document.getElementById("connector-import-file");
 
 // Hierarchy elements
 const hierarchyList = document.getElementById("hierarchy-list");
 const hierarchyAddBtn = document.getElementById("hierarchy-add-btn");
 const hierarchySaveBtn = document.getElementById("hierarchy-save-btn");
+const hierarchyExportBtn = document.getElementById("hierarchy-export-btn");
+const hierarchyImportBtn = document.getElementById("hierarchy-import-btn");
+const hierarchyImportFile = document.getElementById("hierarchy-import-file");
 const hierarchyHint = document.getElementById("hierarchy-hint");
+const exportDialog = document.getElementById("export-dialog");
+const exportNameInput = document.getElementById("export-name");
+const exportCancelBtn = document.getElementById("export-cancel");
+const exportDownloadBtn = document.getElementById("export-download");
 
 // Settings / API key elements
 const apiKeyDisplay = document.getElementById("api-key-display");
@@ -58,6 +69,13 @@ const I18N = {
     connectorDeleteMessage: "Alle Daten dieses Konnektors werden unwiderruflich gelöscht.",
     connectorDeleteCancel: "Abbrechen",
     connectorDeleteConfirm: "Löschen",
+    connectorImportTitle: "Konnektor importieren",
+    connectorImportMessage: "Alle bestehenden Daten dieses Konnektors (Hierarchie, Datenmodell, Dateien und Assets) werden durch die importierten Daten ersetzt. Dieser Vorgang kann nicht rückgängig gemacht werden.",
+    connectorImportCancel: "Abbrechen",
+    connectorImportConfirm: "Importieren",
+    connectorImportSuccess: "Konnektor erfolgreich importiert.",
+    connectorImportError: "Fehler beim Importieren.",
+    connectorExportError: "Fehler beim Exportieren.",
     connectorCreated: "Erstellt",
     hierarchy: "Hierarchie",
     model: "Modell",
@@ -71,6 +89,17 @@ const I18N = {
     hierarchyPlaceholder: "Name (z.B. ProductType)",
     hierarchyValidation: "Nur Buchstaben (A-Z, a-z), Ziffern (0-9), Unterstrich (_) und Bindestrich (-) erlaubt.",
     allowedCharsLabel: "Erlaubte Zeichen:",
+    exportTitle: "Export",
+    exportNameLabel: "Dateiname",
+    exportFormatLabel: "Format",
+    exportCancel: "Abbrechen",
+    exportDownload: "Download",
+    hierarchyImported: "{count} Level importiert. Klicke Übernehmen zum Speichern.",
+    hierarchyImportEmpty: "Die Datei enthält keine gültigen Einträge.",
+    hierarchyImportError: "Fehler beim Lesen der Datei.",
+    modelImported: "{count} Datenpunkte importiert. Klicke Übernehmen zum Speichern.",
+    modelImportEmpty: "Die Datei enthält keine gültigen Einträge.",
+    modelImportError: "Fehler beim Lesen der Datei.",
     hierarchyEmpty: "Jedes Level muss einen Namen haben.",
     hierarchySaved: "Hierarchie-Level erfolgreich gespeichert.",
     hierarchyError: "Fehler beim Speichern der Hierarchie-Level.",
@@ -128,6 +157,12 @@ const I18N = {
     filesIdDuplicate: "ID bereits vergeben: {id}",
     filesUploadError: "Fehler beim Hochladen.",
     filesDeleteError: "Fehler beim Löschen.",
+    filesExportEmpty: "Keine Dateien zum Exportieren vorhanden.",
+    filesExportError: "Fehler beim Exportieren.",
+    filesImported: "{count} Dateien importiert.",
+    filesImportEmpty: "Das ZIP enthält keine gültigen Dateien.",
+    filesImportError: "Fehler beim Importieren.",
+    filesImportNoManifest: "Das ZIP enthält keine manifest.json.",
     filesUploading: "Wird hochgeladen…",
     assetsTitle: "Assets",
     assetsDesc: "Verwalte deine Assets. Jedes Asset erhält eine eindeutige Item ID.",
@@ -142,6 +177,11 @@ const I18N = {
     assetsIdDuplicate: "ID bereits vergeben: {id}",
     assetsCreateError: "Fehler beim Anlegen.",
     assetsDeleteError: "Fehler beim Löschen.",
+    assetsExportEmpty: "Keine Assets zum Exportieren vorhanden.",
+    assetsExportError: "Fehler beim Exportieren.",
+    assetsImported: "{count} Assets importiert ({skipped} übersprungen).",
+    assetsImportEmpty: "Die Datei enthält keine gültigen Assets.",
+    assetsImportError: "Fehler beim Importieren.",
     assetsBack: "Zurück",
     assetsItemId: "Item ID",
     assetsHierarchySection: "Hierarchie",
@@ -171,6 +211,13 @@ const I18N = {
     connectorDeleteMessage: "All data of this connector will be permanently deleted.",
     connectorDeleteCancel: "Cancel",
     connectorDeleteConfirm: "Delete",
+    connectorImportTitle: "Import connector",
+    connectorImportMessage: "All existing data of this connector (hierarchy, data model, files and assets) will be replaced by the imported data. This action cannot be undone.",
+    connectorImportCancel: "Cancel",
+    connectorImportConfirm: "Import",
+    connectorImportSuccess: "Connector imported successfully.",
+    connectorImportError: "Import failed.",
+    connectorExportError: "Export failed.",
     connectorCreated: "Created",
     hierarchy: "Hierarchy",
     model: "Model",
@@ -184,6 +231,17 @@ const I18N = {
     hierarchyPlaceholder: "Name (e.g. ProductType)",
     hierarchyValidation: "Only letters (A-Z, a-z), digits (0-9), underscore (_) and hyphen (-) allowed.",
     allowedCharsLabel: "Allowed characters:",
+    exportTitle: "Export",
+    exportNameLabel: "Filename",
+    exportFormatLabel: "Format",
+    exportCancel: "Cancel",
+    exportDownload: "Download",
+    hierarchyImported: "{count} levels imported. Click Apply to save.",
+    hierarchyImportEmpty: "The file contains no valid entries.",
+    hierarchyImportError: "Failed to read the file.",
+    modelImported: "{count} datapoints imported. Click Apply to save.",
+    modelImportEmpty: "The file contains no valid entries.",
+    modelImportError: "Failed to read the file.",
     hierarchyEmpty: "Every level must have a name.",
     hierarchySaved: "Hierarchy levels saved successfully.",
     hierarchyError: "Failed to save hierarchy levels.",
@@ -241,6 +299,12 @@ const I18N = {
     filesIdDuplicate: "ID already in use: {id}",
     filesUploadError: "Upload failed.",
     filesDeleteError: "Delete failed.",
+    filesExportEmpty: "No files to export.",
+    filesExportError: "Export failed.",
+    filesImported: "{count} files imported.",
+    filesImportEmpty: "The ZIP contains no valid files.",
+    filesImportError: "Import failed.",
+    filesImportNoManifest: "The ZIP contains no manifest.json.",
     filesUploading: "Uploading…",
     assetsTitle: "Assets",
     assetsDesc: "Manage your assets. Each asset gets a unique Item ID.",
@@ -255,6 +319,11 @@ const I18N = {
     assetsIdDuplicate: "ID already in use: {id}",
     assetsCreateError: "Failed to create asset.",
     assetsDeleteError: "Delete failed.",
+    assetsExportEmpty: "No assets to export.",
+    assetsExportError: "Export failed.",
+    assetsImported: "{count} assets imported ({skipped} skipped).",
+    assetsImportEmpty: "The file contains no valid assets.",
+    assetsImportError: "Import failed.",
     assetsBack: "Back",
     assetsItemId: "Item ID",
     assetsHierarchySection: "Hierarchy",
@@ -397,6 +466,13 @@ function applyLocaleToUI() {
   document.getElementById("hierarchy-add-label").textContent = t("hierarchyAdd");
   document.getElementById("hierarchy-save-label").textContent = t("hierarchySave");
 
+  // Export dialog
+  document.getElementById("export-dialog-title").textContent = t("exportTitle");
+  document.getElementById("export-name-label").textContent = t("exportNameLabel");
+  document.getElementById("export-format-label").textContent = t("exportFormatLabel");
+  document.getElementById("export-cancel").textContent = t("exportCancel");
+  document.getElementById("export-download").textContent = t("exportDownload");
+
   // Settings page
   document.getElementById("settings-title").textContent = t("settingsTitle");
   document.getElementById("settings-desc").textContent = t("settingsDesc");
@@ -497,6 +573,27 @@ function renderConnectors() {
 
     const actions = document.createElement("div");
     actions.className = "connector-card-actions";
+
+    const importBtn = document.createElement("button");
+    importBtn.type = "button";
+    importBtn.className = "connector-card-action-btn";
+    importBtn.title = "Import";
+    importBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+    importBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startConnectorImport(conn.connector_id, conn.name);
+    });
+
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.className = "connector-card-action-btn";
+    exportBtn.title = "Export";
+    exportBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    exportBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      exportFullConnector(conn.connector_id, conn.name);
+    });
+
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "connector-card-del";
@@ -506,6 +603,8 @@ function renderConnectors() {
       e.stopPropagation();
       openConnectorDeleteModal(conn.connector_id, conn.name);
     });
+    actions.appendChild(importBtn);
+    actions.appendChild(exportBtn);
     actions.appendChild(delBtn);
 
     card.appendChild(info);
@@ -608,6 +707,103 @@ connectorDeleteForm.addEventListener("submit", async (e) => {
     renderConnectors();
   }
   deleteConnectorId = null;
+});
+
+// ======================= CONNECTOR FULL EXPORT =======================
+
+async function exportFullConnector(connId, connName) {
+  try {
+    const resp = await fetch(APP_BASE + "/api/connectors/" + connId + "/export-full", { credentials: "same-origin" });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      connectorHint.textContent = err.error || t("connectorExportError");
+      connectorHint.className = "hierarchy-hint hint-error";
+      connectorHint.hidden = false;
+      setTimeout(() => { connectorHint.hidden = true; }, 3000);
+      return;
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = connName + ".zip";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    connectorHint.textContent = t("connectorExportError");
+    connectorHint.className = "hierarchy-hint hint-error";
+    connectorHint.hidden = false;
+    setTimeout(() => { connectorHint.hidden = true; }, 3000);
+  }
+}
+
+// ======================= CONNECTOR FULL IMPORT =======================
+
+let importConnectorId = null;
+let importConnectorName = null;
+
+function startConnectorImport(connId, connName) {
+  importConnectorId = connId;
+  importConnectorName = connName;
+  connectorImportFileInput.value = "";
+  connectorImportFileInput.click();
+}
+
+connectorImportFileInput.addEventListener("change", () => {
+  const file = connectorImportFileInput.files[0];
+  if (!file || !importConnectorId) return;
+
+  // Show confirmation dialog
+  document.getElementById("connector-import-title").textContent = t("connectorImportTitle");
+  document.getElementById("connector-import-message").textContent = t("connectorImportMessage");
+  document.getElementById("connector-import-cancel").textContent = t("connectorImportCancel");
+  document.getElementById("connector-import-ok").textContent = t("connectorImportConfirm");
+  connectorImportModal.showModal();
+});
+
+connectorImportCancel.addEventListener("click", () => {
+  connectorImportModal.close();
+  importConnectorId = null;
+  importConnectorName = null;
+});
+
+connectorImportForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  connectorImportModal.close();
+  if (!importConnectorId) return;
+
+  const file = connectorImportFileInput.files[0];
+  if (!file) return;
+
+  const form = new FormData();
+  form.append("zip", file);
+
+  try {
+    const resp = await fetch(APP_BASE + "/api/connectors/" + importConnectorId + "/import-full", {
+      method: "POST",
+      credentials: "same-origin",
+      body: form,
+    });
+    const result = await resp.json();
+    if (!resp.ok) {
+      connectorHint.textContent = result.error || t("connectorImportError");
+      connectorHint.className = "hierarchy-hint hint-error";
+      connectorHint.hidden = false;
+      setTimeout(() => { connectorHint.hidden = true; }, 3000);
+    } else {
+      connectorHint.textContent = t("connectorImportSuccess");
+      connectorHint.className = "hierarchy-hint hint-success";
+      connectorHint.hidden = false;
+      setTimeout(() => { connectorHint.hidden = true; }, 4000);
+    }
+  } catch {
+    connectorHint.textContent = t("connectorImportError");
+    connectorHint.className = "hierarchy-hint hint-error";
+    connectorHint.hidden = false;
+    setTimeout(() => { connectorHint.hidden = true; }, 3000);
+  }
+  importConnectorId = null;
+  importConnectorName = null;
 });
 
 // ======================= CONNECTOR DETAIL VIEW =======================
@@ -778,11 +974,19 @@ apiKeyCopyBtn.addEventListener("click", async () => {
 
 // ======================= HIERARCHY =======================
 
+let hierarchyDragIndex = null;
+
 function renderHierarchy() {
   hierarchyList.innerHTML = "";
   hierarchyLevels.forEach((level, i) => {
     const row = document.createElement("div");
     row.className = "hierarchy-row";
+    row.draggable = true;
+    row.dataset.index = i;
+
+    const handle = document.createElement("div");
+    handle.className = "drag-handle";
+    handle.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
 
     const num = document.createElement("div");
     num.className = "hierarchy-level";
@@ -814,6 +1018,46 @@ function renderHierarchy() {
       renderHierarchy();
     });
 
+    // Drag events
+    row.addEventListener("dragstart", (e) => {
+      hierarchyDragIndex = i;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", () => {
+      hierarchyDragIndex = null;
+      row.classList.remove("dragging");
+      hierarchyList.querySelectorAll(".hierarchy-row").forEach(r => {
+        r.classList.remove("drag-over-top", "drag-over-bottom");
+      });
+    });
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (hierarchyDragIndex === null || hierarchyDragIndex === i) return;
+      const rect = row.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      row.classList.toggle("drag-over-top", e.clientY < mid);
+      row.classList.toggle("drag-over-bottom", e.clientY >= mid);
+    });
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drag-over-top", "drag-over-bottom");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      row.classList.remove("drag-over-top", "drag-over-bottom");
+      if (hierarchyDragIndex === null || hierarchyDragIndex === i) return;
+      const from = hierarchyDragIndex;
+      const rect = row.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      let to = e.clientY < mid ? i : i + 1;
+      if (from < to) to--;
+      const [item] = hierarchyLevels.splice(from, 1);
+      hierarchyLevels.splice(to, 0, item);
+      hierarchyDragIndex = null;
+      renderHierarchy();
+    });
+
+    row.appendChild(handle);
     row.appendChild(num);
     row.appendChild(input);
     row.appendChild(removeBtn);
@@ -849,6 +1093,117 @@ hierarchySaveBtn.addEventListener("click", () => {
   if (!validateHierarchy()) return;
   pendingConfirmAction = "hierarchy";
   openConfirm();
+});
+
+// ======================= HIERARCHY EXPORT =======================
+
+hierarchyExportBtn.addEventListener("click", () => {
+  exportNameInput.value = "hierarchy_" + currentConnectorName + "_" + savedApiKey;
+  exportDialog.querySelector('input[value="xlsx"]').checked = true;
+  exportDialog.dataset.source = "hierarchy";
+  exportDialog.showModal();
+});
+
+exportCancelBtn.addEventListener("click", () => exportDialog.close());
+
+exportDownloadBtn.addEventListener("click", () => {
+  const filename = (exportNameInput.value || "export").trim();
+  const format = exportDialog.querySelector('input[name="export-format"]:checked').value;
+  const source = exportDialog.dataset.source || "hierarchy";
+
+  let data, sheetName;
+  if (source === "assets") {
+    try { data = JSON.parse(exportDialog.dataset.assetsRows || "[]"); } catch { data = []; }
+    sheetName = "Assets";
+  } else if (source === "model") {
+    data = modelDatapoints.map((dp, i) => ({ ID: dp.id, Name: dp.name, Type: dp.type === 1 ? "File" : "Prop" }));
+    sheetName = "Model";
+  } else {
+    data = hierarchyLevels.map((h, i) => ({ Level: i + 1, Name: h.name }));
+    sheetName = "Hierarchy";
+  }
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  if (format === "xlsx") {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename + ".xlsx");
+  } else {
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename + ".csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  exportDialog.close();
+});
+
+// ======================= HIERARCHY IMPORT =======================
+
+hierarchyImportBtn.addEventListener("click", () => {
+  hierarchyImportFile.value = "";
+  hierarchyImportFile.click();
+});
+
+hierarchyImportFile.addEventListener("change", async () => {
+  const file = hierarchyImportFile.files[0];
+  if (!file) return;
+
+  try {
+    let rows;
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      let text = await file.text();
+      // Strip BOM
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      // Detect separator: semicolon or comma
+      const sep = text.indexOf(";") < text.indexOf("\n") && text.includes(";") ? ";" : ",";
+      const wb = XLSX.read(text, { type: "string", FS: sep });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws);
+    } else {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws);
+    }
+
+    if (!rows.length) {
+      showHint(t("hierarchyImportEmpty"), "error");
+      return;
+    }
+
+    // Detect column names (support Level/level, Name/name and any first/second column)
+    const imported = [];
+    for (const row of rows) {
+      const keys = Object.keys(row);
+      const name = row.Name || row.name || row.NAME || (keys.length >= 2 ? row[keys[1]] : row[keys[0]]) || "";
+      const str = String(name).trim();
+      if (str) {
+        imported.push({ name: str });
+      }
+    }
+
+    if (!imported.length) {
+      showHint(t("hierarchyImportEmpty"), "error");
+      return;
+    }
+
+    // Validate names
+    for (const h of imported) {
+      if (!NAME_PATTERN.test(h.name)) {
+        showHint(t("hierarchyValidation"), "error");
+        return;
+      }
+    }
+
+    hierarchyLevels = imported;
+    renderHierarchy();
+    showHint(t("hierarchyImported").replace("{count}", imported.length), "success");
+  } catch (err) {
+    showHint(t("hierarchyImportError"), "error");
+  }
 });
 
 // ======================= CONFIRM MODAL =======================
@@ -909,6 +1264,9 @@ const modelSearchInput = document.getElementById("model-search");
 const modelCountEl = document.getElementById("model-count");
 const modelAddBtn = document.getElementById("model-add-btn");
 const modelSaveBtn = document.getElementById("model-save-btn");
+const modelExportBtn = document.getElementById("model-export-btn");
+const modelImportBtn = document.getElementById("model-import-btn");
+const modelImportFile = document.getElementById("model-import-file");
 const modelHint = document.getElementById("model-hint");
 
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9._]+$/;
@@ -1030,6 +1388,72 @@ modelAddBtn.addEventListener("click", () => {
   }
 });
 
+// ======================= MODEL EXPORT =======================
+
+modelExportBtn.addEventListener("click", () => {
+  exportNameInput.value = "model_" + currentConnectorName + "_" + savedApiKey;
+  exportDialog.querySelector('input[value="xlsx"]').checked = true;
+  // Tag the dialog so download knows it's model data
+  exportDialog.dataset.source = "model";
+  exportDialog.showModal();
+});
+
+// ======================= MODEL IMPORT =======================
+
+modelImportBtn.addEventListener("click", () => {
+  modelImportFile.value = "";
+  modelImportFile.click();
+});
+
+modelImportFile.addEventListener("change", async () => {
+  const file = modelImportFile.files[0];
+  if (!file) return;
+
+  try {
+    let rows;
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      let text = await file.text();
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const sep = text.indexOf(";") < text.indexOf("\n") && text.includes(";") ? ";" : ",";
+      const wb = XLSX.read(text, { type: "string", FS: sep });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws);
+    } else {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws);
+    }
+
+    if (!rows.length) {
+      showModelHint(t("modelImportEmpty"), "error");
+      return;
+    }
+
+    const imported = [];
+    for (const row of rows) {
+      const id = String(row.ID || row.id || row.Id || "").trim();
+      const name = String(row.Name || row.name || row.NAME || "").trim();
+      const rawType = row.Type || row.type || row.Typ || row.typ || 0;
+      const type = rawType === 1 || rawType === "1" || String(rawType).toLowerCase() === "file" ? 1 : 0;
+      if (id && MODEL_ID_PATTERN.test(id)) {
+        imported.push({ id, name, type, sort_order: imported.length });
+      }
+    }
+
+    if (!imported.length) {
+      showModelHint(t("modelImportEmpty"), "error");
+      return;
+    }
+
+    modelDatapoints = imported;
+    renderModel();
+    showModelHint(t("modelImported").replace("{count}", imported.length), "success");
+  } catch (err) {
+    showModelHint(t("modelImportError"), "error");
+  }
+});
+
 modelSaveBtn.addEventListener("click", () => {
   if (!validateModel()) return;
   confirmTitle.textContent = t("modelConfirmTitle");
@@ -1069,6 +1493,9 @@ const filesTableBody = document.getElementById("files-table-body");
 const filesSearchInput = document.getElementById("files-search");
 const filesCountEl = document.getElementById("files-count");
 const filesAddBtn = document.getElementById("files-add-btn");
+const filesExportBtn = document.getElementById("files-export-btn");
+const filesImportBtn = document.getElementById("files-import-btn");
+const filesImportFile = document.getElementById("files-import-file");
 const filesHint = document.getElementById("files-hint");
 
 const FILES_ID_PATTERN = /^[a-zA-Z0-9._]+$/;
@@ -1313,6 +1740,76 @@ filesAddBtn.addEventListener("click", () => {
   const idInput = document.getElementById("files-new-id");
   if (idInput) idInput.focus();
   filesTableBody.scrollTop = filesTableBody.scrollHeight;
+});
+
+// ======================= FILES EXPORT (ZIP) =======================
+
+filesExportBtn.addEventListener("click", async () => {
+  if (!filesData.length) {
+    showFilesHint(t("filesExportEmpty"), "error");
+    setTimeout(hideFilesHint, 3000);
+    return;
+  }
+  try {
+    const resp = await fetch(APP_BASE + "/api/connectors/" + currentConnectorId + "/files/export", { credentials: "same-origin" });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      showFilesHint(err.error || t("filesExportError"), "error");
+      setTimeout(hideFilesHint, 3000);
+      return;
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "files_" + currentConnectorName + "_" + savedApiKey + ".zip";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    showFilesHint(t("filesExportError"), "error");
+    setTimeout(hideFilesHint, 3000);
+  }
+});
+
+// ======================= FILES IMPORT (ZIP) =======================
+
+filesImportBtn.addEventListener("click", () => {
+  filesImportFile.value = "";
+  filesImportFile.click();
+});
+
+filesImportFile.addEventListener("change", async () => {
+  const file = filesImportFile.files[0];
+  if (!file) return;
+
+  const form = new FormData();
+  form.append("zip", file);
+
+  try {
+    const resp = await fetch(APP_BASE + "/api/connectors/" + currentConnectorId + "/files/import", {
+      method: "POST",
+      credentials: "same-origin",
+      body: form,
+    });
+    const result = await resp.json();
+    if (!resp.ok) {
+      showFilesHint(result.error || t("filesImportError"), "error");
+      setTimeout(hideFilesHint, 3000);
+      return;
+    }
+    if (result.imported === 0) {
+      showFilesHint(t("filesImportEmpty"), "error");
+      setTimeout(hideFilesHint, 3000);
+      return;
+    }
+    // Reload files from server
+    await loadFiles();
+    showFilesHint(t("filesImported").replace("{count}", result.imported), "success");
+    setTimeout(hideFilesHint, 4000);
+  } catch {
+    showFilesHint(t("filesImportError"), "error");
+    setTimeout(hideFilesHint, 3000);
+  }
 });
 
 function pickAndUpload(entry, lang) {
@@ -1584,6 +2081,160 @@ assetsAddBtn.addEventListener("click", () => {
   const idInput = document.getElementById("assets-new-id");
   if (idInput) idInput.focus();
   assetsTableBody.scrollTop = assetsTableBody.scrollHeight;
+});
+
+// ======================= ASSETS EXPORT =======================
+
+const assetsExportBtn = document.getElementById("assets-export-btn");
+const assetsImportBtn = document.getElementById("assets-import-btn");
+const assetsImportFile = document.getElementById("assets-import-file");
+
+assetsExportBtn.addEventListener("click", async () => {
+  if (!assetsData.filter(a => !a._new).length) {
+    showAssetsListHint(t("assetsExportEmpty"), "error");
+    setTimeout(hideAssetsListHint, 3000);
+    return;
+  }
+  try {
+    const result = await apiRequest(connApi("/assets/export"));
+    if (!result.ok) {
+      showAssetsListHint(result.payload?.error || t("assetsExportError"), "error");
+      setTimeout(hideAssetsListHint, 3000);
+      return;
+    }
+    const data = result.payload;
+    const hLevels = data.hierarchy_levels || [];
+    const dps = data.datapoints || [];
+    const assets = data.assets || [];
+
+    // Build column headers:
+    // - Item ID
+    // - Hierarchy levels: single column (only EN, no language distinction)
+    // - Prop datapoints: two columns with (EN) / (DE) suffix
+    // - File datapoints: single column (just file_id reference)
+    const rows = [];
+    for (const asset of assets) {
+      const row = { "Item ID": asset.asset_id };
+      const vals = asset.values || {};
+
+      for (const levelName of hLevels) {
+        const lv = vals[levelName] || {};
+        row[levelName] = lv.en || "";
+      }
+
+      for (const dp of dps) {
+        const dv = vals[dp.id] || {};
+        if (dp.type === 1) {
+          row[dp.id] = dv.en || "";
+        } else {
+          row[dp.id + " (EN)"] = dv.en || "";
+          row[dp.id + " (DE)"] = dv.de || "";
+        }
+      }
+      rows.push(row);
+    }
+
+    // Open shared export dialog
+    exportNameInput.value = "assets_" + currentConnectorName + "_" + savedApiKey;
+    exportDialog.querySelector('input[value="xlsx"]').checked = true;
+    exportDialog.dataset.source = "assets";
+    exportDialog.dataset.assetsRows = JSON.stringify(rows);
+    exportDialog.showModal();
+  } catch {
+    showAssetsListHint(t("assetsExportError"), "error");
+    setTimeout(hideAssetsListHint, 3000);
+  }
+});
+
+// ======================= ASSETS IMPORT =======================
+
+assetsImportBtn.addEventListener("click", () => {
+  assetsImportFile.value = "";
+  assetsImportFile.click();
+});
+
+assetsImportFile.addEventListener("change", async () => {
+  const file = assetsImportFile.files[0];
+  if (!file) return;
+
+  try {
+    let rows;
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      let text = await file.text();
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const sep = text.indexOf(";") < text.indexOf("\n") && text.includes(";") ? ";" : ",";
+      const wb = XLSX.read(text, { type: "string", FS: sep });
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    } else {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    }
+
+    if (!rows.length) {
+      showAssetsListHint(t("assetsImportEmpty"), "error");
+      setTimeout(hideAssetsListHint, 3000);
+      return;
+    }
+
+    // Parse rows into import format
+    // Detect column structure: "Item ID" column + other columns with optional " (EN)"/" (DE)" suffix
+    const importAssets = [];
+    for (const row of rows) {
+      const assetId = String(row["Item ID"] || row["item_id"] || row["ItemID"] || row["asset_id"] || "").trim();
+      if (!assetId || !ASSET_ID_PATTERN.test(assetId)) continue;
+
+      const values = {};
+      for (const [col, val] of Object.entries(row)) {
+        if (col === "Item ID" || col === "item_id" || col === "ItemID" || col === "asset_id") continue;
+        const strVal = String(val || "").trim();
+        if (!strVal) continue;
+
+        // Check for " (EN)" or " (DE)" suffix
+        const matchLang = col.match(/^(.+?)\s*\((EN|DE)\)$/i);
+        if (matchLang) {
+          const key = matchLang[1].trim();
+          const lang = matchLang[2].toLowerCase();
+          if (!values[key]) values[key] = {};
+          values[key][lang] = strVal;
+        } else {
+          // No language suffix — set as EN
+          if (!values[col]) values[col] = {};
+          values[col].en = strVal;
+        }
+      }
+
+      importAssets.push({ asset_id: assetId, values });
+    }
+
+    if (!importAssets.length) {
+      showAssetsListHint(t("assetsImportEmpty"), "error");
+      setTimeout(hideAssetsListHint, 3000);
+      return;
+    }
+
+    // Send to server
+    const result = await apiRequest(connApi("/assets/import"), {
+      method: "POST",
+      body: { assets: importAssets },
+    });
+
+    if (!result.ok) {
+      showAssetsListHint(result.payload?.error || t("assetsImportError"), "error");
+      setTimeout(hideAssetsListHint, 3000);
+      return;
+    }
+
+    await loadAssets();
+    showAssetsListHint(
+      t("assetsImported").replace("{count}", result.payload.imported).replace("{skipped}", result.payload.skipped),
+      "success"
+    );
+    setTimeout(hideAssetsListHint, 4000);
+  } catch {
+    showAssetsListHint(t("assetsImportError"), "error");
+    setTimeout(hideAssetsListHint, 3000);
+  }
 });
 
 // -- Assets detail --

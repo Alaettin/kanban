@@ -487,6 +487,44 @@ body.sidebar-collapsed .sidebar-foot {
   letter-spacing: 0.05em;
 }
 
+.page-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.btn-icon:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.btn-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* -- HIERARCHY -- */
 
 .hierarchy-list {
@@ -497,9 +535,40 @@ body.sidebar-collapsed .sidebar-foot {
 
 .hierarchy-row {
   display: grid;
-  grid-template-columns: 40px 1fr 32px;
+  grid-template-columns: 20px 40px 1fr 32px;
   gap: 8px;
   align-items: center;
+  transition: box-shadow 0.15s ease;
+}
+
+.hierarchy-row.dragging {
+  opacity: 0.3;
+}
+
+.hierarchy-row.drag-over-top {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.hierarchy-row.drag-over-bottom {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--muted);
+  opacity: 0.35;
+  transition: opacity var(--transition);
+}
+
+.drag-handle:hover {
+  opacity: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .hierarchy-level {
@@ -601,7 +670,7 @@ body.sidebar-collapsed .sidebar-foot {
   stroke-linejoin: round;
 }
 
-.hierarchy-actions .btn-primary {
+.hierarchy-actions .btn-icon:first-of-type {
   margin-left: auto;
 }
 
@@ -839,6 +908,82 @@ body.sidebar-collapsed .sidebar-foot {
   gap: 0.4rem;
   padding-top: 0.55rem;
   border-top: 1px solid var(--border);
+}
+
+/* -- EXPORT DIALOG -- */
+
+.export-dialog {
+  border: 1px solid rgba(221, 228, 237, 0.4);
+  border-radius: 16px;
+  padding: 0;
+  width: min(92vw, 480px);
+  box-shadow: 0 24px 64px rgba(0, 20, 50, 0.18), 0 4px 16px rgba(0, 20, 50, 0.06);
+  background: var(--surface);
+  animation: modal-appear 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.export-dialog::backdrop {
+  background: rgba(10, 20, 40, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.export-dialog form {
+  padding: 1.25rem 1.4rem 1.2rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.export-dialog h2 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.export-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 0.3rem;
+}
+
+.export-input {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.export-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.export-format-options {
+  display: flex;
+  gap: 1rem;
+}
+
+.export-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.export-radio input[type="radio"] {
+  accent-color: var(--accent);
 }
 
 /* -- MODEL PAGE -- */
@@ -1082,7 +1227,9 @@ body.sidebar-collapsed .sidebar-foot {
 
 .model-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
@@ -1919,6 +2066,27 @@ body.sidebar-collapsed .sidebar-foot {
   background: #fef2f2;
   border-color: #fca5a5;
   color: #dc2626;
+}
+
+.connector-card-action-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  padding: 0;
+}
+
+.connector-card-action-btn:hover {
+  background: var(--hover);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .connector-empty {

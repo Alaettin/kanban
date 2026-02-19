@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DTI Connector – Workspace</title>
   <link rel="stylesheet" href="/apps/dti-connector/styles.css" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -121,6 +122,13 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               <span id="hierarchy-add-label">Level hinzufügen</span>
             </button>
+            <button id="hierarchy-import-btn" class="btn-icon" type="button" title="Import">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <input id="hierarchy-import-file" type="file" accept=".xlsx,.csv" hidden />
+            <button id="hierarchy-export-btn" class="btn-icon" type="button" title="Export">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
             <button id="hierarchy-save-btn" class="btn btn-primary" type="button">
               <span id="hierarchy-save-label">Übernehmen</span>
             </button>
@@ -161,6 +169,13 @@
           </div>
 
           <div class="model-actions">
+            <button id="model-import-btn" class="btn-icon" type="button" title="Import">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <input id="model-import-file" type="file" accept=".xlsx,.csv" hidden />
+            <button id="model-export-btn" class="btn-icon" type="button" title="Export">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
             <button id="model-save-btn" class="btn btn-primary" type="button">
               <span id="model-save-label">Übernehmen</span>
             </button>
@@ -182,6 +197,13 @@
               <input id="files-search" class="model-search" type="text" placeholder="Suchen…" />
             </div>
             <span id="files-count" class="model-count"></span>
+            <button id="files-import-btn" class="btn-icon" type="button" title="Import ZIP">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <input id="files-import-file" type="file" accept=".zip" hidden />
+            <button id="files-export-btn" class="btn-icon" type="button" title="Export ZIP">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
             <button id="files-add-btn" class="btn btn-secondary btn-sm-text" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               <span id="files-add-label">Hinzufügen</span>
@@ -221,6 +243,13 @@
               <input id="assets-search" class="model-search" type="text" placeholder="Suchen…" />
             </div>
             <span id="assets-count" class="model-count"></span>
+            <button id="assets-import-btn" class="btn-icon" type="button" title="Import">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <input id="assets-import-file" type="file" accept=".xlsx,.csv" hidden />
+            <button id="assets-export-btn" class="btn-icon" type="button" title="Export">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
             <button id="assets-add-btn" class="btn btn-secondary btn-sm-text" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               <span id="assets-add-label">Hinzufügen</span>
@@ -356,6 +385,41 @@
       <div class="dti-confirm-actions">
         <button id="connector-delete-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
         <button id="connector-delete-ok" class="btn btn-danger" type="submit" value="confirm">Löschen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Connector import confirm modal -->
+  <dialog id="connector-import-modal" class="dti-confirm-modal">
+    <form id="connector-import-form" method="dialog" class="dti-confirm-form">
+      <h2 id="connector-import-title">Konnektor importieren</h2>
+      <p id="connector-import-message">Alle bestehenden Daten dieses Konnektors (Hierarchie, Datenmodell, Dateien und Assets) werden durch die importierten Daten ersetzt. Dieser Vorgang kann nicht rückgängig gemacht werden.</p>
+      <div class="dti-confirm-actions">
+        <button id="connector-import-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="connector-import-ok" class="btn btn-danger" type="submit" value="confirm">Importieren</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input id="connector-import-file" type="file" accept=".zip" hidden />
+
+  <dialog id="export-dialog" class="export-dialog">
+    <form method="dialog">
+      <h2 id="export-dialog-title">Export</h2>
+      <div class="export-field">
+        <label id="export-name-label" for="export-name">Dateiname</label>
+        <input id="export-name" type="text" class="export-input" placeholder="hierarchy" />
+      </div>
+      <div class="export-field">
+        <label id="export-format-label">Format</label>
+        <div class="export-format-options">
+          <label class="export-radio"><input type="radio" name="export-format" value="xlsx" checked /> .xlsx</label>
+          <label class="export-radio"><input type="radio" name="export-format" value="csv" /> .csv</label>
+        </div>
+      </div>
+      <div class="dti-confirm-actions">
+        <button id="export-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="export-download" class="btn btn-primary" type="button">Download</button>
       </div>
     </form>
   </dialog>

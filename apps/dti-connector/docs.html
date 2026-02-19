@@ -137,6 +137,36 @@
       font-size: 0.82rem;
       color: #e2e8f0;
       word-break: break-all;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+
+    .base-url-copy {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.3rem;
+      border-radius: 6px;
+      color: #94a3b8;
+      flex-shrink: 0;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .base-url-copy:hover {
+      color: #e2e8f0;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .base-url-copy svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .base-url-none {
@@ -683,8 +713,14 @@
       } catch {}
 
       if (apiKey) {
-        const baseUrl = window.location.origin + APP_BASE + "/api/v1/" + apiKey;
-        baseUrlDisplay.innerHTML = '<div class="base-url-value">' + baseUrl + '</div>';
+        const baseUrl = window.location.origin + APP_BASE + "/api/v1/" + apiKey + "/";
+        baseUrlDisplay.innerHTML =
+          '<div class="base-url-value">' +
+            '<span>' + baseUrl + '</span>' +
+            '<button class="base-url-copy" title="Copy" onclick="copyBaseUrl(this)">' +
+              '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+            '</button>' +
+          '</div>';
         document.getElementById("try-product-ids-btn").disabled = false;
         document.getElementById("try-hierarchies-btn").disabled = false;
         document.getElementById("try-hierarchy-btn").disabled = false;
@@ -881,6 +917,16 @@
 
     function escapeHtml(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function copyBaseUrl(btn) {
+      const text = btn.parentElement.querySelector("span").textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+        setTimeout(() => {
+          btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+        }, 1500);
+      });
     }
 
     init();
