@@ -76,6 +76,22 @@ const I18N = {
     connectorImportSuccess: "Konnektor erfolgreich importiert.",
     connectorImportError: "Fehler beim Importieren.",
     connectorExportError: "Fehler beim Exportieren.",
+    shareTitle: "Konnektor teilen",
+    shareRoleLabel: "Rolle",
+    shareGenerate: "Link erstellen",
+    shareCopied: "Link kopiert!",
+    shareMembers: "Mitglieder",
+    membersTitle: "Mitglieder",
+    memberOwner: "Inhaber",
+    memberEditor: "Editor",
+    memberViewer: "Betrachter",
+    memberRemove: "Entfernen",
+    memberRemoved: "Mitglied entfernt.",
+    memberRoleUpdated: "Rolle aktualisiert.",
+    inviteAccepted: "Einladung angenommen!",
+    inviteError: "Einladung konnte nicht angenommen werden.",
+    inviteExpired: "Diese Einladung ist abgelaufen.",
+    shareReadOnly: "Du hast nur Leserechte für diesen Konnektor.",
     connectorCreated: "Erstellt",
     hierarchy: "Hierarchie",
     model: "Modell",
@@ -218,6 +234,22 @@ const I18N = {
     connectorImportSuccess: "Connector imported successfully.",
     connectorImportError: "Import failed.",
     connectorExportError: "Export failed.",
+    shareTitle: "Share connector",
+    shareRoleLabel: "Role",
+    shareGenerate: "Generate link",
+    shareCopied: "Link copied!",
+    shareMembers: "Members",
+    membersTitle: "Members",
+    memberOwner: "Owner",
+    memberEditor: "Editor",
+    memberViewer: "Viewer",
+    memberRemove: "Remove",
+    memberRemoved: "Member removed.",
+    memberRoleUpdated: "Role updated.",
+    inviteAccepted: "Invite accepted!",
+    inviteError: "Could not accept invite.",
+    inviteExpired: "This invite has expired.",
+    shareReadOnly: "You have read-only access to this connector.",
     connectorCreated: "Created",
     hierarchy: "Hierarchy",
     model: "Model",
@@ -354,6 +386,7 @@ let currentConnectorId = null;
 let currentConnectorName = "";
 let addingConnector = false;
 let deleteConnectorId = null;
+let currentConnectorRole = "owner";
 
 // Connector detail state
 let savedApiKey = "";
@@ -511,6 +544,13 @@ function applyLocaleToUI() {
   document.getElementById("assets-save-label").textContent = t("assetsSave");
   assetsPropsSearch.placeholder = t("assetsPropsSearch");
 
+  // Share / Members modals
+  document.getElementById("share-modal-title").textContent = t("shareTitle");
+  document.getElementById("share-role-label").textContent = t("shareRoleLabel");
+  document.getElementById("share-generate-btn").textContent = t("shareGenerate");
+  document.getElementById("share-members-btn").textContent = t("shareMembers");
+  document.getElementById("members-modal-title").textContent = t("membersTitle");
+
   // Re-render
   if (currentConnectorId) {
     renderHierarchy();
@@ -571,18 +611,58 @@ function renderConnectors() {
     info.appendChild(name);
     info.appendChild(meta);
 
+    // Role badge for shared connectors
+    if (conn.role && conn.role !== "owner") {
+      const badge = document.createElement("span");
+      badge.className = "connector-card-role";
+      badge.textContent = conn.role === "editor" ? t("memberEditor") : t("memberViewer");
+      meta.appendChild(badge);
+    }
+
     const actions = document.createElement("div");
     actions.className = "connector-card-actions";
 
-    const importBtn = document.createElement("button");
-    importBtn.type = "button";
-    importBtn.className = "connector-card-action-btn";
-    importBtn.title = "Import";
-    importBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
-    importBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      startConnectorImport(conn.connector_id, conn.name);
-    });
+    // Share button (owner only)
+    if (conn.role === "owner") {
+      const shareBtn = document.createElement("button");
+      shareBtn.type = "button";
+      shareBtn.className = "connector-card-action-btn";
+      shareBtn.title = t("shareTitle");
+      shareBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
+      shareBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openShareModal(conn.connector_id);
+      });
+      actions.appendChild(shareBtn);
+    }
+
+    // Members button (editor — can view, not manage)
+    if (conn.role === "editor") {
+      const membersBtn = document.createElement("button");
+      membersBtn.type = "button";
+      membersBtn.className = "connector-card-action-btn";
+      membersBtn.title = t("shareMembers");
+      membersBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+      membersBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openMembersModal(conn.connector_id);
+      });
+      actions.appendChild(membersBtn);
+    }
+
+    // Import button (owner + editor)
+    if (conn.role === "owner" || conn.role === "editor") {
+      const importBtn = document.createElement("button");
+      importBtn.type = "button";
+      importBtn.className = "connector-card-action-btn";
+      importBtn.title = "Import";
+      importBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+      importBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startConnectorImport(conn.connector_id, conn.name);
+      });
+      actions.appendChild(importBtn);
+    }
 
     const exportBtn = document.createElement("button");
     exportBtn.type = "button";
@@ -593,23 +673,25 @@ function renderConnectors() {
       e.stopPropagation();
       exportFullConnector(conn.connector_id, conn.name);
     });
-
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.className = "connector-card-del";
-    delBtn.textContent = "\u00d7";
-    delBtn.title = t("connectorDeleteTitle");
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openConnectorDeleteModal(conn.connector_id, conn.name);
-    });
-    actions.appendChild(importBtn);
     actions.appendChild(exportBtn);
-    actions.appendChild(delBtn);
+
+    // Delete button (owner only)
+    if (conn.role === "owner") {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "connector-card-del";
+      delBtn.textContent = "\u00d7";
+      delBtn.title = t("connectorDeleteTitle");
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openConnectorDeleteModal(conn.connector_id, conn.name);
+      });
+      actions.appendChild(delBtn);
+    }
 
     card.appendChild(info);
     card.appendChild(actions);
-    card.addEventListener("click", () => enterConnector(conn.connector_id, conn.name));
+    card.addEventListener("click", () => enterConnector(conn.connector_id, conn.name, conn.role));
     connectorGrid.appendChild(card);
   }
 
@@ -806,11 +888,178 @@ connectorImportForm.addEventListener("submit", async (e) => {
   importConnectorName = null;
 });
 
+// ======================= SHARING =======================
+
+let shareConnectorId = null;
+
+function openShareModal(connId) {
+  shareConnectorId = connId || currentConnectorId;
+  const modal = document.getElementById("share-modal");
+  document.getElementById("share-link-box").hidden = true;
+  document.getElementById("share-hint").hidden = true;
+  modal.showModal();
+}
+
+document.getElementById("share-generate-btn").addEventListener("click", async () => {
+  const role = document.getElementById("share-role-select").value;
+  try {
+    const resp = await fetch(APP_BASE + "/api/connectors/" + shareConnectorId + "/invites", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    const linkInput = document.getElementById("share-link-input");
+    linkInput.value = data.inviteUrl;
+    document.getElementById("share-link-box").hidden = false;
+  } catch {
+    const hint = document.getElementById("share-hint");
+    hint.textContent = t("connectorExportError");
+    hint.className = "hierarchy-hint hint-error";
+    hint.hidden = false;
+    setTimeout(() => { hint.hidden = true; }, 3000);
+  }
+});
+
+document.getElementById("share-copy-btn").addEventListener("click", () => {
+  const linkInput = document.getElementById("share-link-input");
+  navigator.clipboard.writeText(linkInput.value).then(() => {
+    const hint = document.getElementById("share-hint");
+    hint.textContent = t("shareCopied");
+    hint.className = "hierarchy-hint hint-success";
+    hint.hidden = false;
+    setTimeout(() => { hint.hidden = true; }, 2000);
+  });
+});
+
+document.getElementById("share-members-btn").addEventListener("click", () => {
+  document.getElementById("share-modal").close();
+  openMembersModal(shareConnectorId);
+});
+
+async function openMembersModal(connId) {
+  const cid = connId || currentConnectorId;
+  const modal = document.getElementById("members-modal");
+  const list = document.getElementById("members-list");
+  list.innerHTML = '<div style="padding:12px;color:var(--text-muted)">...</div>';
+  modal.showModal();
+  try {
+    const resp = await fetch(APP_BASE + "/api/connectors/" + cid + "/members", { credentials: "same-origin" });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    list.innerHTML = "";
+    for (const m of data.members) {
+      const row = document.createElement("div");
+      row.className = "member-row";
+
+      const info = document.createElement("div");
+      info.className = "member-info";
+      const nameEl = document.createElement("span");
+      nameEl.className = "member-name";
+      nameEl.textContent = m.name;
+      const emailEl = document.createElement("span");
+      emailEl.className = "member-email";
+      emailEl.textContent = m.email;
+      info.appendChild(nameEl);
+      info.appendChild(emailEl);
+
+      const roleEl = document.createElement("span");
+      roleEl.className = "member-role";
+
+      if (m.role === "owner") {
+        roleEl.textContent = t("memberOwner");
+        row.appendChild(info);
+        row.appendChild(roleEl);
+      } else if (data.canManage) {
+        const sel = document.createElement("select");
+        sel.className = "member-role-select";
+        sel.innerHTML = '<option value="editor">' + t("memberEditor") + '</option><option value="viewer">' + t("memberViewer") + '</option>';
+        sel.value = m.role;
+        sel.addEventListener("change", async () => {
+          try {
+            await fetch(APP_BASE + "/api/connectors/" + cid + "/members/" + m.userId, {
+              method: "PATCH", credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ role: sel.value }),
+            });
+          } catch {}
+        });
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn btn-danger btn-sm member-remove-btn";
+        removeBtn.textContent = t("memberRemove");
+        removeBtn.addEventListener("click", async () => {
+          try {
+            const resp = await fetch(APP_BASE + "/api/connectors/" + cid + "/members/" + m.userId, {
+              method: "DELETE", credentials: "same-origin",
+            });
+            if (resp.ok) {
+              row.remove();
+            }
+          } catch {}
+        });
+        row.appendChild(info);
+        row.appendChild(sel);
+        row.appendChild(removeBtn);
+      } else {
+        roleEl.textContent = m.role === "editor" ? t("memberEditor") : t("memberViewer");
+        row.appendChild(info);
+        row.appendChild(roleEl);
+      }
+      list.appendChild(row);
+    }
+  } catch {
+    list.innerHTML = '<div style="padding:12px;color:var(--danger)">Error loading members</div>';
+  }
+}
+
+async function handleInviteFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("invite");
+  if (!token) return;
+  // Remove token from URL
+  const clean = new URL(window.location);
+  clean.searchParams.delete("invite");
+  window.history.replaceState({}, "", clean);
+  try {
+    const resp = await fetch(APP_BASE + "/api/connector-invites/" + token + "/accept", {
+      method: "POST", credentials: "same-origin",
+    });
+    const data = await resp.json();
+    if (resp.status === 410) {
+      connectorHint.textContent = t("inviteExpired");
+      connectorHint.className = "hierarchy-hint hint-error";
+      connectorHint.hidden = false;
+      setTimeout(() => { connectorHint.hidden = true; }, 4000);
+      return;
+    }
+    if (!resp.ok) throw new Error(data.error);
+    connectorHint.textContent = t("inviteAccepted");
+    connectorHint.className = "hierarchy-hint hint-success";
+    connectorHint.hidden = false;
+    setTimeout(() => { connectorHint.hidden = true; }, 4000);
+    // Reload connectors to show the newly shared one
+    await loadConnectors();
+  } catch {
+    connectorHint.textContent = t("inviteError");
+    connectorHint.className = "hierarchy-hint hint-error";
+    connectorHint.hidden = false;
+    setTimeout(() => { connectorHint.hidden = true; }, 4000);
+  }
+}
+
+// Sidebar share/members buttons
+document.getElementById("sidebar-share-btn").addEventListener("click", () => openShareModal());
+document.getElementById("sidebar-members-btn").addEventListener("click", () => openMembersModal());
+
 // ======================= CONNECTOR DETAIL VIEW =======================
 
-async function enterConnector(connId, connName) {
+async function enterConnector(connId, connName, role) {
   currentConnectorId = connId;
   currentConnectorName = connName;
+  currentConnectorRole = role || "owner";
 
   // Reset detail state
   savedApiKey = "";
@@ -832,9 +1081,21 @@ async function enterConnector(connId, connName) {
   connectorDetailView.style.display = "";
   brandText.textContent = connName;
 
-  // Update docs link with connector context
+  // Show + update docs link with connector context
   const docsLink = document.getElementById("docs-link");
-  if (docsLink) docsLink.href = APP_BASE + "/docs?connector=" + connId;
+  if (docsLink) {
+    docsLink.href = APP_BASE + "/docs?connector=" + connId;
+    docsLink.style.display = "";
+  }
+
+  // Show/hide sidebar share/members buttons based on role
+  const sidebarShareBtn = document.getElementById("sidebar-share-btn");
+  const sidebarMembersBtn = document.getElementById("sidebar-members-btn");
+  sidebarShareBtn.style.display = currentConnectorRole === "owner" ? "" : "none";
+  sidebarMembersBtn.style.display = "";
+
+  // Toggle read-only class for viewer role
+  connectorDetailView.classList.toggle("role-viewer", currentConnectorRole === "viewer");
 
   // Navigate to hierarchy tab
   navigateTo("hierarchy");
@@ -850,9 +1111,14 @@ async function enterConnector(connId, connName) {
 function backToConnectors() {
   currentConnectorId = null;
   currentConnectorName = "";
+  currentConnectorRole = "owner";
   connectorDetailView.style.display = "none";
   connectorListView.style.display = "";
   brandText.textContent = "DTI Connector";
+  document.getElementById("sidebar-share-btn").style.display = "none";
+  document.getElementById("sidebar-members-btn").style.display = "none";
+  const docsLink = document.getElementById("docs-link");
+  if (docsLink) docsLink.style.display = "none";
   loadConnectors();
 }
 
@@ -892,7 +1158,7 @@ function navigateTo(page) {
 
 sidebarNav.addEventListener("click", (e) => {
   const btn = e.target.closest(".sidebar-item");
-  if (!btn) return;
+  if (!btn || !btn.dataset.page) return;
   navigateTo(btn.dataset.page);
 });
 
@@ -981,12 +1247,13 @@ function renderHierarchy() {
   hierarchyLevels.forEach((level, i) => {
     const row = document.createElement("div");
     row.className = "hierarchy-row";
-    row.draggable = true;
     row.dataset.index = i;
 
     const handle = document.createElement("div");
     handle.className = "drag-handle";
     handle.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
+    handle.addEventListener("mousedown", () => { row.draggable = true; });
+    handle.addEventListener("touchstart", () => { row.draggable = true; }, { passive: true });
 
     const num = document.createElement("div");
     num.className = "hierarchy-level";
@@ -1026,6 +1293,7 @@ function renderHierarchy() {
     });
     row.addEventListener("dragend", () => {
       hierarchyDragIndex = null;
+      row.draggable = false;
       row.classList.remove("dragging");
       hierarchyList.querySelectorAll(".hierarchy-row").forEach(r => {
         r.classList.remove("drag-over-top", "drag-over-bottom");
@@ -1327,6 +1595,10 @@ function renderModel() {
     typeWrap.appendChild(propBtn);
     typeWrap.appendChild(fileBtn);
 
+    const typeText = document.createElement("span");
+    typeText.className = "model-type-text";
+    typeText.textContent = dp.type === 1 ? t("modelTypeFile") : t("modelTypeProperty");
+
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "model-row-del";
@@ -1337,6 +1609,7 @@ function renderModel() {
     row.appendChild(idInput);
     row.appendChild(nameInput);
     row.appendChild(typeWrap);
+    row.appendChild(typeText);
     row.appendChild(delBtn);
     modelTableBody.appendChild(row);
   });
@@ -2285,10 +2558,23 @@ function buildFieldLabel(id, name) {
     const info = document.createElement("span");
     info.className = "assets-field-info";
     info.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
-    const tooltip = document.createElement("span");
-    tooltip.className = "assets-field-tooltip";
-    tooltip.textContent = name;
-    info.appendChild(tooltip);
+    info.addEventListener("mouseenter", (e) => {
+      let tip = document.getElementById("field-tooltip");
+      if (!tip) {
+        tip = document.createElement("div");
+        tip.id = "field-tooltip";
+        document.body.appendChild(tip);
+      }
+      tip.textContent = name;
+      const rect = e.currentTarget.getBoundingClientRect();
+      tip.style.left = rect.left + rect.width / 2 + "px";
+      tip.style.top = rect.bottom + 6 + "px";
+      tip.style.display = "block";
+    });
+    info.addEventListener("mouseleave", () => {
+      const tip = document.getElementById("field-tooltip");
+      if (tip) tip.style.display = "none";
+    });
     label.appendChild(info);
   }
   return label;
@@ -2515,6 +2801,7 @@ async function init() {
   }
 
   setLocale(locale);
+  await handleInviteFromUrl();
   await loadConnectors();
 
   // Deep-link: ?connector=<id> → jump straight into that connector
@@ -2522,7 +2809,7 @@ async function init() {
   if (urlConn) {
     const match = connectors.find((c) => c.connector_id === urlConn);
     if (match) {
-      await enterConnector(match.connector_id, match.name);
+      await enterConnector(match.connector_id, match.name, match.role);
     }
   }
 }

@@ -21,7 +21,7 @@
       <span id="brand-text">DTI Connector</span>
     </div>
     <div class="header-spacer"></div>
-    <a id="docs-link" href="/apps/dti-connector/docs" class="header-swagger-btn" target="_blank" title="API Docs">
+    <a id="docs-link" href="/apps/dti-connector/docs" class="header-swagger-btn" target="_blank" title="API Docs" style="display:none">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
       <span id="swagger-btn-label">API Docs</span>
     </a>
@@ -89,6 +89,23 @@
           <span class="sidebar-label">Assets</span>
         </button>
         <div class="sidebar-spacer"></div>
+        <button id="sidebar-share-btn" class="sidebar-item" type="button" title="Teilen" style="display:none">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          <span class="sidebar-label">Teilen</span>
+        </button>
+        <button id="sidebar-members-btn" class="sidebar-item" type="button" title="Mitglieder" style="display:none">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span class="sidebar-label">Mitglieder</span>
+        </button>
         <button class="sidebar-item" data-page="settings" type="button">
           <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
@@ -402,6 +419,43 @@
   </dialog>
 
   <input id="connector-import-file" type="file" accept=".zip" hidden />
+
+  <!-- Share connector modal -->
+  <dialog id="share-modal" class="dti-confirm-modal">
+    <form method="dialog" class="dti-confirm-form share-form">
+      <h2 id="share-modal-title">Konnektor teilen</h2>
+      <div class="share-role-row">
+        <label id="share-role-label" for="share-role-select">Rolle</label>
+        <select id="share-role-select" class="export-input">
+          <option value="editor">Editor</option>
+          <option value="viewer">Viewer</option>
+        </select>
+      </div>
+      <button id="share-generate-btn" type="button" class="btn btn-primary share-generate-btn">Link erstellen</button>
+      <div id="share-link-box" class="share-link-box" hidden>
+        <input id="share-link-input" type="text" class="export-input" readonly />
+        <button id="share-copy-btn" type="button" class="btn btn-secondary share-copy-btn" title="Copy">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M3 11V3a1 1 0 011-1h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div id="share-hint" class="hierarchy-hint" hidden></div>
+      <div class="dti-confirm-actions">
+        <button id="share-members-btn" type="button" class="btn btn-secondary">Mitglieder</button>
+        <button type="submit" class="btn btn-secondary">Schließen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Members modal -->
+  <dialog id="members-modal" class="dti-confirm-modal">
+    <form method="dialog" class="dti-confirm-form members-form">
+      <h2 id="members-modal-title">Mitglieder</h2>
+      <div id="members-list" class="members-list"></div>
+      <div class="dti-confirm-actions">
+        <button type="submit" class="btn btn-secondary">Schließen</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="export-dialog" class="export-dialog">
     <form method="dialog">

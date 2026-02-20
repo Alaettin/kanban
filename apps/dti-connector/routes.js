@@ -190,6 +190,36 @@ async function initDtiTables() {
     FOREIGN KEY (connector_id) REFERENCES dti_connectors(connector_id) ON DELETE CASCADE
   )`);
 
+  await db.run(`CREATE TABLE IF NOT EXISTS connector_members (
+    connector_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (connector_id, user_id),
+    FOREIGN KEY (connector_id) REFERENCES dti_connectors(connector_id) ON DELETE CASCADE
+  )`);
+  await db.run(`CREATE TABLE IF NOT EXISTS connector_invites (
+    token TEXT PRIMARY KEY,
+    connector_id TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('editor', 'viewer')),
+    created_by TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (connector_id) REFERENCES dti_connectors(connector_id) ON DELETE CASCADE
+  )`);
+  await db.run("CREATE INDEX IF NOT EXISTS idx_connector_members_user_id ON connector_members(user_id)");
+  await db.run("CREATE INDEX IF NOT EXISTS idx_connector_members_connector_id ON connector_members(connector_id)");
+  await db.run("CREATE INDEX IF NOT EXISTS idx_connector_invites_connector_id ON connector_invites(connector_id)");
+
+  // Backfill: ensure every existing connector owner has a connector_members row
+  const allConnectors = await db.all("SELECT connector_id, user_id FROM dti_connectors");
+  for (const c of allConnectors) {
+    await db.run(
+      "INSERT OR IGNORE INTO connector_members (connector_id, user_id, role) VALUES (?, ?, 'owner')",
+      [c.connector_id, c.user_id]
+    );
+  }
+
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   console.log("[DTI] Tables ready.");
 }
@@ -200,22 +230,43 @@ async function initDtiTables() {
 
 function mountRoutes(router) {
 
-  // --- Middleware: resolve connector + ownership check ---
+  // --- Middleware: resolve connector + ownership / membership check ---
 
   async function resolveConnector(req, res, next) {
     const connectorId = req.params.connectorId;
     if (!connectorId) return res.status(400).json({ error: "Missing connector ID" });
     try {
       const row = await db.get(
-        "SELECT connector_id, user_id, name, api_key, created_at FROM dti_connectors WHERE connector_id = ? AND user_id = ?",
-        [connectorId, req.user.id]
+        `SELECT c.connector_id, c.user_id, c.name, c.api_key, c.created_at, m.role
+         FROM dti_connectors c
+         JOIN connector_members m ON m.connector_id = c.connector_id AND m.user_id = ?
+         WHERE c.connector_id = ?`,
+        [req.user.id, connectorId]
       );
       if (!row) return res.status(404).json({ error: "Connector not found" });
-      req.connector = row;
+      req.connector = row;           // row.user_id = owner, row.role = current user's role
       next();
     } catch {
       res.status(500).json({ error: "Failed to resolve connector" });
     }
+  }
+
+  function requireRole(...allowed) {
+    return (req, res, next) => {
+      if (!allowed.includes(req.connector.role)) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+      next();
+    };
+  }
+
+  const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+  function getBaseUrl(req) {
+    const proto = typeof req.headers["x-forwarded-proto"] === "string"
+      ? req.headers["x-forwarded-proto"].split(",")[0].trim()
+      : req.protocol;
+    return `${proto}://${req.get("host")}`;
   }
 
   // ======================= CONNECTOR CRUD =======================
@@ -223,7 +274,10 @@ function mountRoutes(router) {
   router.get("/api/connectors", auth.requireAuth, async (req, res) => {
     try {
       const rows = await db.all(
-        "SELECT connector_id, name, api_key, created_at FROM dti_connectors WHERE user_id = ? ORDER BY created_at",
+        `SELECT c.connector_id, c.name, c.api_key, c.created_at, m.role
+         FROM dti_connectors c
+         JOIN connector_members m ON m.connector_id = c.connector_id AND m.user_id = ?
+         ORDER BY c.created_at`,
         [req.user.id]
       );
       res.json({ connectors: rows });
@@ -244,13 +298,17 @@ function mountRoutes(router) {
         "INSERT INTO dti_connectors (connector_id, user_id, name, api_key) VALUES (?, ?, ?, ?)",
         [connectorId, req.user.id, name.trim(), apiKey]
       );
-      res.json({ connector_id: connectorId, name: name.trim(), api_key: apiKey, created_at: new Date().toISOString() });
+      await db.run(
+        "INSERT INTO connector_members (connector_id, user_id, role) VALUES (?, ?, 'owner')",
+        [connectorId, req.user.id]
+      );
+      res.json({ connector_id: connectorId, name: name.trim(), api_key: apiKey, created_at: new Date().toISOString(), role: "owner" });
     } catch {
       res.status(500).json({ error: "Failed to create connector" });
     }
   });
 
-  router.put("/api/connectors/:connectorId", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.put("/api/connectors/:connectorId", auth.requireAuth, resolveConnector, requireRole("owner"), async (req, res) => {
     const { name } = req.body || {};
     if (!name || typeof name !== "string" || name.trim().length === 0 || name.trim().length > 100) {
       return res.status(400).json({ error: "Invalid connector name" });
@@ -264,9 +322,9 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/connectors/:connectorId", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.delete("/api/connectors/:connectorId", auth.requireAuth, resolveConnector, requireRole("owner"), async (req, res) => {
     try {
-      const connDir = path.join(UPLOADS_DIR, req.user.id, req.connector.connector_id);
+      const connDir = path.join(UPLOADS_DIR, req.connector.user_id, req.connector.connector_id);
       if (fs.existsSync(connDir)) {
         fs.rmSync(connDir, { recursive: true, force: true });
       }
@@ -280,10 +338,10 @@ function mountRoutes(router) {
   // ======================= CONNECTOR SETTINGS (API KEY) =======================
 
   router.get("/api/connectors/:connectorId/key", auth.requireAuth, resolveConnector, async (req, res) => {
-    res.json({ apiKey: req.connector.api_key });
+    res.json({ apiKey: req.connector.api_key, connectorName: req.connector.name });
   });
 
-  router.put("/api/connectors/:connectorId/key", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.put("/api/connectors/:connectorId/key", auth.requireAuth, resolveConnector, requireRole("owner"), async (req, res) => {
     const { apiKey } = req.body || {};
     if (!apiKey || typeof apiKey !== "string" || !UUID_PATTERN.test(apiKey)) {
       return res.status(400).json({ error: "Invalid API key format" });
@@ -314,7 +372,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/connectors/:connectorId/hierarchy/levels", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.put("/api/connectors/:connectorId/hierarchy/levels", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const levels = req.body;
     if (!Array.isArray(levels) || levels.length === 0) {
@@ -371,7 +429,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/connectors/:connectorId/model", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.put("/api/connectors/:connectorId/model", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const items = req.body;
     if (!Array.isArray(items)) {
@@ -427,7 +485,7 @@ function mountRoutes(router) {
   const upload = multer({
     storage: multer.diskStorage({
       destination(req, file, cb) {
-        const connDir = path.join(UPLOADS_DIR, req.user.id, req.connector.connector_id);
+        const connDir = path.join(UPLOADS_DIR, req.connector.user_id, req.connector.connector_id);
         fs.mkdirSync(connDir, { recursive: true });
         cb(null, connDir);
       },
@@ -453,7 +511,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/connectors/:connectorId/files/upload", auth.requireAuth, resolveConnector, upload.single("file"), async (req, res) => {
+  router.post("/api/connectors/:connectorId/files/upload", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), upload.single("file"), async (req, res) => {
     const cid = req.connector.connector_id;
     const fileId = (req.body.file_id || "").trim();
     const lang = (req.body.lang || "en").trim().toLowerCase();
@@ -487,7 +545,7 @@ function mountRoutes(router) {
       );
       if (existingLang) {
         const oldExt = path.extname(existingLang.original_name);
-        const oldPath = path.join(UPLOADS_DIR, req.user.id, cid, fileId + "_" + lang + oldExt);
+        const oldPath = path.join(UPLOADS_DIR, req.connector.user_id, cid, fileId + "_" + lang + oldExt);
         fs.unlink(oldPath, () => {});
         await db.run("DELETE FROM dti_files WHERE connector_id = ? AND file_id = ? AND lang = ?", [cid, fileId, lang]);
       }
@@ -520,7 +578,7 @@ function mountRoutes(router) {
       );
       if (!row) return res.status(404).json({ error: "File not found" });
       const ext = path.extname(row.original_name);
-      const filePath = path.join(UPLOADS_DIR, req.user.id, cid, fileId + "_" + lang + ext);
+      const filePath = path.join(UPLOADS_DIR, req.connector.user_id, cid, fileId + "_" + lang + ext);
       if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found on disk" });
       res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
       res.setHeader("Content-Disposition", "inline");
@@ -530,7 +588,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/connectors/:connectorId/files/:fileId", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.delete("/api/connectors/:connectorId/files/:fileId", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const fileId = req.params.fileId;
     if (!fileId || !ID_PATTERN.test(fileId)) {
@@ -544,7 +602,7 @@ function mountRoutes(router) {
       if (rows.length === 0) return res.status(404).json({ error: "File not found" });
       for (const row of rows) {
         const ext = path.extname(row.original_name);
-        const filePath = path.join(UPLOADS_DIR, req.user.id, cid, row.file_id + "_" + row.lang + ext);
+        const filePath = path.join(UPLOADS_DIR, req.connector.user_id, cid, row.file_id + "_" + row.lang + ext);
         fs.unlink(filePath, () => {});
       }
       await db.run("DELETE FROM dti_files WHERE connector_id = ? AND file_id = ?", [cid, fileId]);
@@ -565,7 +623,7 @@ function mountRoutes(router) {
       );
       if (rows.length === 0) return res.status(404).json({ error: "No files to export" });
 
-      const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+      const connDir = path.join(UPLOADS_DIR, req.connector.user_id, cid);
       const manifest = [];
 
       const archive = archiver("zip", { zlib: { level: 5 } });
@@ -603,12 +661,12 @@ function mountRoutes(router) {
   fs.mkdirSync(zipTmpDir, { recursive: true });
   const zipUpload = multer({ dest: zipTmpDir, limits: { fileSize: 500 * 1024 * 1024 } });
 
-  router.post("/api/connectors/:connectorId/files/import", auth.requireAuth, resolveConnector, zipUpload.single("zip"), async (req, res) => {
+  router.post("/api/connectors/:connectorId/files/import", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), zipUpload.single("zip"), async (req, res) => {
     const cid = req.connector.connector_id;
     const tmpPath = req.file && req.file.path;
     if (!tmpPath) return res.status(400).json({ error: "No file uploaded" });
 
-    const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+    const connDir = path.join(UPLOADS_DIR, req.connector.user_id, cid);
     fs.mkdirSync(connDir, { recursive: true });
 
     let imported = 0;
@@ -687,7 +745,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/connectors/:connectorId/assets", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.post("/api/connectors/:connectorId/assets", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const { asset_id } = req.body || {};
     if (!asset_id || typeof asset_id !== "string" || !ASSET_ID_PATTERN.test(asset_id)) {
@@ -709,7 +767,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/connectors/:connectorId/assets/:assetId/rename", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.put("/api/connectors/:connectorId/assets/:assetId/rename", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const oldId = req.params.assetId;
     const { asset_id: newId } = req.body || {};
@@ -734,7 +792,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/connectors/:connectorId/assets/:assetId", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.delete("/api/connectors/:connectorId/assets/:assetId", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const assetId = req.params.assetId;
     if (!assetId || !ASSET_ID_PATTERN.test(assetId)) return res.status(400).json({ error: "Invalid asset ID" });
@@ -765,7 +823,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/connectors/:connectorId/assets/:assetId/values", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.put("/api/connectors/:connectorId/assets/:assetId/values", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const assetId = req.params.assetId;
     if (!assetId || !ASSET_ID_PATTERN.test(assetId)) return res.status(400).json({ error: "Invalid asset ID" });
@@ -829,7 +887,7 @@ function mountRoutes(router) {
 
   // ======================= ASSETS IMPORT =======================
 
-  router.post("/api/connectors/:connectorId/assets/import", auth.requireAuth, resolveConnector, async (req, res) => {
+  router.post("/api/connectors/:connectorId/assets/import", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     try {
       const { assets: importAssets } = req.body || {};
@@ -894,6 +952,116 @@ function mountRoutes(router) {
     }
   });
 
+  // ======================= SHARING: INVITES & MEMBERS =======================
+
+  router.post("/api/connectors/:connectorId/invites", auth.requireAuth, resolveConnector, requireRole("owner"), async (req, res) => {
+    const role = req.body?.role === "viewer" ? "viewer" : "editor";
+    try {
+      const token = crypto.randomUUID();
+      const expiresAt = Date.now() + INVITE_TTL_MS;
+      await db.run(
+        "INSERT INTO connector_invites (token, connector_id, role, created_by, expires_at) VALUES (?, ?, ?, ?, ?)",
+        [token, req.connector.connector_id, role, req.user.id, expiresAt]
+      );
+      const inviteUrl = `${getBaseUrl(req)}/apps/dti-connector?invite=${token}`;
+      res.status(201).json({ ok: true, inviteUrl, expiresAt, role });
+    } catch {
+      res.status(500).json({ error: "Failed to create invite" });
+    }
+  });
+
+  router.post("/api/connector-invites/:token/accept", auth.requireAuth, async (req, res) => {
+    try {
+      // Clean expired invites
+      await db.run("DELETE FROM connector_invites WHERE expires_at < ?", [Date.now()]);
+      const invite = await db.get(
+        "SELECT token, connector_id, role, expires_at FROM connector_invites WHERE token = ?",
+        [req.params.token]
+      );
+      if (!invite) return res.status(404).json({ error: "Invite not found or expired" });
+      if (invite.expires_at < Date.now()) {
+        await db.run("DELETE FROM connector_invites WHERE token = ?", [invite.token]);
+        return res.status(410).json({ error: "Invite expired" });
+      }
+      // Check if already a member
+      const existing = await db.get(
+        "SELECT role FROM connector_members WHERE connector_id = ? AND user_id = ?",
+        [invite.connector_id, req.user.id]
+      );
+      if (!existing) {
+        await db.run(
+          "INSERT INTO connector_members (connector_id, user_id, role) VALUES (?, ?, ?)",
+          [invite.connector_id, req.user.id, invite.role]
+        );
+      }
+      await db.run("DELETE FROM connector_invites WHERE token = ?", [invite.token]);
+      res.json({ ok: true, connectorId: invite.connector_id });
+    } catch {
+      res.status(500).json({ error: "Failed to accept invite" });
+    }
+  });
+
+  router.get("/api/connectors/:connectorId/members", auth.requireAuth, resolveConnector, async (req, res) => {
+    try {
+      const rows = await db.all(
+        `SELECT m.user_id, m.role, u.name, u.email, u.picture
+         FROM connector_members m JOIN users u ON u.id = m.user_id
+         WHERE m.connector_id = ?
+         ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'editor' THEN 1 ELSE 2 END, u.name COLLATE NOCASE`,
+        [req.connector.connector_id]
+      );
+      res.json({
+        members: rows.map(r => ({
+          userId: r.user_id, role: r.role,
+          name: r.name || r.email || "Unknown",
+          email: r.email || "", picture: r.picture || ""
+        })),
+        canManage: req.connector.role === "owner",
+        currentUserId: req.user.id
+      });
+    } catch {
+      res.status(500).json({ error: "Failed to load members" });
+    }
+  });
+
+  router.patch("/api/connectors/:connectorId/members/:userId", auth.requireAuth, resolveConnector, requireRole("owner"), async (req, res) => {
+    const nextRole = req.body?.role === "viewer" ? "viewer" : req.body?.role === "editor" ? "editor" : null;
+    if (!nextRole) return res.status(400).json({ error: "Invalid role" });
+    try {
+      const target = await db.get(
+        "SELECT role FROM connector_members WHERE connector_id = ? AND user_id = ?",
+        [req.connector.connector_id, req.params.userId]
+      );
+      if (!target) return res.status(404).json({ error: "Member not found" });
+      if (target.role === "owner") return res.status(400).json({ error: "Cannot change owner role" });
+      await db.run(
+        "UPDATE connector_members SET role = ? WHERE connector_id = ? AND user_id = ?",
+        [nextRole, req.connector.connector_id, req.params.userId]
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to update member role" });
+    }
+  });
+
+  router.delete("/api/connectors/:connectorId/members/:userId", auth.requireAuth, resolveConnector, requireRole("owner"), async (req, res) => {
+    try {
+      const target = await db.get(
+        "SELECT role FROM connector_members WHERE connector_id = ? AND user_id = ?",
+        [req.connector.connector_id, req.params.userId]
+      );
+      if (!target) return res.status(404).json({ error: "Member not found" });
+      if (target.role === "owner") return res.status(400).json({ error: "Cannot remove owner" });
+      await db.run(
+        "DELETE FROM connector_members WHERE connector_id = ? AND user_id = ?",
+        [req.connector.connector_id, req.params.userId]
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to remove member" });
+    }
+  });
+
   // ======================= FULL CONNECTOR EXPORT (ZIP) =======================
 
   router.get("/api/connectors/:connectorId/export-full", auth.requireAuth, resolveConnector, async (req, res) => {
@@ -906,7 +1074,7 @@ function mountRoutes(router) {
       const assets = await db.all("SELECT asset_id FROM dti_assets WHERE connector_id = ? ORDER BY asset_id", [cid]);
       const assetValues = await db.all("SELECT asset_id, key, lang, value FROM dti_asset_values WHERE connector_id = ?", [cid]);
 
-      const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+      const connDir = path.join(UPLOADS_DIR, req.connector.user_id, cid);
 
       const archive = archiver("zip", { zlib: { level: 5 } });
       const connName = req.connector.name || cid;
@@ -958,12 +1126,12 @@ function mountRoutes(router) {
 
   // ======================= FULL CONNECTOR IMPORT (ZIP) =======================
 
-  router.post("/api/connectors/:connectorId/import-full", auth.requireAuth, resolveConnector, zipUpload.single("zip"), async (req, res) => {
+  router.post("/api/connectors/:connectorId/import-full", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), zipUpload.single("zip"), async (req, res) => {
     const cid = req.connector.connector_id;
     const tmpPath = req.file && req.file.path;
     if (!tmpPath) return res.status(400).json({ error: "No file uploaded" });
 
-    const connDir = path.join(UPLOADS_DIR, req.user.id, cid);
+    const connDir = path.join(UPLOADS_DIR, req.connector.user_id, cid);
     fs.mkdirSync(connDir, { recursive: true });
 
     try {

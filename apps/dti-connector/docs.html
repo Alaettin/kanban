@@ -417,6 +417,11 @@
       <div id="base-url-display"></div>
     </div>
 
+    <div class="base-url-card">
+      <div class="base-url-label">DTI Connector Command</div>
+      <div id="connector-command-display"></div>
+    </div>
+
     <div class="auth-section">
       <h3>Authentication</h3>
       <p>
@@ -695,7 +700,9 @@
 
     async function init() {
       const baseUrlDisplay = document.getElementById("base-url-display");
+      const commandDisplay = document.getElementById("connector-command-display");
       const connectorId = new URLSearchParams(window.location.search).get("connector");
+      let connectorName = "";
 
       if (connectorId) {
         document.getElementById("back-link").href = APP_BASE + "?connector=" + connectorId;
@@ -710,6 +717,7 @@
         });
         const data = await res.json();
         apiKey = data.apiKey;
+        connectorName = data.connectorName || "";
       } catch {}
 
       if (apiKey) {
@@ -721,6 +729,21 @@
               '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
             '</button>' +
           '</div>';
+
+        const command = JSON.stringify({
+          baseAddress: baseUrl,
+          useAuthorization: false,
+          connectorId: connectorName,
+          mainDefault: true
+        }, null, 2);
+        commandDisplay.innerHTML =
+          '<div class="base-url-value" style="white-space:pre;align-items:flex-start">' +
+            '<span>' + command + '</span>' +
+            '<button class="base-url-copy" title="Copy" onclick="copyBaseUrl(this)" style="margin-top:2px">' +
+              '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+            '</button>' +
+          '</div>';
+
         document.getElementById("try-product-ids-btn").disabled = false;
         document.getElementById("try-hierarchies-btn").disabled = false;
         document.getElementById("try-hierarchy-btn").disabled = false;
@@ -731,6 +754,7 @@
         baseUrlDisplay.innerHTML =
           '<div class="base-url-none">Kein API-Schl\u00fcssel gespeichert. ' +
           '<a href="/apps/dti-connector">Erstelle einen in den Einstellungen.</a></div>';
+        commandDisplay.innerHTML = '';
       }
     }
 

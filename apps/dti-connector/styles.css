@@ -1203,6 +1203,17 @@ body.sidebar-collapsed .sidebar-foot {
   color: var(--text-2);
 }
 
+.model-type-text {
+  display: none;
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding: 0 0.35rem;
+  white-space: nowrap;
+}
+.role-viewer .model-type-text {
+  display: block;
+}
+
 .model-row-del {
   width: 24px;
   height: 24px;
@@ -1738,26 +1749,19 @@ body.sidebar-collapsed .sidebar-foot {
   color: var(--accent);
 }
 
-.assets-field-info .assets-field-tooltip {
+#field-tooltip {
   display: none;
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 4px);
+  position: fixed;
   transform: translateX(-50%);
   background: var(--text);
   color: var(--bg);
-  font-family: inherit;
   font-size: 0.7rem;
   font-weight: 500;
   padding: 0.25rem 0.5rem;
   border-radius: 5px;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 10;
-}
-
-.assets-field-info:hover .assets-field-tooltip {
-  display: block;
+  z-index: 9999;
 }
 
 .assets-field-input {
@@ -1812,6 +1816,8 @@ body.sidebar-collapsed .sidebar-foot {
   align-items: center;
   background: var(--surface-3);
   border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 0;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -2087,6 +2093,149 @@ body.sidebar-collapsed .sidebar-foot {
   background: var(--hover);
   border-color: var(--border);
   color: var(--text);
+}
+
+.connector-card-role {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Share modal */
+#share-modal { width: min(92vw, 420px); }
+.share-role-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.share-role-row label { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
+.share-role-row select { flex: 1; }
+.share-generate-btn { width: 100%; margin-bottom: 12px; }
+.share-link-box {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.share-link-box input { flex: 1; font-size: 0.8rem; }
+.share-copy-btn {
+  flex-shrink: 0;
+  width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Members modal */
+#members-modal { width: min(92vw, 460px); }
+.members-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.member-row:last-child { border-bottom: none; }
+.member-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.member-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.member-email {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.member-role {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.member-role-select {
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+}
+.member-remove-btn {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+/* Viewer role: hide write controls */
+/* Viewer: hide all write controls, delete buttons, import/export */
+.role-viewer #hierarchy-add-btn,
+.role-viewer #hierarchy-save-btn,
+.role-viewer #model-add-btn,
+.role-viewer #model-save-btn,
+.role-viewer #files-add-btn,
+.role-viewer #assets-add-btn,
+.role-viewer #assets-save-btn,
+.role-viewer .hierarchy-remove-btn,
+.role-viewer .model-row-del,
+.role-viewer .files-row-del,
+.role-viewer .assets-row-del,
+.role-viewer [data-page="settings"],
+.role-viewer #hierarchy-import-btn,
+.role-viewer #hierarchy-export-btn,
+.role-viewer #model-import-btn,
+.role-viewer #model-export-btn,
+.role-viewer #files-import-btn,
+.role-viewer #files-export-btn,
+.role-viewer #assets-import-btn,
+.role-viewer #assets-export-btn,
+.role-viewer .drag-handle,
+.role-viewer .model-type-toggle {
+  display: none !important;
+}
+
+/* Viewer: grid layouts without handle/delete columns */
+.role-viewer .hierarchy-row {
+  grid-template-columns: 40px 1fr;
+}
+.role-viewer .model-row {
+  grid-template-columns: 42px 1fr 1fr 90px;
+}
+.role-viewer .files-row {
+  grid-template-columns: 42px 1fr 1.2fr 1.2fr;
+}
+.role-viewer .assets-row {
+  grid-template-columns: 42px 1fr;
+}
+
+/* Viewer: all inputs/selects read-only */
+.role-viewer input,
+.role-viewer select,
+.role-viewer textarea {
+  pointer-events: none;
+  opacity: 0.8;
+  background: var(--bg-card);
 }
 
 .connector-empty {
