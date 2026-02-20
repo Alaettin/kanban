@@ -21,9 +21,11 @@ const auth = require("./shared/auth");
 const registry = require("./shared/app-registry");
 const kanbanRoutes = require("./apps/kanban/routes");
 const dtiRoutes = require("./apps/dti-connector/routes");
+const cardScannerRoutes = require("./apps/card-scanner/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
+const cardScannerDir = path.join(__dirname, "apps", "card-scanner");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -51,8 +53,17 @@ registry.register({
   color: "#0891b2",
 });
 
+registry.register({
+  id: "card-scanner",
+  name: "Card Scanner",
+  description: "Visitenkarten scannen und verwalten",
+  icon: "card-scanner",
+  path: "/apps/card-scanner",
+  color: "#7c3aed",
+});
+
 // --- Middleware ---
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "5mb" }));
 
 // --- Platform static assets ---
 app.get("/dashboard.css", (req, res) => {
@@ -170,6 +181,25 @@ app.get("/apps/dti-connector/docs", auth.requireAuthPage, requireAppAccess("dti-
 const dtiRouter = express.Router();
 dtiRoutes.mountRoutes(dtiRouter);
 app.use("/apps/dti-connector", dtiRouter);
+
+// --- Card Scanner App ---
+
+app.get("/apps/card-scanner/styles.css", (req, res) => {
+  res.sendFile(path.join(cardScannerDir, "styles.css"));
+});
+
+app.get("/apps/card-scanner/app.js", (req, res) => {
+  res.sendFile(path.join(cardScannerDir, "app.js"));
+});
+
+app.get("/apps/card-scanner", auth.requireAuthPage, requireAppAccess("card-scanner"), (req, res) => {
+  res.sendFile(path.join(cardScannerDir, "index.html"));
+});
+
+// Card Scanner API routes (mounted under /apps/card-scanner)
+const cardScannerRouter = express.Router();
+cardScannerRoutes.mountRoutes(cardScannerRouter);
+app.use("/apps/card-scanner", cardScannerRouter);
 
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
@@ -311,6 +341,7 @@ async function start() {
   await auth.initAuthTables();
   await kanbanRoutes.initKanbanTables();
   await dtiRoutes.initDtiTables();
+  await cardScannerRoutes.initCardScannerTables();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically

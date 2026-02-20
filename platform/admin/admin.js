@@ -16,6 +16,7 @@ const saveConfirmBtn = document.getElementById("save-confirm");
 const AVAILABLE_APPS = [
   { id: "kanban", name: "Kanban Board" },
   { id: "dti-connector", name: "DTI Connector" },
+  { id: "card-scanner", name: "Card Scanner" },
 ];
 
 const I18N = {

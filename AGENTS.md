@@ -1,25 +1,48 @@
 ﻿# AGENTS.md
 
 ## Purpose
-This repository contains a multi-user Kanban app with Google login, shared projects, role-based access, SQLite persistence, and an activity feed.
+This repository contains a multi-app workspace platform with Google login, role-based access control, and SQLite persistence.
+Apps: Kanban Board, DTI Connector, Card Scanner.
 Use this file as the default operating guide for any coding agent working in this project.
 
 ## Project Snapshot
 - Runtime: Node.js
 - Backend: Express (`server.js`)
-- Frontend: Vanilla HTML/CSS/JS (`index.html`, `styles.css`, `app.js`)
-- Database: SQLite (`data/kanban.db`)
+- Frontend: Vanilla HTML/CSS/JS (per app: `index.html`, `styles.css`, `app.js`)
+- Database: SQLite (`data/platform.db`)
 - Auth: Google OAuth 2.0 + cookie sessions
-- Collaboration: shared projects, invites, member roles (`owner`, `editor`, `viewer`)
+- Platform: Dashboard with app launcher, admin panel, user management
+- Collaboration: shared projects/connectors, invites, member roles (`owner`, `editor`, `viewer`)
 
 ## Important Files
-- `server.js`: API routes, auth/session flow, SQLite schema and maintenance jobs
-- `app.js`: board UI, project sync, invites, member management, role-aware UI, activity panel
-- `index.html`: board layout, share/member modals, activity panel, templates
-- `styles.css`: all UI styles including sync status, management modals, and activity overlay
-- `login.html`: login page
-- `package.json`: scripts and dependencies
-- `.env.example`: required env var template
+
+### Platform
+- `server.js`: Entry point, app registration, admin API, static routes
+- `shared/auth.js`: Google OAuth, session management, middleware
+- `shared/db.js`: SQLite async wrapper
+- `shared/app-registry.js`: App registration system
+- `platform/dashboard.*`: App launcher (dashboard)
+- `platform/login.html`: Login page
+- `platform/admin/`: Admin panel (user management, role & app access)
+
+### Kanban Board (`apps/kanban/`)
+- `routes.js`: Project/board API, invites, members, activities
+- `app.js`: Board UI, drag & drop, project sync, member management
+- `index.html` / `styles.css`: Board layout and styles
+
+### DTI Connector (`apps/dti-connector/`)
+- `routes.js`: Connector CRUD, hierarchy, model, assets, files, sharing, external API
+- `app.js`: Connector management UI, import/export
+- `index.html` / `styles.css` / `docs.html`: UI and API docs
+
+### Card Scanner (`apps/card-scanner/`)
+- `routes.js`: Card CRUD, image storage and retrieval
+- `app.js`: OCR (Tesseract.js), image preprocessing, business card text parsing, webcam/upload
+- `index.html` / `styles.css`: Card list with thumbnails, edit form, image modal
+
+### Config
+- `package.json`: Scripts and dependencies
+- `.env.example`: Required env var template
 
 ## Required Environment Variables
 - `GOOGLE_CLIENT_ID`
@@ -33,54 +56,54 @@ Use this file as the default operating guide for any coding agent working in thi
 4. Open: `http://localhost:3000`
 
 ## API Contract (Current)
-Auth/User:
-- `GET /api/me`
+
+### Platform
+- `GET /api/me` — current user info
+- `GET /api/apps` — apps the user has access to
 - `POST /auth/logout`
-- `GET /auth/google`
-- `GET /auth/google/callback`
+- `GET /auth/google` / `GET /auth/google/callback`
 
-Projects:
-- `GET /api/projects`
-- `GET /api/projects/summary` (lightweight polling)
-- `POST /api/projects`
-- `GET /api/projects/:projectId`
-- `PATCH /api/projects/:projectId` (rename)
+### Admin (`/api/admin/`)
+- `GET /api/admin/users`
+- `PUT /api/admin/users/:userId/role`
+- `PUT /api/admin/users/:userId/access`
+- `DELETE /api/admin/users/:userId`
+
+### Kanban Board (`/apps/kanban/`)
+- `GET/POST /api/projects`
+- `GET/PATCH/DELETE /api/projects/:projectId`
 - `PUT /api/projects/:projectId/state`
-- `DELETE /api/projects/:projectId` (owner only)
-
-Invites:
 - `POST /api/projects/:projectId/invites`
 - `POST /api/invites/:token/accept`
-- `GET /invite/:token` (redirect helper)
+- `GET/PATCH/DELETE /api/projects/:projectId/members/:userId`
+- `GET/POST /api/projects/:projectId/activities`
 
-Members/Roles:
-- `GET /api/projects/:projectId/members`
-- `PATCH /api/projects/:projectId/members/:userId` (`editor`/`viewer`, owner only)
-- `DELETE /api/projects/:projectId/members/:userId` (owner only, owner cannot be removed)
+### DTI Connector (`/apps/dti-connector/`)
+- Connector CRUD, hierarchy, model, assets, files, sharing, external API
+- See `apps/dti-connector/routes.js` for full route list
 
-Activity:
-- `GET /api/projects/:projectId/activities`
-- `POST /api/projects/:projectId/activities`
+### Card Scanner (`/apps/card-scanner/`)
+- `GET /api/cards` — list cards (without image blob)
+- `POST /api/cards` — create card (with image base64)
+- `PUT /api/cards/:scanId` — update card fields
+- `DELETE /api/cards/:scanId` — delete card
+- `GET /api/cards/:scanId/image` — get card image
 
 ## Data Model Notes
-Primary collaborative model:
-- `projects`
-- `project_members`
-- `project_invites`
-- `project_activities`
-- `sessions`
-- `oauth_states`
-- `users`
 
-Legacy table still present for migration compatibility:
-- `user_state`
+### Platform tables
+- `users`, `sessions`, `oauth_states`, `user_roles`, `user_app_access`
 
-Frontend canonical state:
-- `state.activeProjectId`
-- `state.projects[]`
-- project: `{ id, name, columns[] }`
-- column: `{ id, title, cards[] }`
-- card fields: `title`, `description`, `priority`, `dueDate`, `assignee`, `tags`, `progress`, `checklist`
+### Kanban tables
+- `projects`, `project_members`, `project_invites`, `project_activities`, `user_state`
+
+### DTI Connector tables
+- `dti_connectors`, `dti_api_keys`, `dti_hierarchy_levels`, `dti_model_datapoints`
+- `dti_files`, `dti_assets`, `dti_asset_values`
+- `dti_connector_members`, `dti_connector_invites`
+
+### Card Scanner tables
+- `card_scans` (scan_id, user_id, name, company, position, phone, email, website, address, raw_text, image, created_at)
 
 ## UX/Behavior Notes
 - Sync indicator is a circle near avatar (green/yellow/red states).
@@ -105,15 +128,13 @@ Frontend canonical state:
 
 ## Verification Checklist
 After meaningful changes, verify:
-1. `node --check app.js` and `node --check server.js` succeed.
+1. `node --check server.js` succeeds.
 2. `npm start` boots without runtime errors.
-3. Login flow works.
-4. Shared project edits sync to another user without manual page refresh.
-5. Member role update via `Uebernehmen` works.
-6. Member removal hides project for removed user.
-7. Owner cannot be removed.
-8. Share invite links can be generated and accepted.
-9. Activity panel loads and refreshes entries.
+3. Login flow works, dashboard shows assigned apps.
+4. Kanban: board drag & drop, project sharing, member management.
+5. DTI Connector: connector CRUD, hierarchy/model editing, file upload, API docs.
+6. Card Scanner: webcam/upload capture, OCR processing, card list with thumbnails, image preview modal, delete with confirmation.
+7. Admin panel: user roles, app access toggling, user deletion.
 
 ## Deployment Notes
 - Recommended: Linux VPS + Nginx + PM2 + HTTPS.

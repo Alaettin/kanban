@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Card Scanner – Workspace</title>
+  <link rel="stylesheet" href="/apps/card-scanner/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <rect x="2" y="3" width="20" height="18" rx="2" ry="2"/>
+        <line x1="2" y1="9" x2="22" y2="9"/>
+        <circle cx="7" cy="14" r="2"/>
+        <path d="M11 13h6M11 16h4"/>
+      </svg>
+      <span id="brand-text">Card Scanner</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Card List View -->
+  <main id="card-list-view" class="view active">
+    <div class="list-inner">
+      <div class="page-header">
+        <h2 id="list-title">Visitenkarten</h2>
+        <span id="card-count" class="card-count"></span>
+      </div>
+      <div id="empty-state" class="empty-state" hidden>
+        <svg viewBox="0 0 24 24" class="empty-icon">
+          <rect x="2" y="3" width="20" height="18" rx="2" ry="2"/>
+          <line x1="2" y1="9" x2="22" y2="9"/>
+          <circle cx="7" cy="14" r="2"/>
+          <path d="M11 13h6M11 16h4"/>
+        </svg>
+        <p id="empty-text">Noch keine Visitenkarten gescannt.</p>
+        <p id="empty-hint" class="empty-hint">Tippe auf den Button unten, um eine Karte zu scannen.</p>
+      </div>
+      <div id="card-grid" class="card-grid"></div>
+    </div>
+
+    <!-- FAB Buttons -->
+    <div class="fab-group">
+      <button id="upload-btn" class="upload-fab" type="button" title="Bild hochladen">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </button>
+      <button id="scan-btn" class="scan-fab" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span id="scan-btn-label">Scannen</span>
+      </button>
+    </div>
+    <input type="file" id="camera-input" accept="image/*" hidden />
+  </main>
+
+  <!-- Webcam Modal -->
+  <div id="webcam-modal" class="webcam-modal">
+    <div class="webcam-inner">
+      <div class="webcam-header">
+        <h3 id="webcam-title">Kamera</h3>
+        <button id="webcam-close" class="webcam-close-btn" type="button">&times;</button>
+      </div>
+      <div class="webcam-preview">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <canvas id="webcam-canvas" style="display:none"></canvas>
+      </div>
+      <div class="webcam-actions">
+        <button id="webcam-capture" class="webcam-capture-btn" type="button" title="Foto aufnehmen"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OCR Loading Overlay -->
+  <div id="ocr-overlay" class="ocr-overlay">
+    <div class="ocr-spinner"></div>
+    <p id="ocr-text">Text wird erkannt...</p>
+  </div>
+
+  <!-- Card Edit/Detail View -->
+  <main id="card-edit-view" class="view">
+    <div class="edit-inner">
+      <div class="edit-header">
+        <button id="edit-back-btn" class="back-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <h2 id="edit-title">Neue Karte</h2>
+      </div>
+      <form id="card-form" autocomplete="off">
+        <div class="form-group">
+          <label for="f-name" id="lbl-name">Name</label>
+          <input id="f-name" type="text" />
+        </div>
+        <div class="form-group">
+          <label for="f-company" id="lbl-company">Firma</label>
+          <input id="f-company" type="text" />
+        </div>
+        <div class="form-group">
+          <label for="f-position" id="lbl-position">Position</label>
+          <input id="f-position" type="text" />
+        </div>
+        <div class="form-group">
+          <label for="f-phone" id="lbl-phone">Telefon</label>
+          <input id="f-phone" type="tel" />
+        </div>
+        <div class="form-group">
+          <label for="f-email" id="lbl-email">E-Mail</label>
+          <input id="f-email" type="email" />
+        </div>
+        <div class="form-group">
+          <label for="f-website" id="lbl-website">Website</label>
+          <input id="f-website" type="text" />
+        </div>
+        <div class="form-group">
+          <label for="f-address" id="lbl-address">Adresse</label>
+          <textarea id="f-address" rows="2"></textarea>
+        </div>
+        <details id="raw-text-section" class="raw-text-section" hidden>
+          <summary id="raw-text-label">Erkannter Text</summary>
+          <pre id="raw-text-display" class="raw-text-display"></pre>
+        </details>
+        <div class="form-actions">
+          <button type="submit" id="save-btn" class="btn btn-primary">Speichern</button>
+          <button type="button" id="delete-btn" class="btn btn-danger" hidden>Löschen</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- Image Preview Modal -->
+  <div id="image-modal" class="image-modal">
+    <div class="image-modal-inner">
+      <div class="image-modal-header">
+        <button id="image-modal-close" class="webcam-close-btn" type="button">&times;</button>
+      </div>
+      <div class="image-modal-body">
+        <img id="image-modal-img" src="" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Dialog -->
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <p id="confirm-text">Karte wirklich löschen?</p>
+    <div class="confirm-actions">
+      <button id="confirm-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+      <button id="confirm-ok" class="btn btn-danger" type="button">Löschen</button>
+    </div>
+  </dialog>
+
+  <script src="/apps/card-scanner/app.js"></script>
+</body>
+</html>

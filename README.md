@@ -23,6 +23,16 @@ Data management system for structured product data. Define hierarchies, data mod
 - External API for third-party integrations
 - Interactive API documentation page
 
+### Card Scanner
+Business card scanner with OCR text recognition. Photograph or upload business cards, extract structured contact data, and manage a personal card collection.
+
+- Camera capture (webcam) and image upload
+- OCR via Tesseract.js with Otsu binarization preprocessing
+- Automatic field extraction (name, company, position, phone, email, website, address)
+- Image storage with thumbnail preview in list view
+- Full CRUD with inline delete from list
+- Multi-language support (DE / EN)
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -105,7 +115,8 @@ git pull && docker compose up -d --build
 │   └── admin/             # Admin panel
 ├── apps/
 │   ├── kanban/            # Kanban Board app
-│   └── dti-connector/     # DTI Connector app
+│   ├── dti-connector/     # DTI Connector app
+│   └── card-scanner/      # Card Scanner app
 ├── data/                  # SQLite DB + uploaded files (gitignored)
 ├── Dockerfile
 ├── docker-compose.yml

@@ -15,6 +15,7 @@ const adminLinkLabel = document.getElementById("admin-link-label");
 const APP_ICONS = {
   kanban: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>',
   "dti-connector": '<svg viewBox="0 0 24 24"><path d="M4 6h6M4 12h6M4 18h6"/><path d="M14 6h6M14 12h6M14 18h6"/><path d="M10 6l4 6-4 6"/></svg>',
+  "card-scanner": '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2" ry="2"/><line x1="2" y1="9" x2="22" y2="9"/><circle cx="7" cy="14" r="2"/><path d="M11 13h6M11 16h4"/></svg>',
 };
 
 const I18N = {
@@ -28,6 +29,7 @@ const I18N = {
     noApps: "Kein Zugang freigeschaltet. Bitte kontaktiere einen Administrator.",
     "app.kanban": "Projekte und Tasks verwalten",
     "app.dti-connector": "Daten erstellen und bereitstellen",
+    "app.card-scanner": "Visitenkarten scannen und verwalten",
   },
   en: {
     subtitle: "Choose an app to get started.",
@@ -39,6 +41,7 @@ const I18N = {
     noApps: "No access granted. Please contact an administrator.",
     "app.kanban": "Manage projects and tasks",
     "app.dti-connector": "Create and provide data",
+    "app.card-scanner": "Scan and manage business cards",
   },
 };
 
