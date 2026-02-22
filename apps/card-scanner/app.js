@@ -1089,6 +1089,7 @@ qrUrlOk.addEventListener("click", async () => {
 });
 
 const qrModalCopy = document.getElementById("qr-modal-copy");
+const qrModalOpen = document.getElementById("qr-modal-open");
 
 function openQrModal(url) {
   qrModalCanvas.innerHTML = "";
@@ -1111,6 +1112,11 @@ qrModalCopy.addEventListener("click", () => {
     qrModalCopy.classList.add("copied");
     setTimeout(() => qrModalCopy.classList.remove("copied"), 1500);
   });
+});
+
+qrModalOpen.addEventListener("click", () => {
+  const url = qrModalUrl.textContent;
+  if (url) window.open(url, "_blank");
 });
 
 qrModalClose.addEventListener("click", closeQrModal);

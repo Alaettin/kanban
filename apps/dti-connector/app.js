@@ -65,6 +65,7 @@ const I18N = {
     connectorNew: "Neuer Konnektor",
     connectorNewPlaceholder: "Name eingeben…",
     connectorEmpty: "Noch keine Konnektoren erstellt.",
+    reservedName: "Dieser Name ist reserviert.",
     connectorDeleteTitle: "Konnektor löschen?",
     connectorDeleteMessage: "Alle Daten dieses Konnektors werden unwiderruflich gelöscht.",
     connectorDeleteCancel: "Abbrechen",
@@ -226,6 +227,7 @@ const I18N = {
     connectorNew: "New Connector",
     connectorNewPlaceholder: "Enter name…",
     connectorEmpty: "No connectors created yet.",
+    reservedName: "This name is reserved.",
     connectorDeleteTitle: "Delete connector?",
     connectorDeleteMessage: "All data of this connector will be permanently deleted.",
     connectorDeleteCancel: "Cancel",
@@ -784,6 +786,11 @@ async function confirmNewConnector() {
     });
     addingConnector = false;
     renderConnectors();
+  } else if (result.payload?.error === "RESERVED_NAME") {
+    connectorHint.textContent = t("reservedName");
+    connectorHint.className = "hierarchy-hint hint-error";
+    connectorHint.hidden = false;
+    setTimeout(() => { connectorHint.hidden = true; }, 3000);
   }
 }
 

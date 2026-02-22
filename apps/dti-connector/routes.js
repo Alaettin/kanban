@@ -299,6 +299,9 @@ function mountRoutes(router) {
     if (!name || typeof name !== "string" || name.trim().length === 0 || name.trim().length > 100) {
       return res.status(400).json({ error: "Invalid connector name" });
     }
+    if (name.trim().toLowerCase() === "cardscanner") {
+      return res.status(400).json({ error: "RESERVED_NAME" });
+    }
     try {
       const connectorId = crypto.randomUUID();
       const apiKey = crypto.randomUUID();
@@ -321,6 +324,9 @@ function mountRoutes(router) {
     if (!name || typeof name !== "string" || name.trim().length === 0 || name.trim().length > 100) {
       return res.status(400).json({ error: "Invalid connector name" });
     }
+    if (name.trim().toLowerCase() === "cardscanner" && req.connector.type !== "card-scanner") {
+      return res.status(400).json({ error: "RESERVED_NAME" });
+    }
     try {
       await db.run("UPDATE dti_connectors SET name = ? WHERE connector_id = ?",
         [name.trim(), req.connector.connector_id]);
@@ -335,6 +341,10 @@ function mountRoutes(router) {
       const connDir = path.join(UPLOADS_DIR, req.connector.user_id, req.connector.connector_id);
       if (fs.existsSync(connDir)) {
         fs.rmSync(connDir, { recursive: true, force: true });
+      }
+      // If this is a card-scanner connector, clear card scanner settings
+      if (req.connector.type === "card-scanner") {
+        await db.run("DELETE FROM card_scanner_settings WHERE user_id = ?", [req.connector.user_id]);
       }
       await db.run("DELETE FROM dti_connectors WHERE connector_id = ?", [req.connector.connector_id]);
       res.json({ ok: true });
