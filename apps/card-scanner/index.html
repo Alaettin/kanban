@@ -65,6 +65,11 @@
         <h2 id="list-title">Visitenkarten</h2>
         <span id="card-count" class="card-count"></span>
       </div>
+      <div class="search-bar">
+        <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search-input" type="text" class="search-input" autocomplete="off" />
+        <button id="search-clear" class="search-clear-btn" type="button" hidden>&times;</button>
+      </div>
       <div id="empty-state" class="empty-state" hidden>
         <svg viewBox="0 0 24 24" class="empty-icon">
           <rect x="2" y="3" width="20" height="18" rx="2" ry="2"/>
@@ -76,6 +81,15 @@
         <p id="empty-hint" class="empty-hint">Tippe auf den Button unten, um eine Karte zu scannen.</p>
       </div>
       <div id="card-grid" class="card-grid"></div>
+      <div id="pagination" class="pagination" hidden>
+        <button id="page-prev" class="pagination-btn" type="button" disabled>
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span id="page-info" class="page-info">1 / 1</span>
+        <button id="page-next" class="pagination-btn" type="button" disabled>
+          <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
     </div>
 
     <!-- FAB Buttons -->

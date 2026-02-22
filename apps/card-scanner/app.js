@@ -53,6 +53,9 @@ const I18N = {
     autosyncOn: "Auto-Sync aktiviert",
     autosyncOff: "Auto-Sync deaktiviert",
     autosyncOk: "Ja",
+    searchPlaceholder: "Suchen\u2026",
+    pageInfo: "Seite {page} von {total}",
+    noResults: "Keine Ergebnisse.",
   },
   en: {
     brandText: "Card Scanner",
@@ -101,6 +104,9 @@ const I18N = {
     autosyncOn: "Auto-sync enabled",
     autosyncOff: "Auto-sync disabled",
     autosyncOk: "Yes",
+    searchPlaceholder: "Search\u2026",
+    pageInfo: "Page {page} of {total}",
+    noResults: "No results.",
   },
 };
 
@@ -118,6 +124,9 @@ let tesseractWorker = null;
 let pendingImageBase64 = null; // original image kept for saving
 let qrBaseUrl = null;
 let autoSyncEnabled = false;
+let currentPage = 1;
+const PAGE_SIZE = 20;
+let searchQuery = "";
 
 // ---------------------------------------------------------------------------
 // DOM
@@ -137,6 +146,12 @@ const confirmDialog = document.getElementById("confirm-dialog");
 const confirmCancel = document.getElementById("confirm-cancel");
 const confirmOk = document.getElementById("confirm-ok");
 const uploadBtn = document.getElementById("upload-btn");
+const searchInput = document.getElementById("search-input");
+const searchClear = document.getElementById("search-clear");
+const pagination = document.getElementById("pagination");
+const pagePrev = document.getElementById("page-prev");
+const pageNext = document.getElementById("page-next");
+const pageInfo = document.getElementById("page-info");
 
 // Image modal
 const imageModal = document.getElementById("image-modal");
@@ -457,12 +472,58 @@ function showView(view) {
 // ---------------------------------------------------------------------------
 // Render card list
 // ---------------------------------------------------------------------------
+function getFilteredCards() {
+  if (!searchQuery) return cards;
+  const q = searchQuery.toLowerCase();
+  return cards.filter(c =>
+    (c.name || "").toLowerCase().includes(q) ||
+    (c.company || "").toLowerCase().includes(q) ||
+    (c.position || "").toLowerCase().includes(q) ||
+    (c.phone || "").toLowerCase().includes(q) ||
+    (c.email || "").toLowerCase().includes(q)
+  );
+}
+
 function renderCards() {
   cardGrid.innerHTML = "";
-  cardCount.textContent = cards.length ? `(${cards.length})` : "";
-  emptyState.hidden = cards.length > 0;
+  const filtered = getFilteredCards();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageCards = filtered.slice(start, start + PAGE_SIZE);
 
-  for (const card of cards) {
+  // Count display
+  if (searchQuery && filtered.length !== cards.length) {
+    cardCount.textContent = cards.length ? `(${filtered.length}/${cards.length})` : "";
+  } else {
+    cardCount.textContent = cards.length ? `(${cards.length})` : "";
+  }
+
+  // Empty state
+  if (cards.length === 0) {
+    emptyState.hidden = false;
+    document.getElementById("empty-text").textContent = t("emptyText");
+    document.getElementById("empty-hint").textContent = t("emptyHint");
+    document.getElementById("empty-hint").hidden = false;
+  } else if (filtered.length === 0) {
+    emptyState.hidden = false;
+    document.getElementById("empty-text").textContent = t("noResults");
+    document.getElementById("empty-hint").hidden = true;
+  } else {
+    emptyState.hidden = true;
+  }
+
+  // Pagination
+  if (totalPages > 1) {
+    pagination.hidden = false;
+    pagePrev.disabled = currentPage <= 1;
+    pageNext.disabled = currentPage >= totalPages;
+    pageInfo.textContent = t("pageInfo").replace("{page}", currentPage).replace("{total}", totalPages);
+  } else {
+    pagination.hidden = true;
+  }
+
+  for (const card of pageCards) {
     const el = document.createElement("div");
     el.className = "card-row";
     el.dataset.id = card.scan_id;
@@ -701,6 +762,7 @@ cardForm.addEventListener("submit", async (e) => {
         has_image: pendingImageBase64 ? 1 : 0,
         created_at: new Date().toISOString(),
       });
+      currentPage = 1;
       // Auto-sync to DTI Connector
       if (autoSyncEnabled && csConnectorId) {
         api("/api/cards/sync-dti", { method: "POST", body: {} }).then((syncRes) => {
@@ -900,11 +962,48 @@ function applyLocaleToUI() {
   document.getElementById("lbl-card-id").textContent = t("lblCardId");
   uploadBtn.title = t("uploadBtn");
   logoutBtn.textContent = t("logout");
+  searchInput.placeholder = t("searchPlaceholder");
   renderCards();
 }
 
 localeDeBtn.addEventListener("click", () => setLocale("de"));
 localeEnBtn.addEventListener("click", () => setLocale("en"));
+
+// ---------------------------------------------------------------------------
+// Search + Pagination
+// ---------------------------------------------------------------------------
+searchInput.addEventListener("input", () => {
+  searchQuery = searchInput.value.trim();
+  searchClear.hidden = !searchQuery;
+  currentPage = 1;
+  renderCards();
+});
+
+searchClear.addEventListener("click", () => {
+  searchInput.value = "";
+  searchQuery = "";
+  searchClear.hidden = true;
+  currentPage = 1;
+  renderCards();
+});
+
+pagePrev.addEventListener("click", () => {
+  if (currentPage > 1) {
+    currentPage--;
+    renderCards();
+    listView.scrollTo({ top: 0, behavior: "smooth" });
+  }
+});
+
+pageNext.addEventListener("click", () => {
+  const filtered = getFilteredCards();
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderCards();
+    listView.scrollTo({ top: 0, behavior: "smooth" });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // User menu
