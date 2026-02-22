@@ -2,7 +2,7 @@
 
 ## Purpose
 This repository contains a multi-app workspace platform with Google login, role-based access control, and SQLite persistence.
-Apps: Kanban Board, DTI Connector, Card Scanner, AAS Chat.
+Apps: Kanban Board, DTI Connector, Card Scanner, AAS Chat, Knowledge Base.
 Use this file as the default operating guide for any coding agent working in this project.
 
 ## Project Snapshot
@@ -44,11 +44,18 @@ Use this file as the default operating guide for any coding agent working in thi
 - `index.html` / `styles.css`: Card list with thumbnails, edit form, image modal
 
 ### AAS Chat (`apps/aas-chat/`)
-- `routes.js`: Chat API, LLM integration (Gemini + Groq), DTI Connector tool executor, settings, connector status
-- `app.js`: Chat UI, slash-command autocomplete, connector panel, tool log rendering, mode toggle
-- `index.html` / `styles.css`: ChatGPT-style interface with sidebar, settings, docs page
+- `routes.js`: Chat API, LLM integration (Gemini + Groq), DTI Connector tool executor, KB MCP pool, settings, connector status
+- `app.js`: Chat UI, slash-command autocomplete, connector panel, tool log rendering (AAS/DTI/KB labels), mode toggle
+- `index.html` / `styles.css`: ChatGPT-style interface with sidebar, settings (3 MCP toggles: AAS, DTI, KB), docs page
 - `mcp-server.mjs`: MCP server for AAS Repository Server tools (stdio transport)
 - `AAS-MCP.md`: MCP integration documentation
+
+### Knowledge Base (`apps/knowledge-base/`)
+- `routes.js`: Document CRUD, file upload (Multer), text extraction (PDF/DOCX/Excel/TXT), AI description generation, settings
+- `app.js`: Document list UI, search + pagination, upload, edit, AI description, settings
+- `index.html` / `styles.css`: Document library with cards, edit view, settings modal (accent: amber #f59e0b)
+- `mcp-server.mjs`: MCP server with 2 tools (`listDocuments`, `readDocument`), env: `KB_USER_ID` + `KB_BASE_PROMPT`
+- File storage: `data/kb-files/{user_id}/{doc_id}{ext}`
 
 ### Config
 - `package.json`: Scripts and dependencies
@@ -63,7 +70,9 @@ Use this file as the default operating guide for any coding agent working in thi
 - `archiver` (^7.0.1) — ZIP creation
 - `unzipper` (^0.12.3) — ZIP extraction
 - `pdf-parse` (^1.1.1) — PDF text extraction
-- `@modelcontextprotocol/sdk` (^1.26.0) — MCP client/server for AAS Chat
+- `mammoth` (^1.9.0) — DOCX text extraction (Knowledge Base)
+- `xlsx` (^0.18.5) — Excel text extraction (Knowledge Base)
+- `@modelcontextprotocol/sdk` (^1.26.0) — MCP client/server for AAS Chat + Knowledge Base
 
 ## Required Environment Variables
 - `GOOGLE_CLIENT_ID`
@@ -115,12 +124,32 @@ Use this file as the default operating guide for any coding agent working in thi
 - `GET /api/messages` — list chat messages (with tool_log JSON)
 - `POST /api/messages` — send message to LLM (supports `forceTool` for slash commands)
 - `DELETE /api/messages` — clear chat history
-- `GET /api/settings` — get user settings (provider, model, masked API key)
-- `PUT /api/settings` — save settings
+- `GET /api/settings` — get user settings (provider, model, masked API key, enabled_mcps)
+- `PUT /api/settings` — save settings (including enabled_mcps array)
 - `GET /api/mcp-tools` — list AAS MCP tools (cached)
 - `GET /api/dti-tools` — list DTI connector tool definitions
+- `GET /api/kb-tools` — list Knowledge Base tool definitions
 - `GET /api/connector-status` — get active connector state (for page restore)
 - `POST /api/connector-disconnect` — disconnect active connector
+
+### Knowledge Base (`/apps/knowledge-base/`)
+- `GET /api/documents` — list all user's documents
+- `POST /api/documents` — upload document (multipart, text extraction)
+- `PUT /api/documents/:docId` — update title/description
+- `DELETE /api/documents/:docId` — delete document + file
+- `GET /api/documents/:docId/content` — get extracted text content
+- `POST /api/documents/:docId/generate-description` — AI-generate description (uses Gemini API key from AAS Chat settings)
+- `GET /api/settings` — get KB settings (base_prompt)
+- `PUT /api/settings` — save KB settings
+
+## AAS Chat — MCP Tool Sources
+
+The AAS Chat integrates 3 MCP servers, each togglable via settings checkboxes (`enabled_mcps` JSON array):
+- **AAS** — AAS Repository Server tools (stdio transport via `mcp-server.mjs`)
+- **DTI** — DTI Connector tools (16 tools, inline executor)
+- **KB** — Knowledge Base tools (2 tools, stdio transport via `knowledge-base/mcp-server.mjs`)
+
+Tool source routing: `DTI_TOOL_NAMES.has() ? "dti" : KB_TOOL_NAMES.has() ? "kb" : "aas"`
 
 ## AAS Chat — DTI Connector Tools (16 total)
 
@@ -165,7 +194,14 @@ Use this file as the default operating guide for any coding agent working in thi
 ### LLM Providers
 - **Google Gemini**: 2.5 Flash, 2.5 Flash Lite, 2.5 Pro (maxOutputTokens: 65536)
 - **Groq**: Llama 3.1 8B, Llama 3.3 70B, Mixtral 8x7B
-- Mode toggle: "Tool" (MCP + DTI tools) vs "WEB" (Google Search, Gemini only)
+- Mode toggle: "Tool" (MCP + DTI + KB tools) vs "WEB" (Google Search, Gemini only)
+
+## AAS Chat — Knowledge Base Tools (2 total)
+
+| Tool | Description | Params |
+|------|-------------|--------|
+| `listDocuments` | List all documents in user's KB | — |
+| `readDocument` | Read extracted text of a document | `doc_id` |
 
 ## Data Model
 
@@ -185,7 +221,11 @@ Use this file as the default operating guide for any coding agent working in thi
 
 ### AAS Chat tables
 - `aas_chat_messages` (message_id, user_id, role, content, tool_log JSON, created_at)
-- `aas_chat_settings` (user_id, provider, model, api_key, aas_url, system_prompt, active_connector_id)
+- `aas_chat_settings` (user_id, provider, model, api_key, aas_url, system_prompt, active_connector_id, enabled_mcps JSON)
+
+### Knowledge Base tables
+- `kb_documents` (doc_id, user_id, title, description, original_name, mime_type, file_size, content_text, created_at, updated_at)
+- `kb_settings` (user_id, base_prompt)
 
 ## UX/Behavior Notes
 - Sync indicator is a circle near avatar (green/yellow/red states).
@@ -195,7 +235,7 @@ Use this file as the default operating guide for any coding agent working in thi
 - Removed members lose project visibility on sync.
 - Activity panel opens from the right as an overlay (board layout does not shift).
 - AAS Chat: Connector panel (right frame) shows connected connector info, role, stats, activity log. Logs persist across page reloads (restored from tool_log in DB). Cleared on disconnect or chat clear.
-- AAS Chat: Tool log summary labeled "Communication" (amber) with tool call count + token usage. Log item labels: MCP/AAS (green), Connector (blue), LLM (purple), Tokens (red).
+- AAS Chat: Tool log summary labeled "Communication" (amber) with tool call count + token usage. Log item labels: MCP/AAS (green), Connector (blue), KB (amber), LLM (purple), Tokens (red).
 - AAS Chat: Copy button on all chat bubbles (hover-reveal, top-right corner).
 - AAS Chat: Slash-command autocomplete popup with keyboard navigation (arrows/enter/tab/escape), scrolling description text on overflow.
 
@@ -206,6 +246,7 @@ Use this file as the default operating guide for any coding agent working in thi
 - Keep API behavior backward-safe unless user requested breaking changes.
 - When changing roles/invites/projects, update both backend route and frontend handling.
 - When adding DTI tools: add definition to `DTI_TOOLS_CONNECTED` (routes.js), add case to `executeDtiTool()` (routes.js), add to system prompt in `buildDtiPromptSection()` (routes.js), add to `CONNECTOR_TOOL_NAMES` (app.js).
+- When adding KB tools: add to `mcp-server.mjs` tool list, add tool name to `KB_TOOL_NAMES` (aas-chat/routes.js), add to `KB_TOOL_NAMES_CLIENT` (aas-chat/app.js).
 - Gemini quirks: use maxOutputTokens 65536 (thinking tokens count against limit), handle MALFORMED_FUNCTION_CALL with retry, handle empty replies with tool-result fallback.
 - System prompt: intent-based tool selection (ersetzen/setzen → setModelDatapoints, hinzufügen → addModelDatapoint), no tools for text formatting questions.
 
@@ -223,8 +264,9 @@ After meaningful changes, verify:
 4. Kanban: board drag & drop, project sharing, member management.
 5. DTI Connector: connector CRUD, hierarchy/model editing, file upload, assets, API docs.
 6. Card Scanner: webcam/upload capture, OCR processing, card list with thumbnails, image preview modal, delete with confirmation.
-7. AAS Chat: message send/receive, tool calls (MCP + DTI), slash commands, connector panel, settings save/load, mode toggle.
-8. Admin panel: user roles, app access toggling, user deletion.
+7. AAS Chat: message send/receive, tool calls (MCP + DTI + KB), slash commands, connector panel, settings save/load, mode toggle, KB toggle.
+8. Knowledge Base: document upload (PDF/DOCX/Excel/TXT), text extraction, AI description, search + pagination, settings.
+9. Admin panel: user roles, app access toggling (incl. knowledge-base), user deletion.
 
 ## Deployment Notes
 - Docker: `docker-compose up -d` (port 3000, volume: `./data:/app/data`)
