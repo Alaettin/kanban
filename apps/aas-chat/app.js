@@ -37,6 +37,7 @@ const settingsHint = document.getElementById("settings-hint");
 const toggleKeyVis = document.getElementById("toggle-key-vis");
 const mcpAasCheckbox = document.getElementById("mcp-aas");
 const mcpDtiCheckbox = document.getElementById("mcp-dti");
+const mcpKbCheckbox = document.getElementById("mcp-kb");
 const settingsBasePrompt = document.getElementById("settings-base-prompt");
 const resetBasePromptBtn = document.getElementById("reset-base-prompt-btn");
 const modeToggle = document.getElementById("mode-toggle");
@@ -181,12 +182,16 @@ const CONNECTOR_TOOL_NAMES = new Set([
 // Slash-command autocomplete state
 let allAasTools = [];
 let allDtiTools = [];
+let allKbTools = [];
 let cachedToolList = [];
+
+const KB_TOOL_NAMES_CLIENT = new Set(["listDocuments", "readDocument"]);
 
 function rebuildCachedToolList() {
   cachedToolList = [
     ...(enabledMcps.includes("aas") ? allAasTools : []),
     ...(enabledMcps.includes("dti") ? allDtiTools : []),
+    ...(enabledMcps.includes("kb") ? allKbTools : []),
   ];
 }
 let slashMenuVisible = false;
@@ -480,14 +485,17 @@ function buildToolLogBlock(toolLog) {
   block.className = "mcp-tool-log";
 
   const isConnector = (e) => e.source === "dti" || CONNECTOR_TOOL_NAMES.has(e.tool);
+  const isKb = (e) => e.source === "kb" || KB_TOOL_NAMES_CLIENT.has(e.tool);
 
   // Count tool calls for summary (split by source)
-  const aasCalls = toolLog.filter((e) => e.type === "tool_call" && !isConnector(e)).length;
+  const aasCalls = toolLog.filter((e) => e.type === "tool_call" && !isConnector(e) && !isKb(e)).length;
   const connCalls = toolLog.filter((e) => e.type === "tool_call" && isConnector(e)).length;
-  const totalCalls = aasCalls + connCalls;
+  const kbCalls = toolLog.filter((e) => e.type === "tool_call" && isKb(e)).length;
+  const totalCalls = aasCalls + connCalls + kbCalls;
   let summaryParts = [];
   if (aasCalls) summaryParts.push(`${aasCalls} MCP (AAS)`);
   if (connCalls) summaryParts.push(`${connCalls} Connector`);
+  if (kbCalls) summaryParts.push(`${kbCalls} KB`);
   const summaryInfo = summaryParts.length > 0
     ? `${summaryParts.join(" + ")} Tool-Aufruf${totalCalls !== 1 ? "e" : ""}`
     : "Tools";
@@ -545,14 +553,20 @@ function buildToolLogBlock(toolLog) {
       labelText = "Connector";
       mainText = `${entry.count} Tools`;
       detailText = entry.names.join(", ");
+    } else if (entry.type === "kb_tools") {
+      labelClass = "label-kb";
+      labelText = "KB";
+      mainText = `${entry.count} Tools`;
+      detailText = entry.names.join(", ");
     } else if (entry.type === "llm_request") {
       labelClass = "label-llm";
       labelText = "LLM";
       mainText = `${entry.provider}/${entry.model || "?"} (Runde ${entry.round + 1})`;
     } else if (entry.type === "tool_call") {
       const conn = isConnector(entry);
-      labelClass = conn ? "label-dti" : "label-aas";
-      labelText = conn ? "Connector" : "MCP (AAS)";
+      const kb = isKb(entry);
+      labelClass = conn ? "label-dti" : kb ? "label-kb" : "label-aas";
+      labelText = conn ? "Connector" : kb ? "KB" : "MCP (AAS)";
       mainText = entry.tool;
       const args = entry.args || {};
       if (Object.keys(args).length > 0) {
@@ -560,8 +574,9 @@ function buildToolLogBlock(toolLog) {
       }
     } else if (entry.type === "tool_result") {
       const conn = isConnector(entry);
-      labelClass = conn ? "label-dti" : "label-aas";
-      labelText = conn ? "Connector ✓" : "MCP (AAS) ✓";
+      const kb = isKb(entry);
+      labelClass = conn ? "label-dti" : kb ? "label-kb" : "label-aas";
+      labelText = conn ? "Connector ✓" : kb ? "KB ✓" : "MCP (AAS) ✓";
       mainText = entry.tool;
       detailText = entry.result || "";
     } else if (entry.type === "llm_usage") {
@@ -1295,6 +1310,7 @@ async function loadSettings() {
     enabledMcps = s.enabled_mcps || ["aas", "dti"];
     mcpAasCheckbox.checked = enabledMcps.includes("aas");
     mcpDtiCheckbox.checked = enabledMcps.includes("dti");
+    mcpKbCheckbox.checked = enabledMcps.includes("kb");
     settingsBasePrompt.value = s.base_prompt || s.default_base_prompt || "";
     updateModeToggle();
   } else {
@@ -1314,6 +1330,7 @@ async function saveSettings() {
       enabled_mcps: [
         ...(mcpAasCheckbox.checked ? ["aas"] : []),
         ...(mcpDtiCheckbox.checked ? ["dti"] : []),
+        ...(mcpKbCheckbox.checked ? ["kb"] : []),
       ],
       base_prompt: settingsBasePrompt.value,
     },
@@ -1589,12 +1606,14 @@ async function init() {
   }
 
   // Load tool list for slash-command autocomplete (AAS + DTI)
-  const [aasToolsRes, dtiToolsRes] = await Promise.allSettled([
+  const [aasToolsRes, dtiToolsRes, kbToolsRes] = await Promise.allSettled([
     apiRequest("/apps/aas-chat/api/mcp-tools"),
     apiRequest("/apps/aas-chat/api/dti-tools"),
+    apiRequest("/apps/aas-chat/api/kb-tools"),
   ]);
   allAasTools = aasToolsRes.status === "fulfilled" && aasToolsRes.value.ok ? aasToolsRes.value.payload.tools : [];
   allDtiTools = dtiToolsRes.status === "fulfilled" && dtiToolsRes.value.ok ? dtiToolsRes.value.payload.tools : [];
+  allKbTools = kbToolsRes.status === "fulfilled" && kbToolsRes.value.ok ? kbToolsRes.value.payload.tools : [];
   rebuildCachedToolList();
 }
 

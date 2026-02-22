@@ -912,6 +912,7 @@ body.sidebar-collapsed .chat-list { display: none; }
 .mcp-log-item-label.label-mcp { background: var(--accent-light); color: var(--accent); }
 .mcp-log-item-label.label-aas { background: #ecfdf5; color: #059669; }
 .mcp-log-item-label.label-dti { background: #eff6ff; color: #2563eb; }
+.mcp-log-item-label.label-kb { background: #fffbeb; color: #d97706; }
 .mcp-log-item-label.label-llm { background: #f3f0ff; color: #7c3aed; }
 .mcp-log-item-label.label-tokens { background: #fdf2f2; color: #a33; }
 .mcp-log-item-label.label-tool { background: #eff6ff; color: #2563eb; }

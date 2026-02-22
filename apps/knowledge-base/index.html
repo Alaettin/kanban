@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Knowledge Base – Workspace</title>
+  <link rel="stylesheet" href="/apps/knowledge-base/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+      <span id="brand-text">Knowledge Base</span>
+    </div>
+    <div class="header-spacer"></div>
+    <button id="settings-btn" class="header-btn" type="button" title="Einstellungen">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Document List View -->
+  <main id="list-view" class="view active">
+    <div class="list-inner">
+      <div class="page-header">
+        <h2 id="list-title">Dokumente</h2>
+        <span id="doc-count" class="doc-count"></span>
+      </div>
+      <div class="search-bar">
+        <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search-input" type="text" class="search-input" autocomplete="off" />
+        <button id="search-clear" class="search-clear-btn" type="button" hidden>&times;</button>
+      </div>
+      <div id="empty-state" class="empty-state" hidden>
+        <svg viewBox="0 0 24 24" class="empty-icon">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        <p id="empty-text">Noch keine Dokumente hochgeladen.</p>
+        <p id="empty-hint" class="empty-hint">Tippe auf den Button unten, um ein Dokument hochzuladen.</p>
+      </div>
+      <div id="doc-grid" class="doc-grid"></div>
+      <div id="pagination" class="pagination" hidden>
+        <button id="page-prev" class="pagination-btn" type="button" disabled>
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span id="page-info" class="page-info">1 / 1</span>
+        <button id="page-next" class="pagination-btn" type="button" disabled>
+          <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="fab-group">
+      <button id="upload-btn" class="upload-fab" type="button">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="upload-btn-label">Hochladen</span>
+      </button>
+    </div>
+    <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md,.xlsx,.xls,.csv" hidden />
+  </main>
+
+  <!-- Document Edit View -->
+  <main id="edit-view" class="view">
+    <div class="edit-inner">
+      <div class="edit-header">
+        <button id="edit-back-btn" class="back-btn" type="button">
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <h2 id="edit-title">Dokument bearbeiten</h2>
+      </div>
+      <form id="doc-form" autocomplete="off">
+        <div class="form-group">
+          <label for="f-title" id="lbl-title">Titel</label>
+          <input id="f-title" type="text" />
+        </div>
+        <div class="form-group">
+          <label id="lbl-desc">Beschreibung</label>
+          <div class="desc-row">
+            <textarea id="f-desc" rows="3"></textarea>
+            <button type="button" id="generate-desc-btn" class="generate-btn">KI-Beschreibung</button>
+          </div>
+        </div>
+        <div id="file-info" class="file-info">
+          <div class="file-info-row">
+            <span><span class="file-info-label" id="lbl-filename">Datei: </span><span id="info-filename"></span></span>
+            <span><span class="file-info-label" id="lbl-filesize">Größe: </span><span id="info-filesize"></span></span>
+            <span><span class="file-info-label" id="lbl-filetype">Typ: </span><span id="info-filetype"></span></span>
+            <span><span class="file-info-label" id="lbl-filedate">Datum: </span><span id="info-filedate"></span></span>
+          </div>
+        </div>
+        <details id="text-section" class="text-section">
+          <summary id="text-section-label">Extrahierter Text</summary>
+          <pre id="text-preview" class="text-preview"></pre>
+        </details>
+        <div class="form-actions">
+          <button type="submit" id="save-btn" class="btn btn-primary">Speichern</button>
+          <button type="button" id="delete-btn" class="btn btn-danger">Löschen</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- Upload Overlay -->
+  <div id="upload-overlay" class="upload-overlay" hidden>
+    <div class="upload-spinner"></div>
+  </div>
+
+  <!-- Confirm Delete Dialog -->
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <p id="confirm-text">Dokument wirklich löschen?</p>
+    <div class="confirm-actions">
+      <button id="confirm-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+      <button id="confirm-ok" class="btn btn-danger" type="button">Löschen</button>
+    </div>
+  </dialog>
+
+  <!-- Settings Dialog -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <div class="settings-inner">
+      <h3 id="settings-title">Einstellungen</h3>
+      <p class="settings-desc" id="settings-desc">Instruktionen für die Wissensdatenbank als MCP-Ressource.</p>
+      <label for="settings-prompt" id="lbl-base-prompt">MCP Base-Prompt</label>
+      <textarea id="settings-prompt"></textarea>
+      <div class="settings-actions">
+        <button id="settings-reset" class="btn btn-secondary" type="button">Zurücksetzen</button>
+        <button id="settings-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="settings-save" class="btn btn-primary" type="button">Speichern</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="kb-toast" class="kb-toast" hidden></div>
+  <script src="/apps/knowledge-base/app.js"></script>
+</body>
+</html>

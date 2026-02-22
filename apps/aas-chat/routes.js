@@ -99,10 +99,11 @@ const BASE_SYSTEM_PROMPT =
   "Du bist ein hilfreicher Assistent für Fragen rund um die Verwaltungsschale (Asset Administration Shell / AAS). " +
   "Antworte klar und präzise. Wenn du etwas nicht weißt, sage es ehrlich.";
 
-function buildSystemPrompt(baseOverride, aasInstructions, dtiInstructions, mcpResources, mcpPrompts) {
+function buildSystemPrompt(baseOverride, aasInstructions, dtiInstructions, mcpResources, mcpPrompts, kbInstructions) {
   let prompt = baseOverride || BASE_SYSTEM_PROMPT;
   if (aasInstructions) prompt += "\n\n" + aasInstructions;
   if (dtiInstructions) prompt += "\n\n" + dtiInstructions;
+  if (kbInstructions) prompt += "\n\n" + kbInstructions;
   if (mcpResources.length > 0) {
     prompt += "\n\nVERFÜGBARE MCP-RESSOURCEN:\n";
     for (const r of mcpResources) {
@@ -125,6 +126,8 @@ const DTI_TOOL_NAMES = new Set([
   "getModelDatapoints", "setModelDatapoints", "addModelDatapoint", "editModelDatapoint", "removeModelDatapoint",
   "listAssets", "createAsset", "deleteAsset", "renameAsset", "getAssetValues", "setAssetValues", "updateAssetValues",
 ]);
+
+const KB_TOOL_NAMES = new Set(["listDocuments", "readDocument"]);
 
 // ---------------------------------------------------------------------------
 // Continuation store — allows extending beyond MAX_ROUNDS per user request
@@ -269,6 +272,76 @@ function closeDtiMcpPool(userId) {
       try { entry.client.close(); } catch {}
       dtiMcpClientPool.delete(key);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// KB MCP Client Pool — pooled per user
+// ---------------------------------------------------------------------------
+const kbMcpClientPool = new Map();
+const KB_POOL_TTL = 10 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of kbMcpClientPool) {
+    if (now - entry.lastUsed > KB_POOL_TTL) {
+      console.log("[KB MCP Pool] Closing idle client:", key);
+      try { entry.client.close(); } catch {}
+      kbMcpClientPool.delete(key);
+    }
+  }
+}, 60 * 1000);
+
+async function getPooledKbMcpClient(userId, basePrompt, log) {
+  const poolKey = `kb:${userId}`;
+  const existing = kbMcpClientPool.get(poolKey);
+  if (existing) {
+    existing.lastUsed = Date.now();
+    if (existing.loggingTransport) existing.loggingTransport.setLog(log);
+    if (log) log.push({ type: "console", direction: "received", label: "MCP (knowledge-base): pooled connection reused", json: { poolKey, tools: existing.tools.map(t => t.name) } });
+    return existing;
+  }
+
+  const { Client, StdioClientTransport } = await getMcpSdk();
+  const transport = new StdioClientTransport({
+    command: "node",
+    args: [path.join(__dirname, "../knowledge-base/mcp-server.mjs")],
+    env: {
+      ...process.env,
+      KB_USER_ID: userId,
+      KB_BASE_PROMPT: basePrompt || "",
+    },
+  });
+  const loggingTransport = new LoggingTransport(transport, "knowledge-base");
+  if (log) loggingTransport.setLog(log);
+
+  const clientInfo = { name: "aas-chat-kb-client", version: "1.0.0" };
+  const client = new Client(clientInfo);
+
+  if (log) log.push({ type: "console", direction: "sent", label: "Client → MCP: initialize", json: { jsonrpc: "2.0", method: "initialize", params: { protocolVersion: "2024-11-05", clientInfo, capabilities: { tools: {} } } } });
+  await client.connect(loggingTransport);
+  const serverCaps = client.getServerCapabilities?.() || {};
+  const serverInfo = client.getServerVersion?.() || {};
+  const instructions = client.getInstructions?.() || "";
+  const srvName = serverInfo.name || "knowledge-base";
+  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
+  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
+
+  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
+  const { tools } = await client.listTools();
+  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+
+  const entry = { client, loggingTransport, lastUsed: Date.now(), tools, instructions };
+  kbMcpClientPool.set(poolKey, entry);
+  console.log("[KB MCP Pool] Created client:", poolKey, `(${tools.length} tools)`);
+  return entry;
+}
+
+function closeKbMcpPool(userId) {
+  const key = `kb:${userId}`;
+  const entry = kbMcpClientPool.get(key);
+  if (entry) {
+    try { entry.client.close(); } catch {}
+    kbMcpClientPool.delete(key);
   }
 }
 
@@ -568,13 +641,13 @@ async function chatGroqWithTools(apiKey, model, chatHistory, allTools, mcpClient
         let fnArgs = {};
         try { fnArgs = JSON.parse(tc.function?.arguments || "{}"); } catch {}
 
-        const toolSource = DTI_TOOL_NAMES.has(fnName) ? "dti" : "aas";
-        const mcpLabel = toolSource === "dti" ? "MCP (dti-connector)" : "MCP (aas-repository)";
+        const toolSource = DTI_TOOL_NAMES.has(fnName) ? "dti" : KB_TOOL_NAMES.has(fnName) ? "kb" : "aas";
+        const mcpLabel = toolSource === "dti" ? "MCP (dti-connector)" : toolSource === "kb" ? "MCP (knowledge-base)" : "MCP (aas-repository)";
         log.push({ type: "tool_call", tool: fnName, args: fnArgs, source: toolSource });
 
         let resultText;
         try {
-          const targetClient = toolSource === "dti" ? mcpClients.dti : mcpClients.aas;
+          const targetClient = toolSource === "dti" ? mcpClients.dti : toolSource === "kb" ? mcpClients.kb : mcpClients.aas;
           if (targetClient) {
             const mcpCallPayload = { name: fnName, arguments: fnArgs };
             log.push({ type: "console", direction: "sent", label: `Client → ${mcpLabel}: tools/call (${fnName})`, json: { jsonrpc: "2.0", method: "tools/call", params: mcpCallPayload } });
@@ -796,13 +869,13 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
       const responseParts = [];
       for (const fc of funcCalls) {
         const { name, args } = fc.functionCall;
-        const toolSource = DTI_TOOL_NAMES.has(name) ? "dti" : "aas";
-        const mcpLabel = toolSource === "dti" ? "MCP (dti-connector)" : "MCP (aas-repository)";
+        const toolSource = DTI_TOOL_NAMES.has(name) ? "dti" : KB_TOOL_NAMES.has(name) ? "kb" : "aas";
+        const mcpLabel = toolSource === "dti" ? "MCP (dti-connector)" : toolSource === "kb" ? "MCP (knowledge-base)" : "MCP (aas-repository)";
         log.push({ type: "tool_call", tool: name, args: args || {}, source: toolSource });
 
         let resultText;
         try {
-          const targetClient = toolSource === "dti" ? mcpClients.dti : mcpClients.aas;
+          const targetClient = toolSource === "dti" ? mcpClients.dti : toolSource === "kb" ? mcpClients.kb : mcpClients.aas;
           if (targetClient) {
             const mcpCallPayload = { name, arguments: args || {} };
             log.push({ type: "console", direction: "sent", label: `Client → ${mcpLabel}: tools/call (${name})`, json: { jsonrpc: "2.0", method: "tools/call", params: mcpCallPayload } });
@@ -995,19 +1068,31 @@ function mountRoutes(router) {
             dtiTools = dtiPoolEntry.tools;
           }
 
-          const allTools = [...mcpTools, ...dtiTools];
+          // --- KB MCP tools (only if enabled) ---
+          let kbMcpClient = null;
+          let kbTools = [];
+          let kbPoolEntry = { instructions: "" };
+          if (enabledMcpsCont.includes("kb")) {
+            const kbSettings = await db.get("SELECT base_prompt FROM kb_settings WHERE user_id = ?", [req.user.id]);
+            kbPoolEntry = await getPooledKbMcpClient(req.user.id, kbSettings?.base_prompt || "", toolLog);
+            kbMcpClient = kbPoolEntry.client;
+            kbTools = kbPoolEntry.tools;
+          }
+
+          const allTools = [...mcpTools, ...dtiTools, ...kbTools];
           const sysPrompt = buildSystemPrompt(
             settings.base_prompt || "",
             aasPoolEntry?.instructions || "",
             dtiPoolEntry.instructions,
             aasPoolEntry?.resources || [],
-            aasPoolEntry?.prompts || []
+            aasPoolEntry?.prompts || [],
+            kbPoolEntry.instructions
           );
 
           toolLog.push({ type: "info", text: "Fortsetzung — weitere Tool-Aufrufe" });
 
           let result;
-          const mcpClients = { aas: aasMcpClient, dti: dtiMcpClient };
+          const mcpClients = { aas: aasMcpClient, dti: dtiMcpClient, kb: kbMcpClient };
           if (stored.provider === "gemini") {
             result = await chatGeminiWithTools(settings.api_key, settings.model, [], allTools, mcpClients, toolLog, sysPrompt, req.user.id, stored.state);
           } else {
@@ -1130,18 +1215,32 @@ function mountRoutes(router) {
             toolLog.push({ type: "dti_tools", count: dtiTools.length, names: dtiTools.map((t) => t.name) });
           }
 
-          const allTools = [...mcpTools, ...dtiTools];
+          // --- KB MCP tools (only if enabled) ---
+          let kbMcpClient = null;
+          let kbTools = [];
+          let kbPoolEntry = { instructions: "" };
+          if (enabledMcps.includes("kb")) {
+            const kbSettings = await db.get("SELECT base_prompt FROM kb_settings WHERE user_id = ?", [req.user.id]);
+            kbPoolEntry = await getPooledKbMcpClient(req.user.id, kbSettings?.base_prompt || "", toolLog);
+            kbMcpClient = kbPoolEntry.client;
+            kbTools = kbPoolEntry.tools;
+            toolLog.push({ type: "kb_tools", count: kbTools.length, names: kbTools.map((t) => t.name) });
+          }
+
+          const allTools = [...mcpTools, ...dtiTools, ...kbTools];
           const userBase = settings.base_prompt || "";
           const sysPrompt = buildSystemPrompt(
             userBase,
             aasPoolEntry?.instructions || "",
             dtiPoolEntry.instructions,
             mcpResources,
-            mcpPrompts
+            mcpPrompts,
+            kbPoolEntry.instructions
           );
           const promptSources = [{ source: "client", label: "Base-Prompt", text: userBase || BASE_SYSTEM_PROMPT }];
           if (aasPoolEntry?.instructions) promptSources.push({ source: "aas-repository", label: "MCP Server instructions", text: aasPoolEntry.instructions });
           if (dtiPoolEntry.instructions) promptSources.push({ source: "dti-connector", label: "MCP Server instructions", text: dtiPoolEntry.instructions });
+          if (kbPoolEntry.instructions) promptSources.push({ source: "knowledge-base", label: "MCP Server instructions", text: kbPoolEntry.instructions });
           if (mcpResources.length > 0) promptSources.push({ source: "aas-repository", label: "Resources", text: mcpResources.map(r => r.name || r.uri) });
           if (mcpPrompts.length > 0) promptSources.push({ source: "aas-repository", label: "Prompts", text: mcpPrompts.map(p => p.name) });
           toolLog.push({ type: "system_prompt", text: sysPrompt, sources: promptSources });
@@ -1150,7 +1249,7 @@ function mountRoutes(router) {
           const allToolNames = allTools.map(t => t.name);
           const validForceTool = forceTool && allToolNames.includes(forceTool) ? forceTool : null;
 
-          const mcpClients = { aas: aasMcpClient, dti: dtiMcpClient };
+          const mcpClients = { aas: aasMcpClient, dti: dtiMcpClient, kb: kbMcpClient };
           let result;
           if (validForceTool) {
             toolLog.push({ type: "force_tool", tool: validForceTool });
@@ -1187,9 +1286,9 @@ function mountRoutes(router) {
 
             if (directArgs) {
               // Direct MCP call — no LLM needed
-              const targetClient = DTI_TOOL_NAMES.has(validForceTool) ? dtiMcpClient : aasMcpClient;
-              const toolSource = DTI_TOOL_NAMES.has(validForceTool) ? "dti" : "aas";
-              const mcpLabel = toolSource === "dti" ? "MCP (dti-connector)" : "MCP (aas-repository)";
+              const targetClient = DTI_TOOL_NAMES.has(validForceTool) ? dtiMcpClient : KB_TOOL_NAMES.has(validForceTool) ? kbMcpClient : aasMcpClient;
+              const toolSource = DTI_TOOL_NAMES.has(validForceTool) ? "dti" : KB_TOOL_NAMES.has(validForceTool) ? "kb" : "aas";
+              const mcpLabel = toolSource === "dti" ? "MCP (dti-connector)" : toolSource === "kb" ? "MCP (knowledge-base)" : "MCP (aas-repository)";
               toolLog.push({ type: "tool_call", tool: validForceTool, args: { itemCount: Array.isArray(Object.values(directArgs)[0]) ? Object.values(directArgs)[0].length : "obj" }, source: toolSource });
               const mcpCallPayload = { name: validForceTool, arguments: directArgs };
               toolLog.push({ type: "console", direction: "sent", label: `Client → ${mcpLabel}: tools/call (${validForceTool})`, json: { jsonrpc: "2.0", method: "tools/call", params: mcpCallPayload } });
@@ -1326,6 +1425,30 @@ function mountRoutes(router) {
     }
   });
 
+  // --- KB tool definitions (for slash autocomplete) ---
+  let cachedKbTools = null;
+  router.get("/api/kb-tools", auth.requireAuth, async (req, res) => {
+    if (cachedKbTools) return res.json({ tools: cachedKbTools });
+    let client = null;
+    try {
+      const { Client, StdioClientTransport } = await getMcpSdk();
+      const transport = new StdioClientTransport({
+        command: "node",
+        args: [path.join(__dirname, "../knowledge-base/mcp-server.mjs")],
+        env: { ...process.env, KB_USER_ID: req.user.id, KB_BASE_PROMPT: "" },
+      });
+      client = new Client({ name: "aas-chat-kb-tools", version: "1.0.0" });
+      await client.connect(transport);
+      const { tools } = await client.listTools();
+      cachedKbTools = tools.map((t) => ({ name: t.name, description: t.description }));
+      res.json({ tools: cachedKbTools });
+    } catch {
+      res.status(500).json({ error: "KB_TOOLS_UNAVAILABLE" });
+    } finally {
+      if (client) { try { await client.close(); } catch {} }
+    }
+  });
+
   // --- DTI connector status (for panel restore on page load) ---
   router.get("/api/connector-status", auth.requireAuth, async (req, res) => {
     try {
@@ -1442,6 +1565,7 @@ function mountRoutes(router) {
       // Invalidate pooled MCP clients when settings change
       closeMcpPoolEntry(req.user.id, aas_url || "");
       closeDtiMcpPool(req.user.id);
+      closeKbMcpPool(req.user.id);
 
       res.json({ ok: true });
     } catch {

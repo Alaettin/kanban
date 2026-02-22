@@ -17,6 +17,7 @@ const APP_ICONS = {
   "dti-connector": '<svg viewBox="0 0 24 24"><path d="M4 6h6M4 12h6M4 18h6"/><path d="M14 6h6M14 12h6M14 18h6"/><path d="M10 6l4 6-4 6"/></svg>',
   "card-scanner": '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2" ry="2"/><line x1="2" y1="9" x2="22" y2="9"/><circle cx="7" cy="14" r="2"/><path d="M11 13h6M11 16h4"/></svg>',
   "aas-chat": '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  "knowledge-base": '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
 };
 
 const I18N = {
@@ -32,6 +33,7 @@ const I18N = {
     "app.dti-connector": "Daten erstellen und bereitstellen",
     "app.card-scanner": "Visitenkarten scannen und verwalten",
     "app.aas-chat": "KI-Chat für Verwaltungsschalen",
+    "app.knowledge-base": "Dokumente hochladen und als Wissensquelle nutzen",
   },
   en: {
     subtitle: "Choose an app to get started.",
@@ -45,6 +47,7 @@ const I18N = {
     "app.dti-connector": "Create and provide data",
     "app.card-scanner": "Scan and manage business cards",
     "app.aas-chat": "AI chat for Asset Administration Shells",
+    "app.knowledge-base": "Upload documents and use as knowledge source",
   },
 };
 

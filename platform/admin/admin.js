@@ -18,6 +18,7 @@ const AVAILABLE_APPS = [
   { id: "dti-connector", name: "DTI Connector" },
   { id: "card-scanner", name: "Card Scanner" },
   { id: "aas-chat", name: "AAS Chat" },
+  { id: "knowledge-base", name: "Knowledge Base" },
 ];
 
 const I18N = {

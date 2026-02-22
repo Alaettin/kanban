@@ -23,11 +23,13 @@ const kanbanRoutes = require("./apps/kanban/routes");
 const dtiRoutes = require("./apps/dti-connector/routes");
 const cardScannerRoutes = require("./apps/card-scanner/routes");
 const aasChatRoutes = require("./apps/aas-chat/routes");
+const kbRoutes = require("./apps/knowledge-base/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
 const cardScannerDir = path.join(__dirname, "apps", "card-scanner");
 const aasChatDir = path.join(__dirname, "apps", "aas-chat");
+const kbDir = path.join(__dirname, "apps", "knowledge-base");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -71,6 +73,15 @@ registry.register({
   icon: "aas-chat",
   path: "/apps/aas-chat",
   color: "#059669",
+});
+
+registry.register({
+  id: "knowledge-base",
+  name: "Knowledge Base",
+  description: "Dokumente hochladen und als Wissensquelle nutzen",
+  icon: "knowledge-base",
+  path: "/apps/knowledge-base",
+  color: "#f59e0b",
 });
 
 // --- Middleware ---
@@ -231,6 +242,25 @@ const aasChatRouter = express.Router();
 aasChatRoutes.mountRoutes(aasChatRouter);
 app.use("/apps/aas-chat", aasChatRouter);
 
+// --- Knowledge Base App ---
+
+app.get("/apps/knowledge-base/styles.css", (req, res) => {
+  res.sendFile(path.join(kbDir, "styles.css"));
+});
+
+app.get("/apps/knowledge-base/app.js", (req, res) => {
+  res.sendFile(path.join(kbDir, "app.js"));
+});
+
+app.get("/apps/knowledge-base", auth.requireAuthPage, requireAppAccess("knowledge-base"), (req, res) => {
+  res.sendFile(path.join(kbDir, "index.html"));
+});
+
+// Knowledge Base API routes (mounted under /apps/knowledge-base)
+const kbRouter = express.Router();
+kbRoutes.mountRoutes(kbRouter);
+app.use("/apps/knowledge-base", kbRouter);
+
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
 
@@ -347,8 +377,15 @@ app.delete("/api/admin/users/:userId", auth.requireAdmin, async (req, res) => {
     if (fs.existsSync(userFilesDir)) {
       fs.rmSync(userFilesDir, { recursive: true, force: true });
     }
+    const userKbDir = path.join(dataDir, "kb-files", userId);
+    if (fs.existsSync(userKbDir)) {
+      fs.rmSync(userKbDir, { recursive: true, force: true });
+    }
     // 2. Delete DTI connectors (CASCADE handles all data tables)
     await db.run("DELETE FROM dti_connectors WHERE user_id = ?", [userId]);
+    // 2b. Delete KB documents
+    await db.run("DELETE FROM kb_documents WHERE user_id = ?", [userId]);
+    await db.run("DELETE FROM kb_settings WHERE user_id = ?", [userId]);
     // 3. Delete platform access tables
     await db.run("DELETE FROM user_app_access WHERE user_id = ?", [userId]);
     await db.run("DELETE FROM user_roles WHERE user_id = ?", [userId]);
@@ -373,6 +410,7 @@ async function start() {
   await dtiRoutes.initDtiTables();
   await cardScannerRoutes.initCardScannerTables();
   await aasChatRoutes.initAasChatTables();
+  await kbRoutes.initKnowledgeBaseTables();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically
