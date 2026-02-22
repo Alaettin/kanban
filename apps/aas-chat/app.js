@@ -22,6 +22,7 @@ const logoutBtn = document.getElementById("logout-btn");
 const localeDeBtn = document.getElementById("locale-de-btn");
 const localeEnBtn = document.getElementById("locale-en-btn");
 const sidebarToggle = document.getElementById("sidebar-toggle");
+const mobileMenuBtn = document.getElementById("mobile-menu-btn");
 const newChatBtn = document.getElementById("new-chat-btn");
 const chatListEl = document.getElementById("chat-list");
 
@@ -246,6 +247,16 @@ sidebarToggle.addEventListener("click", () => {
   document.body.classList.toggle("sidebar-collapsed");
   const collapsed = document.body.classList.contains("sidebar-collapsed");
   sidebarToggle.title = collapsed ? t("toggleExpand") : t("toggleCollapse");
+});
+
+// Mobile sidebar toggle
+mobileMenuBtn.addEventListener("click", () => {
+  document.body.classList.toggle("mobile-sidebar-open");
+});
+document.getElementById("sidebar").addEventListener("click", (e) => {
+  if (e.target.closest(".sidebar-item, .chat-item, .new-chat-btn")) {
+    document.body.classList.remove("mobile-sidebar-open");
+  }
 });
 
 // === Multi-Chat management ===
