@@ -478,6 +478,39 @@
     </form>
   </dialog>
 
+  <!-- Chat Widget -->
+  <div id="chat-widget-area" class="chat-widget-area" hidden>
+    <button id="chat-widget-toggle" class="chat-widget-toggle" type="button" title="AI Assistant">
+      <svg viewBox="0 0 24 24" class="chat-widget-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <svg viewBox="0 0 24 24" class="chat-widget-icon-close"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <div id="chat-widget" class="chat-widget" hidden>
+      <div class="chat-widget-header">
+        <span class="chat-widget-title">AI Assistant</span>
+        <div class="chat-widget-header-actions">
+          <span id="chat-widget-connector-tag" class="chat-widget-connector-tag" hidden></span>
+          <button id="chat-widget-clear" class="chat-widget-clear" type="button" title="Chat leeren">
+            <svg viewBox="0 0 24 24" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="chat-widget-messages" class="chat-widget-messages"></div>
+      <div id="cw-slash-menu" class="cw-slash-menu" hidden></div>
+      <form id="chat-widget-form" class="chat-widget-form">
+        <button id="cw-mode-toggle" class="cw-mode-toggle" type="button" title="MCP / WEB">
+          <svg viewBox="0 0 24 24" class="cw-mode-icon-tools"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg viewBox="0 0 24 24" class="cw-mode-icon-web"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="cw-mode-label" class="cw-mode-label">MCP</span>
+        </button>
+        <textarea id="chat-widget-input" class="chat-widget-input" rows="1" placeholder="Nachricht..." maxlength="10000"></textarea>
+        <button type="submit" id="chat-widget-send" class="chat-widget-send" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script src="/apps/dti-connector/app.js"></script>
 </body>
 </html>

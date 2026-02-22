@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AAS Chat – Workspace</title>
+  <link rel="stylesheet" href="/apps/aas-chat/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span id="brand-text">AAS Chat</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar" aria-label="Navigation">
+      <nav class="sidebar-nav">
+        <div class="chat-list-header">
+          <button id="new-chat-btn" class="new-chat-btn" type="button" title="Neuer Chat">
+            <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span class="sidebar-label">Neuer Chat</span>
+          </button>
+        </div>
+        <div id="chat-list" class="chat-list"></div>
+        <div class="sidebar-spacer"></div>
+        <button class="sidebar-item" data-page="docs" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <span class="sidebar-label" id="nav-docs-label">Docs</span>
+        </button>
+        <button class="sidebar-item" data-page="settings" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span class="sidebar-label" id="nav-settings-label">Einstellungen</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="Navigation einklappen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main class="page-content">
+      <!-- Chat Page -->
+      <section id="page-chat" class="page-section active">
+        <div class="chat-container">
+          <div id="chat-messages" class="chat-messages">
+            <div id="empty-state" class="empty-state">
+              <svg viewBox="0 0 24 24" class="empty-icon">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <p id="empty-text">Stelle eine Frage zur Verwaltungsschale.</p>
+            </div>
+          </div>
+          <div class="chat-input-bar">
+            <form id="chat-form" class="chat-form" autocomplete="off">
+              <div class="chat-input-wrap">
+                <div id="slash-menu" class="slash-menu" hidden>
+                  <div id="slash-menu-list" class="slash-menu-list"></div>
+                </div>
+                <textarea id="chat-input" class="chat-input" rows="1" placeholder="Nachricht eingeben..." maxlength="100000"></textarea>
+                <div class="chat-input-toolbar">
+                  <button type="button" id="mode-toggle" class="mode-toggle" title="Modus wechseln">
+                    <svg class="mode-icon mode-icon-tools" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    <svg class="mode-icon mode-icon-search" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span class="mode-label" id="mode-label">MCP</span>
+                  </button>
+                  <button type="button" id="console-toggle" class="console-toggle-btn" title="Developer Console">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  </button>
+                  <button type="button" id="clear-chat-inline" class="clear-chat-inline" title="Chat leeren">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  </button>
+                  <div class="toolbar-spacer"></div>
+                  <button type="submit" id="send-btn" class="send-btn" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <line x1="22" y1="2" x2="11" y2="13"/>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+          <!-- Developer Console -->
+          <div id="dev-console" class="dev-console" hidden>
+            <div id="console-resize" class="dev-console-resize"></div>
+            <div class="dev-console-header">
+              <span class="dev-console-title">Console</span>
+              <div class="console-tabs">
+                <button type="button" class="console-tab active" data-tab="app">App</button>
+                <button type="button" class="console-tab" data-tab="raw">JSON-RPC</button>
+              </div>
+              <div class="dev-console-actions">
+                <button type="button" id="console-clear" class="dev-console-action" title="Console leeren">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+                <button type="button" id="console-close" class="dev-console-action" title="Console schließen">&times;</button>
+              </div>
+            </div>
+            <div id="console-log" class="dev-console-log"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Docs Page -->
+      <section id="page-docs" class="page-section">
+        <div class="settings-inner">
+          <div class="settings-header">
+            <h2 id="docs-title">Docs</h2>
+            <p id="docs-desc">Übersicht aller verfügbaren Tools, die dem KI-Modell zur Verfügung stehen.</p>
+          </div>
+          <div class="settings-pills" id="docs-pills">
+            <button class="settings-pill active" data-docs-tab="aas" type="button">MCP (AAS)</button>
+            <button class="settings-pill" data-docs-tab="connector" type="button">Connector</button>
+          </div>
+          <div class="docs-tab active" id="docs-tab-aas">
+            <div id="docs-aas-list" class="mcp-tools-list"></div>
+          </div>
+          <div class="docs-tab" id="docs-tab-connector">
+            <div id="docs-connector-list" class="mcp-tools-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Page -->
+      <section id="page-settings" class="page-section">
+        <div class="settings-inner">
+          <div class="settings-header">
+            <h2 id="settings-title">Einstellungen</h2>
+            <p id="settings-desc">Konfiguriere die KI-Anbindung und die Verwaltungsschale.</p>
+          </div>
+
+          <!-- Pill-Switcher -->
+          <div class="settings-pills">
+            <button class="settings-pill active" data-tab="llm" type="button">LLM</button>
+            <button class="settings-pill" data-tab="aas" type="button">AAS</button>
+            <button class="settings-pill" data-tab="mcp" type="button">MCP</button>
+          </div>
+
+          <!-- Tab: LLM -->
+          <div class="settings-tab active" id="settings-tab-llm">
+            <div class="settings-card">
+              <h3 id="settings-provider-title">KI-Modell</h3>
+              <p id="settings-provider-desc" class="settings-card-desc">Wähle den Anbieter und das Modell für den Chat.</p>
+              <div class="settings-field">
+                <label id="lbl-provider" class="settings-label" for="settings-provider">Anbieter</label>
+                <select id="settings-provider" class="settings-select">
+                  <option value="gemini">Google Gemini (Web-Zugriff)</option>
+                  <option value="groq">Groq (Llama)</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label id="lbl-model" class="settings-label" for="settings-model">Modell</label>
+                <select id="settings-model" class="settings-select"></select>
+              </div>
+            </div>
+            <div class="settings-card">
+              <h3 id="settings-apikey-title">API-Schlüssel</h3>
+              <p id="settings-apikey-desc" class="settings-card-desc">Dein Groq API-Key. Kostenlos unter console.groq.com.</p>
+              <div class="settings-apikey-row">
+                <input id="settings-api-key" class="settings-input apikey-masked" type="text" placeholder="gsk_..." autocomplete="off" data-1p-ignore data-lpignore="true" />
+                <button id="toggle-key-vis" class="btn-icon-sm" type="button" title="Anzeigen">
+                  <svg id="eye-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: AAS -->
+          <div class="settings-tab" id="settings-tab-aas">
+            <div class="settings-card">
+              <h3 id="settings-endpoint-title">AAS Server URL</h3>
+              <p id="settings-endpoint-desc" class="settings-card-desc">Die Basis-URL des Verwaltungsschalen-Servers (optional, für später).</p>
+              <input id="settings-aas-url" class="settings-input" type="url" placeholder="https://..." />
+            </div>
+          </div>
+
+          <!-- Tab: MCP -->
+          <div class="settings-tab" id="settings-tab-mcp">
+            <div class="settings-card">
+              <h3>MCP-Server</h3>
+              <p class="settings-card-desc">Wähle, welche MCP-Server im Chat aktiv sein sollen.</p>
+              <div class="settings-mcp-list">
+                <label class="settings-mcp-item">
+                  <input type="checkbox" id="mcp-aas" value="aas" checked />
+                  <div class="settings-mcp-info">
+                    <span class="settings-mcp-name">AAS Repository</span>
+                    <span class="settings-mcp-desc">Verwaltungsschalen-Server — Shells, Submodels, Dokumente abfragen</span>
+                  </div>
+                </label>
+                <label class="settings-mcp-item">
+                  <input type="checkbox" id="mcp-dti" value="dti" checked />
+                  <div class="settings-mcp-info">
+                    <span class="settings-mcp-name">DTI Connector</span>
+                    <span class="settings-mcp-desc">Produkt-Datenmodelle — Connectoren, Hierarchy, Assets verwalten</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div class="settings-card">
+              <h3>Base-Prompt</h3>
+              <p class="settings-card-desc">Grundlegende Instruktionen für die KI. Die MCP-Server-Instructions werden automatisch angehängt.</p>
+              <textarea id="settings-base-prompt" class="settings-textarea" rows="4" spellcheck="false"></textarea>
+              <div class="settings-prompt-actions">
+                <button id="reset-base-prompt-btn" class="btn btn-secondary btn-sm" type="button">Zurücksetzen</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Save -->
+          <div class="settings-actions">
+            <button id="settings-save-btn" class="btn btn-primary" type="button">
+              <span id="settings-save-label">Speichern</span>
+            </button>
+            <div id="settings-hint" class="settings-hint" hidden></div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- DTI Connector Toggle Tab (right edge) -->
+  <button type="button" id="connector-toggle" class="connector-toggle" title="DTI Connector Panel" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    <span class="connector-toggle-label" id="connector-toggle-label"></span>
+  </button>
+
+  <!-- DTI Connector Panel -->
+  <aside id="connector-panel" class="connector-panel" aria-hidden="true">
+    <header class="connector-panel-header">
+      <div>
+        <h2 id="connector-panel-name">DTI Connector</h2>
+        <p id="connector-panel-role" class="connector-panel-meta"></p>
+      </div>
+      <button id="connector-panel-close" class="connector-panel-close-btn" type="button" title="Schließen">&times;</button>
+    </header>
+    <div class="connector-panel-stats" id="connector-panel-stats"></div>
+    <div class="connector-panel-section-title">Aktionslog</div>
+    <div id="connector-panel-log" class="connector-panel-log"></div>
+  </aside>
+
+  <!-- Confirm Clear Dialog -->
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <p id="confirm-text">Chat-Verlauf wirklich löschen?</p>
+    <div class="confirm-actions">
+      <button id="confirm-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+      <button id="confirm-ok" class="btn btn-danger" type="button">Löschen</button>
+    </div>
+  </dialog>
+
+  <!-- Image Lightbox -->
+  <dialog id="lightbox-dialog" class="lightbox-dialog">
+    <button id="lightbox-close" class="lightbox-close" type="button" aria-label="Schließen">&times;</button>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="Vorschau" />
+  </dialog>
+
+  <script src="/apps/aas-chat/app.js"></script>
+</body>
+</html>

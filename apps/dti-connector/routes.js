@@ -141,6 +141,14 @@ async function initDtiTables() {
     )
   `);
 
+  // Migration: add type column (dti = normal, card-scanner = special)
+  {
+    const cols = await db.all("PRAGMA table_info(dti_connectors)");
+    if (!cols.find(c => c.name === "type")) {
+      await db.run("ALTER TABLE dti_connectors ADD COLUMN type TEXT DEFAULT 'dti'");
+    }
+  }
+
   // Check if old user_id-based tables exist
   let needsMigration = false;
   try {
@@ -237,7 +245,7 @@ function mountRoutes(router) {
     if (!connectorId) return res.status(400).json({ error: "Missing connector ID" });
     try {
       const row = await db.get(
-        `SELECT c.connector_id, c.user_id, c.name, c.api_key, c.created_at, m.role
+        `SELECT c.connector_id, c.user_id, c.name, c.api_key, c.created_at, m.role, c.type
          FROM dti_connectors c
          JOIN connector_members m ON m.connector_id = c.connector_id AND m.user_id = ?
          WHERE c.connector_id = ?`,
@@ -274,7 +282,7 @@ function mountRoutes(router) {
   router.get("/api/connectors", auth.requireAuth, async (req, res) => {
     try {
       const rows = await db.all(
-        `SELECT c.connector_id, c.name, c.api_key, c.created_at, m.role
+        `SELECT c.connector_id, c.name, c.api_key, c.created_at, m.role, c.type
          FROM dti_connectors c
          JOIN connector_members m ON m.connector_id = c.connector_id AND m.user_id = ?
          ORDER BY c.created_at`,
@@ -1366,8 +1374,11 @@ function mountRoutes(router) {
         if (!byKey[key]) return;
         const isFile = typeMap[key] === 1;
         if (isFile) {
-          const fileId = byKey[key][0].value;
+          let fileId = byKey[key][0].value;
           if (!fileId) return;
+          // Normalize legacy file references (e.g. "file:image_dt_xxx" → "dt_xxx")
+          if (fileId.startsWith("file:image_")) fileId = fileId.slice(11);
+          else if (fileId.startsWith("file:")) fileId = fileId.slice(5);
           let query = "SELECT lang, original_name, mime_type FROM dti_files WHERE connector_id = ? AND file_id = ?";
           const params = [cid, fileId];
           if (langFilter.length > 0) {

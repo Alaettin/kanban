@@ -22,10 +22,12 @@ const registry = require("./shared/app-registry");
 const kanbanRoutes = require("./apps/kanban/routes");
 const dtiRoutes = require("./apps/dti-connector/routes");
 const cardScannerRoutes = require("./apps/card-scanner/routes");
+const aasChatRoutes = require("./apps/aas-chat/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
 const cardScannerDir = path.join(__dirname, "apps", "card-scanner");
+const aasChatDir = path.join(__dirname, "apps", "aas-chat");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -60,6 +62,15 @@ registry.register({
   icon: "card-scanner",
   path: "/apps/card-scanner",
   color: "#7c3aed",
+});
+
+registry.register({
+  id: "aas-chat",
+  name: "AAS Chat",
+  description: "KI-Chat für Verwaltungsschalen",
+  icon: "aas-chat",
+  path: "/apps/aas-chat",
+  color: "#059669",
 });
 
 // --- Middleware ---
@@ -200,6 +211,25 @@ app.get("/apps/card-scanner", auth.requireAuthPage, requireAppAccess("card-scann
 const cardScannerRouter = express.Router();
 cardScannerRoutes.mountRoutes(cardScannerRouter);
 app.use("/apps/card-scanner", cardScannerRouter);
+
+// --- AAS Chat App ---
+
+app.get("/apps/aas-chat/styles.css", (req, res) => {
+  res.sendFile(path.join(aasChatDir, "styles.css"));
+});
+
+app.get("/apps/aas-chat/app.js", (req, res) => {
+  res.sendFile(path.join(aasChatDir, "app.js"));
+});
+
+app.get("/apps/aas-chat", auth.requireAuthPage, requireAppAccess("aas-chat"), (req, res) => {
+  res.sendFile(path.join(aasChatDir, "index.html"));
+});
+
+// AAS Chat API routes (mounted under /apps/aas-chat)
+const aasChatRouter = express.Router();
+aasChatRoutes.mountRoutes(aasChatRouter);
+app.use("/apps/aas-chat", aasChatRouter);
 
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
@@ -342,6 +372,7 @@ async function start() {
   await kanbanRoutes.initKanbanTables();
   await dtiRoutes.initDtiTables();
   await cardScannerRoutes.initCardScannerTables();
+  await aasChatRoutes.initAasChatTables();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically

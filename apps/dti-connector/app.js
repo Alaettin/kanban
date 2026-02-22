@@ -193,6 +193,9 @@ const I18N = {
     assetsIdDuplicate: "ID bereits vergeben: {id}",
     assetsCreateError: "Fehler beim Anlegen.",
     assetsDeleteError: "Fehler beim Löschen.",
+    assetsDeleteConfirmTitle: "Asset löschen",
+    assetsDeleteConfirmMsg: "Soll das Asset \"{name}\" wirklich gelöscht werden? Alle zugehörigen Werte gehen verloren.",
+    assetsDeleteConfirmOk: "Löschen",
     assetsExportEmpty: "Keine Assets zum Exportieren vorhanden.",
     assetsExportError: "Fehler beim Exportieren.",
     assetsImported: "{count} Assets importiert ({skipped} übersprungen).",
@@ -351,6 +354,9 @@ const I18N = {
     assetsIdDuplicate: "ID already in use: {id}",
     assetsCreateError: "Failed to create asset.",
     assetsDeleteError: "Delete failed.",
+    assetsDeleteConfirmTitle: "Delete asset",
+    assetsDeleteConfirmMsg: "Are you sure you want to delete the asset \"{name}\"? All associated values will be lost.",
+    assetsDeleteConfirmOk: "Delete",
     assetsExportEmpty: "No assets to export.",
     assetsExportError: "Export failed.",
     assetsImported: "{count} assets imported ({skipped} skipped).",
@@ -387,6 +393,7 @@ let currentConnectorName = "";
 let addingConnector = false;
 let deleteConnectorId = null;
 let currentConnectorRole = "owner";
+let currentConnectorType = "dti";
 
 // Connector detail state
 let savedApiKey = "";
@@ -396,6 +403,7 @@ let hierarchyLevels = [];
 let modelDatapoints = [];
 let modelSearchQuery = "";
 let pendingConfirmAction = "";
+let pendingDeleteAssetId = "";
 let filesData = [];
 let filesSearchQuery = "";
 let assetsData = [];
@@ -576,53 +584,43 @@ async function loadConnectors() {
   renderConnectors();
 }
 
-function renderConnectors() {
-  connectorGrid.innerHTML = "";
+function renderConnectorCard(conn, isCardScanner) {
+  const card = document.createElement("div");
+  card.className = isCardScanner ? "connector-card card-scanner" : "connector-card";
 
-  if (connectors.length === 0 && !addingConnector) {
-    const empty = document.createElement("div");
-    empty.className = "connector-empty";
-    empty.textContent = t("connectorEmpty");
-    connectorGrid.appendChild(empty);
-    return;
+  const info = document.createElement("div");
+  info.className = "connector-card-info";
+
+  const name = document.createElement("div");
+  name.className = "connector-card-name";
+  name.textContent = conn.name;
+
+  const meta = document.createElement("div");
+  meta.className = "connector-card-meta";
+  const uuid = document.createElement("span");
+  uuid.className = "connector-card-uuid";
+  uuid.textContent = conn.api_key.slice(0, 8) + "…";
+  const created = document.createElement("span");
+  created.textContent = t("connectorCreated") + ": " + formatDate(conn.created_at);
+  meta.appendChild(uuid);
+  meta.appendChild(created);
+
+  info.appendChild(name);
+  info.appendChild(meta);
+
+  // Role badge for shared connectors
+  if (conn.role && conn.role !== "owner") {
+    const badge = document.createElement("span");
+    badge.className = "connector-card-role";
+    badge.textContent = conn.role === "editor" ? t("memberEditor") : t("memberViewer");
+    meta.appendChild(badge);
   }
 
-  for (const conn of connectors) {
-    const card = document.createElement("div");
-    card.className = "connector-card";
+  const actions = document.createElement("div");
+  actions.className = "connector-card-actions";
 
-    const info = document.createElement("div");
-    info.className = "connector-card-info";
-
-    const name = document.createElement("div");
-    name.className = "connector-card-name";
-    name.textContent = conn.name;
-
-    const meta = document.createElement("div");
-    meta.className = "connector-card-meta";
-    const uuid = document.createElement("span");
-    uuid.className = "connector-card-uuid";
-    uuid.textContent = conn.api_key.slice(0, 8) + "…";
-    const created = document.createElement("span");
-    created.textContent = t("connectorCreated") + ": " + formatDate(conn.created_at);
-    meta.appendChild(uuid);
-    meta.appendChild(created);
-
-    info.appendChild(name);
-    info.appendChild(meta);
-
-    // Role badge for shared connectors
-    if (conn.role && conn.role !== "owner") {
-      const badge = document.createElement("span");
-      badge.className = "connector-card-role";
-      badge.textContent = conn.role === "editor" ? t("memberEditor") : t("memberViewer");
-      meta.appendChild(badge);
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "connector-card-actions";
-
-    // Share button (owner only)
+  if (!isCardScanner) {
+    // Share button (owner only, not for card-scanner)
     if (conn.role === "owner") {
       const shareBtn = document.createElement("button");
       shareBtn.type = "button";
@@ -650,7 +648,7 @@ function renderConnectors() {
       actions.appendChild(membersBtn);
     }
 
-    // Import button (owner + editor)
+    // Import button (owner + editor, not for card-scanner)
     if (conn.role === "owner" || conn.role === "editor") {
       const importBtn = document.createElement("button");
       importBtn.type = "button";
@@ -663,36 +661,55 @@ function renderConnectors() {
       });
       actions.appendChild(importBtn);
     }
+  }
 
-    const exportBtn = document.createElement("button");
-    exportBtn.type = "button";
-    exportBtn.className = "connector-card-action-btn";
-    exportBtn.title = "Export";
-    exportBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-    exportBtn.addEventListener("click", (e) => {
+  const exportBtn = document.createElement("button");
+  exportBtn.type = "button";
+  exportBtn.className = "connector-card-action-btn";
+  exportBtn.title = "Export";
+  exportBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  exportBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    exportFullConnector(conn.connector_id, conn.name);
+  });
+  actions.appendChild(exportBtn);
+
+  // Delete button (owner only)
+  if (conn.role === "owner") {
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "connector-card-del";
+    delBtn.textContent = "\u00d7";
+    delBtn.title = t("connectorDeleteTitle");
+    delBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      exportFullConnector(conn.connector_id, conn.name);
+      openConnectorDeleteModal(conn.connector_id, conn.name);
     });
-    actions.appendChild(exportBtn);
+    actions.appendChild(delBtn);
+  }
 
-    // Delete button (owner only)
-    if (conn.role === "owner") {
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "connector-card-del";
-      delBtn.textContent = "\u00d7";
-      delBtn.title = t("connectorDeleteTitle");
-      delBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openConnectorDeleteModal(conn.connector_id, conn.name);
-      });
-      actions.appendChild(delBtn);
-    }
+  card.appendChild(info);
+  card.appendChild(actions);
+  card.addEventListener("click", () => enterConnector(conn.connector_id, conn.name, conn.role));
+  return card;
+}
 
-    card.appendChild(info);
-    card.appendChild(actions);
-    card.addEventListener("click", () => enterConnector(conn.connector_id, conn.name, conn.role));
-    connectorGrid.appendChild(card);
+function renderConnectors() {
+  connectorGrid.innerHTML = "";
+
+  const normalConns = connectors.filter(c => c.type !== "card-scanner");
+  const csConns = connectors.filter(c => c.type === "card-scanner");
+
+  if (normalConns.length === 0 && csConns.length === 0 && !addingConnector) {
+    const empty = document.createElement("div");
+    empty.className = "connector-empty";
+    empty.textContent = t("connectorEmpty");
+    connectorGrid.appendChild(empty);
+    return;
+  }
+
+  for (const conn of normalConns) {
+    connectorGrid.appendChild(renderConnectorCard(conn, false));
   }
 
   // New connector input row
@@ -730,6 +747,17 @@ function renderConnectors() {
 
     requestAnimationFrame(() => input.focus());
   }
+
+  // Card Scanner connectors (separated)
+  if (csConns.length > 0) {
+    const sep = document.createElement("div");
+    sep.className = "connector-card-separator";
+    sep.textContent = "Card Scanner";
+    connectorGrid.appendChild(sep);
+    for (const conn of csConns) {
+      connectorGrid.appendChild(renderConnectorCard(conn, true));
+    }
+  }
 }
 
 connectorAddBtn.addEventListener("click", () => {
@@ -752,6 +780,7 @@ async function confirmNewConnector() {
       name: result.payload.name,
       api_key: result.payload.api_key,
       created_at: result.payload.created_at,
+      role: result.payload.role || "owner",
     });
     addingConnector = false;
     renderConnectors();
@@ -1060,6 +1089,9 @@ async function enterConnector(connId, connName, role) {
   currentConnectorId = connId;
   currentConnectorName = connName;
   currentConnectorRole = role || "owner";
+  // Determine connector type
+  const connObj = connectors.find(c => c.connector_id === connId);
+  currentConnectorType = connObj?.type || "dti";
 
   // Reset detail state
   savedApiKey = "";
@@ -1091,11 +1123,13 @@ async function enterConnector(connId, connName, role) {
   // Show/hide sidebar share/members buttons based on role
   const sidebarShareBtn = document.getElementById("sidebar-share-btn");
   const sidebarMembersBtn = document.getElementById("sidebar-members-btn");
-  sidebarShareBtn.style.display = currentConnectorRole === "owner" ? "" : "none";
-  sidebarMembersBtn.style.display = "";
+  const isCS = currentConnectorType === "card-scanner";
+  sidebarShareBtn.style.display = (currentConnectorRole === "owner" && !isCS) ? "" : "none";
+  sidebarMembersBtn.style.display = isCS ? "none" : "";
 
-  // Toggle read-only class for viewer role
+  // Toggle read-only class for viewer role or card-scanner type
   connectorDetailView.classList.toggle("role-viewer", currentConnectorRole === "viewer");
+  connectorDetailView.classList.toggle("type-card-scanner", isCS);
 
   // Navigate to hierarchy tab
   navigateTo("hierarchy");
@@ -1112,6 +1146,7 @@ function backToConnectors() {
   currentConnectorId = null;
   currentConnectorName = "";
   currentConnectorRole = "owner";
+  currentConnectorType = "dti";
   connectorDetailView.style.display = "none";
   connectorListView.style.display = "";
   brandText.textContent = "DTI Connector";
@@ -1489,7 +1524,10 @@ confirmCancelBtn.addEventListener("click", () => confirmModal.close());
 confirmForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   confirmModal.close();
-  if (pendingConfirmAction === "model") {
+  if (pendingConfirmAction === "deleteAsset") {
+    await deleteAsset(pendingDeleteAssetId);
+    pendingDeleteAssetId = "";
+  } else if (pendingConfirmAction === "model") {
     await saveModel();
   } else if (pendingConfirmAction === "assets") {
     await saveAssetValues();
@@ -1864,7 +1902,7 @@ function buildLangCell(entry, lang, rowIdx) {
     const btn = createPickBtn(t("filesReplace"));
     btn.addEventListener("click", () => pickAndUpload(entry, "en"));
     cell.appendChild(btn);
-  } else if (!entry._new && lang === "de" && entry.en) {
+  } else if (!entry._new && lang === "de" && entry.en && currentConnectorType !== "card-scanner") {
     const btn = createPickBtn(fileData ? t("filesReplace") : t("filesPick"));
     btn.addEventListener("click", () => pickAndUpload(entry, "de"));
     cell.appendChild(btn);
@@ -2246,7 +2284,16 @@ function renderAssets() {
     delBtn.type = "button";
     delBtn.className = "assets-row-del";
     delBtn.textContent = "\u00d7";
-    delBtn.addEventListener("click", (e) => { e.stopPropagation(); deleteAsset(entry.asset_id); });
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      pendingDeleteAssetId = entry.asset_id;
+      pendingConfirmAction = "deleteAsset";
+      confirmTitle.textContent = t("assetsDeleteConfirmTitle");
+      confirmMessage.textContent = t("assetsDeleteConfirmMsg").replace("{name}", entry.asset_id);
+      confirmOkBtn.textContent = t("assetsDeleteConfirmOk");
+      confirmCancelBtn.textContent = t("confirmCancel");
+      confirmModal.showModal();
+    });
 
     row.addEventListener("click", () => openAssetDetail(entry.asset_id));
     row.appendChild(num);
@@ -2680,11 +2727,12 @@ function renderAssetDetail() {
       emptyOpt.value = "";
       emptyOpt.textContent = t("assetsFileNone");
       select.appendChild(emptyOpt);
+      const rawVal = currentAssetValues[dp.id].en || "";
       fileIds.forEach((fileId) => {
         const opt = document.createElement("option");
         opt.value = fileId;
         opt.textContent = fileId;
-        if ((currentAssetValues[dp.id].en || "") === fileId) opt.selected = true;
+        if (rawVal === fileId || rawVal === "file:" + fileId || rawVal.endsWith("_" + fileId)) opt.selected = true;
         select.appendChild(opt);
       });
       select.addEventListener("change", () => {
@@ -2815,3 +2863,342 @@ async function init() {
 }
 
 init();
+
+// ======================= CHAT WIDGET =======================
+
+(async function initChatWidget() {
+  const CW_CHAT_KEY = "dti_cw_chatId";
+  const cwArea = document.getElementById("chat-widget-area");
+  const cwToggle = document.getElementById("chat-widget-toggle");
+  const cwPanel = document.getElementById("chat-widget");
+  const cwMessages = document.getElementById("chat-widget-messages");
+  const cwForm = document.getElementById("chat-widget-form");
+  const cwInput = document.getElementById("chat-widget-input");
+  const cwSend = document.getElementById("chat-widget-send");
+  const cwClear = document.getElementById("chat-widget-clear");
+  const cwTag = document.getElementById("chat-widget-connector-tag");
+  const cwModeToggle = document.getElementById("cw-mode-toggle");
+  const cwModeLabel = document.getElementById("cw-mode-label");
+  const cwSlashMenu = document.getElementById("cw-slash-menu");
+
+  if (!cwArea) return;
+
+  let cwChatId = localStorage.getItem(CW_CHAT_KEY) || null;
+  let cwSending = false;
+  let cwMode = "tools"; // "tools" or "search"
+  let cwToolList = [];
+  let cwSlashItems = [];
+  let cwSlashIndex = 0;
+  let cwSlashSelected = null;
+  let cwProviderIsGemini = false;
+  let cwInitialized = false;
+
+  // 1. Check if user has AAS Chat access + API key
+  try {
+    const appsRes = await fetch("/api/apps", { credentials: "same-origin" });
+    if (!appsRes.ok) return;
+    const appsData = await appsRes.json();
+    if (!(appsData.apps || []).some(a => a.id === "aas-chat")) return;
+
+    const settingsRes = await fetch("/apps/aas-chat/api/settings", { credentials: "same-origin" });
+    if (!settingsRes.ok) return;
+    const settings = await settingsRes.json();
+    if (!settings.has_api_key) return;
+    cwProviderIsGemini = settings.provider === "gemini";
+  } catch { return; }
+
+  // Show widget
+  cwArea.hidden = false;
+
+  // Load tool list for slash commands
+  async function cwLoadTools() {
+    try {
+      const [aasRes, dtiRes] = await Promise.allSettled([
+        fetch("/apps/aas-chat/api/mcp-tools", { credentials: "same-origin" }).then(r => r.ok ? r.json() : { tools: [] }),
+        fetch("/apps/aas-chat/api/dti-tools", { credentials: "same-origin" }).then(r => r.ok ? r.json() : { tools: [] }),
+      ]);
+      const aas = aasRes.status === "fulfilled" ? (aasRes.value.tools || []) : [];
+      const dti = dtiRes.status === "fulfilled" ? (dtiRes.value.tools || []) : [];
+      cwToolList = [...aas, ...dti];
+    } catch { cwToolList = []; }
+  }
+
+  // Ensure chat exists
+  async function ensureChat() {
+    if (cwChatId) {
+      const res = await fetch("/apps/aas-chat/api/chats", { credentials: "same-origin" });
+      if (res.ok) {
+        const data = await res.json();
+        if ((data.chats || []).some(c => c.chat_id === cwChatId)) return;
+      }
+    }
+    const res = await fetch("/apps/aas-chat/api/chats", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "DTI Widget" })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cwChatId = data.chat_id;
+      localStorage.setItem(CW_CHAT_KEY, cwChatId);
+    }
+  }
+
+  // Load persisted messages
+  async function cwLoadMessages() {
+    if (!cwChatId) return;
+    try {
+      const res = await fetch(`/apps/aas-chat/api/messages?chatId=${cwChatId}`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      cwMessages.innerHTML = "";
+      for (const msg of data.messages || []) {
+        cwAppendMsg(msg.role, msg.content);
+      }
+      cwMessages.scrollTop = cwMessages.scrollHeight;
+    } catch { /* ignore */ }
+  }
+
+  // Restore connector tag
+  async function cwRestoreTag() {
+    if (!cwChatId) return;
+    try {
+      const res = await fetch(`/apps/aas-chat/api/connector-status?chatId=${cwChatId}`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.connected && data.name) {
+        cwTag.textContent = data.name;
+        cwTag.hidden = false;
+      } else {
+        cwTag.hidden = true;
+      }
+    } catch { cwTag.hidden = true; }
+  }
+
+  function cwEscape(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function cwAppendMsg(role, text) {
+    const div = document.createElement("div");
+    div.className = "cw-msg " + role;
+    div.innerHTML = cwEscape(text);
+    cwMessages.appendChild(div);
+    return div;
+  }
+
+  // --- Mode toggle ---
+  cwModeToggle.addEventListener("click", () => {
+    cwMode = cwMode === "tools" ? "search" : "tools";
+    cwModeLabel.textContent = cwMode === "tools" ? "MCP" : "WEB";
+    cwModeToggle.classList.toggle("mode-web", cwMode === "search");
+  });
+
+  // --- Slash command menu ---
+  function cwShowSlash() { cwSlashMenu.hidden = false; }
+  function cwHideSlash() { cwSlashMenu.hidden = true; cwSlashItems = []; }
+
+  function cwRenderSlash() {
+    cwSlashMenu.innerHTML = "";
+    cwSlashItems.forEach((tool, i) => {
+      const div = document.createElement("div");
+      div.className = "cw-slash-item" + (i === cwSlashIndex ? " active" : "");
+      div.textContent = "/" + tool.name;
+      div.addEventListener("mousedown", (e) => { e.preventDefault(); cwSelectSlash(i); });
+      cwSlashMenu.appendChild(div);
+    });
+  }
+
+  function cwSelectSlash(idx) {
+    const tool = cwSlashItems[idx];
+    if (!tool) return;
+    cwSlashSelected = tool.name;
+    cwInput.value = "/" + tool.name + " ";
+    cwInput.focus();
+    cwHideSlash();
+    cwSend.disabled = false;
+  }
+
+  function cwHandleSlash() {
+    const val = cwInput.value;
+    if (cwSlashSelected) { cwHideSlash(); return; }
+    if (!val.startsWith("/")) { cwHideSlash(); return; }
+    if (val.indexOf(" ") > 0) { cwHideSlash(); return; }
+    const query = val.slice(1).toLowerCase();
+    cwSlashItems = cwToolList.filter(t => t.name.toLowerCase().includes(query));
+    if (!cwSlashItems.length) { cwHideSlash(); return; }
+    cwSlashIndex = 0;
+    cwRenderSlash();
+    cwShowSlash();
+  }
+
+  // --- Toggle open/close ---
+  cwToggle.addEventListener("click", async () => {
+    const isOpen = !cwPanel.hidden;
+    cwPanel.hidden = isOpen;
+    cwToggle.classList.toggle("open", !isOpen);
+    if (!isOpen) {
+      if (!cwInitialized) {
+        cwInitialized = true;
+        await Promise.all([ensureChat(), cwLoadTools()]);
+      } else {
+        await ensureChat();
+      }
+      await cwLoadMessages();
+      await cwRestoreTag();
+      cwInput.focus();
+    }
+  });
+
+  // --- Auto-resize + slash ---
+  cwInput.addEventListener("input", () => {
+    cwSend.disabled = !cwInput.value.trim();
+    cwInput.style.height = "auto";
+    cwInput.style.height = Math.min(cwInput.scrollHeight, 80) + "px";
+    // Reset slash selection when user edits
+    if (cwSlashSelected && !cwInput.value.startsWith("/" + cwSlashSelected)) {
+      cwSlashSelected = null;
+    }
+    cwHandleSlash();
+  });
+
+  // --- Send message ---
+  async function cwSendMessage() {
+    const text = cwInput.value.trim();
+    if (!text || cwSending) return;
+
+    // Detect slash command
+    let forceTool = null;
+    let sendContent = text;
+    const slashMatch = text.match(/^\/(\S+)(?:\s+([\s\S]+))?$/);
+    if (slashMatch && cwToolList.some(t => t.name === slashMatch[1])) {
+      forceTool = slashMatch[1];
+      sendContent = slashMatch[2] || "";
+    }
+    cwSlashSelected = null;
+
+    cwSending = true;
+    cwSend.disabled = true;
+    cwInput.value = "";
+    cwInput.style.height = "auto";
+    cwHideSlash();
+
+    cwAppendMsg("user", text);
+    cwMessages.scrollTop = cwMessages.scrollHeight;
+
+    const typing = document.createElement("div");
+    typing.className = "cw-typing";
+    typing.textContent = "...";
+    cwMessages.appendChild(typing);
+    cwMessages.scrollTop = cwMessages.scrollHeight;
+
+    try {
+      await ensureChat();
+      const body = { chatId: cwChatId, content: sendContent, mode: cwMode };
+      if (forceTool) body.forceTool = forceTool;
+
+      const res = await fetch("/apps/aas-chat/api/messages", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      typing.remove();
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          cwAppendMsg("assistant", data.reply);
+        }
+        if (data.connectorEvent) {
+          if (data.connectorEvent.action === "connect" && data.connectorEvent.name) {
+            cwTag.textContent = data.connectorEvent.name;
+            cwTag.hidden = false;
+          } else if (data.connectorEvent.action === "disconnect") {
+            cwTag.hidden = true;
+          }
+        }
+        // Refresh DTI page data if tools modified something
+        if (data.toolLog && currentConnectorId) {
+          const hasDtiWrite = data.toolLog.some(e =>
+            e.type === "tool_call" && e.source === "dti" &&
+            !["listConnectors", "getHierarchyLevels", "getModelDatapoints", "listAssets", "getAssetValues"].includes(e.tool)
+          );
+          if (hasDtiWrite) {
+            if (activePage === "hierarchy") loadHierarchy();
+            else if (activePage === "model") loadModel();
+            else if (activePage === "files") loadFiles();
+            else if (activePage === "assets") loadAssets();
+          }
+        }
+      } else {
+        let errMsg = "Fehler";
+        try { const err = await res.json(); errMsg = err.error || errMsg; } catch { /* ignore */ }
+        cwAppendMsg("error", errMsg);
+      }
+    } catch {
+      typing.remove();
+      cwAppendMsg("error", "Netzwerkfehler");
+    }
+
+    cwMessages.scrollTop = cwMessages.scrollHeight;
+    cwSending = false;
+    cwSend.disabled = !cwInput.value.trim();
+  }
+
+  cwForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    cwSendMessage();
+  });
+
+  // --- Keyboard navigation ---
+  cwInput.addEventListener("keydown", (e) => {
+    // Slash menu navigation
+    if (!cwSlashMenu.hidden && cwSlashItems.length) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        cwSlashIndex = (cwSlashIndex + 1) % cwSlashItems.length;
+        cwRenderSlash();
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        cwSlashIndex = (cwSlashIndex - 1 + cwSlashItems.length) % cwSlashItems.length;
+        cwRenderSlash();
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && cwSlashItems.length)) {
+        e.preventDefault();
+        cwSelectSlash(cwSlashIndex);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cwHideSlash();
+        return;
+      }
+    }
+    // Enter to send
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      cwSendMessage();
+    }
+  });
+
+  // --- Clear chat ---
+  cwClear.addEventListener("click", async () => {
+    if (!cwChatId) return;
+    try {
+      await fetch(`/apps/aas-chat/api/messages?chatId=${cwChatId}`, {
+        method: "DELETE",
+        credentials: "same-origin"
+      });
+    } catch { /* ignore */ }
+    cwMessages.innerHTML = "";
+    cwTag.hidden = true;
+  });
+})();

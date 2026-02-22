@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Card Scanner – Workspace</title>
   <link rel="stylesheet" href="/apps/card-scanner/styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -21,6 +22,25 @@
       <span id="brand-text">Card Scanner</span>
     </div>
     <div class="header-spacer"></div>
+    <!-- DTI Connector buttons -->
+    <div id="cs-dti-buttons" class="cs-dti-buttons" hidden>
+      <button id="cs-qr-btn" class="cs-header-btn" type="button" title="QR Code" hidden>
+        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><rect x="20" y="14" width="2" height="2"/><rect x="14" y="20" width="2" height="2"/><rect x="18" y="18" width="4" height="4"/></svg>
+      </button>
+      <button id="cs-sync-btn" class="cs-header-btn" type="button" title="Sync" hidden>
+        <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button id="cs-autosync-btn" class="cs-header-btn cs-autosync-btn" type="button" title="Auto-Sync" hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M8 12l3 3 5-5"/></svg>
+      </button>
+      <a id="cs-docs-btn" class="cs-docs-btn" target="_blank" hidden title="API Docs">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>API Docs</span>
+      </a>
+      <button id="cs-construct-btn" class="cs-header-btn cs-construct-btn" type="button" title="DTI Connector erstellen" hidden>
+        <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      </button>
+    </div>
     <div class="user-menu-wrap">
       <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
         <span id="user-initials">--</span>
@@ -111,6 +131,10 @@
         <h2 id="edit-title">Neue Karte</h2>
       </div>
       <form id="card-form" autocomplete="off">
+        <div class="form-group" id="card-id-group" hidden>
+          <label id="lbl-card-id">Card ID</label>
+          <input id="f-card-id" type="text" disabled class="card-id-input" />
+        </div>
         <div class="form-group">
           <label for="f-name" id="lbl-name">Name</label>
           <input id="f-name" type="text" />
@@ -172,6 +196,44 @@
     </div>
   </dialog>
 
+  <!-- DTI Action Dialog -->
+  <dialog id="dti-dialog" class="confirm-dialog">
+    <p id="dti-dialog-text"></p>
+    <div class="confirm-actions">
+      <button id="dti-dialog-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+      <button id="dti-dialog-ok" class="btn btn-primary" type="button">OK</button>
+    </div>
+  </dialog>
+
+  <!-- QR URL Dialog -->
+  <dialog id="qr-url-dialog" class="confirm-dialog">
+    <p id="qr-url-label">Base-URL eingeben</p>
+    <input id="qr-url-input" type="url" class="qr-url-input" placeholder="https://..." />
+    <div class="confirm-actions">
+      <button id="qr-url-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+      <button id="qr-url-ok" class="btn btn-primary" type="button">Übernehmen</button>
+    </div>
+  </dialog>
+
+  <!-- QR Preview Modal -->
+  <div id="qr-modal" class="image-modal">
+    <div class="image-modal-inner">
+      <div class="image-modal-header">
+        <button id="qr-modal-close" class="webcam-close-btn" type="button">&times;</button>
+      </div>
+      <div class="image-modal-body" style="text-align:center">
+        <div id="qr-modal-canvas"></div>
+        <div class="qr-modal-url-row">
+          <span id="qr-modal-url" class="qr-modal-url"></span>
+          <button id="qr-modal-copy" class="qr-copy-btn" type="button" title="Kopieren">
+            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cs-toast" class="cs-toast" hidden></div>
   <script src="/apps/card-scanner/app.js"></script>
 </body>
 </html>

@@ -35,6 +35,24 @@ const I18N = {
     webcamNoAccess: "Kein Kamerazugriff m\u00f6glich. Bitte Bild hochladen.",
     uploadBtn: "Bild hochladen",
     rawTextLabel: "Erkannter Text",
+    lblCardId: "Card ID",
+    constructConfirm: "DTI Connector f\u00fcr Card Scanner erstellen? Hier\u00fcber k\u00f6nnen deine Visitenkarten \u00fcber die API abgerufen werden.",
+    constructOk: "Erstellen",
+    syncConfirm: "Karten in den DTI Connector \u00fcbertragen/aktualisieren?",
+    syncOk: "Aktualisieren",
+    syncSuccess: "{count} Karte(n) synchronisiert",
+    syncFailed: "Synchronisierung fehlgeschlagen",
+    constructFailed: "Connector konnte nicht erstellt werden",
+    dtiCancel: "Abbrechen",
+    qrUrlLabel: "Base-URL f\u00fcr QR-Code eingeben",
+    qrUrlOk: "\u00dcbernehmen",
+    qrUrlCancel: "Abbrechen",
+    qrUrlInvalid: "Bitte eine g\u00fcltige URL eingeben (https://...)",
+    autosyncEnable: "Auto-Sync aktivieren? Neue Scans werden automatisch in den DTI Connector \u00fcbertragen.",
+    autosyncDisable: "Auto-Sync deaktivieren?",
+    autosyncOn: "Auto-Sync aktiviert",
+    autosyncOff: "Auto-Sync deaktiviert",
+    autosyncOk: "Ja",
   },
   en: {
     brandText: "Card Scanner",
@@ -65,6 +83,24 @@ const I18N = {
     webcamNoAccess: "No camera access. Please upload an image.",
     uploadBtn: "Upload image",
     rawTextLabel: "Recognized text",
+    lblCardId: "Card ID",
+    constructConfirm: "Create a DTI Connector for Card Scanner? This allows your business cards to be accessed via the API.",
+    constructOk: "Create",
+    syncConfirm: "Transfer/update cards to the DTI Connector?",
+    syncOk: "Update",
+    syncSuccess: "{count} card(s) synchronized",
+    syncFailed: "Synchronization failed",
+    constructFailed: "Failed to create connector",
+    dtiCancel: "Cancel",
+    qrUrlLabel: "Enter base URL for QR code",
+    qrUrlOk: "Apply",
+    qrUrlCancel: "Cancel",
+    qrUrlInvalid: "Please enter a valid URL (https://...)",
+    autosyncEnable: "Enable auto-sync? New scans will be automatically transferred to the DTI Connector.",
+    autosyncDisable: "Disable auto-sync?",
+    autosyncOn: "Auto-sync enabled",
+    autosyncOff: "Auto-sync disabled",
+    autosyncOk: "Yes",
   },
 };
 
@@ -80,6 +116,8 @@ let cards = [];
 let editingId = null; // null = new card, string = existing scan_id
 let tesseractWorker = null;
 let pendingImageBase64 = null; // original image kept for saving
+let qrBaseUrl = null;
+let autoSyncEnabled = false;
 
 // ---------------------------------------------------------------------------
 // DOM
@@ -447,8 +485,11 @@ function renderCards() {
 
     const trashSVG = `<button class="card-delete-btn" type="button" title="${esc(t("deleteBtn"))}"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`;
 
+    const qrHTML = (qrBaseUrl && card.card_id) ? `<div class="card-qr-box" data-card-id="${esc(card.card_id)}"></div>` : "";
+
     el.innerHTML = `
       ${thumbHTML}
+      ${qrHTML}
       <div class="card-item">
         <div class="card-item-body">
           <div class="card-item-main">
@@ -469,6 +510,17 @@ function renderCards() {
         openImageModal(card.scan_id);
       });
       loadThumb(thumb, card.scan_id);
+    }
+
+    // QR code box → render QR + click handler
+    const qrBox = el.querySelector(".card-qr-box");
+    if (qrBox) {
+      const fullUrl = qrBaseUrl + card.card_id;
+      new QRCode(qrBox, { text: fullUrl, width: 68, height: 68, colorDark: "#000", colorLight: "#fff", correctLevel: QRCode.CorrectLevel.H });
+      qrBox.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openQrModal(fullUrl);
+      });
     }
 
     // Trash button click → confirm delete
@@ -551,6 +603,7 @@ function openEdit(scanId) {
   pendingImageBase64 = null;
   const rawSection = document.getElementById("raw-text-section");
   const rawDisplay = document.getElementById("raw-text-display");
+  const cardIdGroup = document.getElementById("card-id-group");
   if (scanId) {
     editingId = scanId;
     const card = cards.find((c) => c.scan_id === scanId);
@@ -562,6 +615,13 @@ function openEdit(scanId) {
     document.getElementById("f-email").value = card.email || "";
     document.getElementById("f-website").value = card.website || "";
     document.getElementById("f-address").value = card.address || "";
+    // Show card_id (read-only)
+    if (card.card_id) {
+      document.getElementById("f-card-id").value = card.card_id;
+      cardIdGroup.hidden = false;
+    } else {
+      cardIdGroup.hidden = true;
+    }
     deleteBtn.hidden = true;
     document.getElementById("edit-title").textContent = t("editTitleEdit");
     // Show raw text if available
@@ -576,6 +636,7 @@ function openEdit(scanId) {
     cardForm.reset();
     deleteBtn.hidden = true;
     rawSection.hidden = true;
+    cardIdGroup.hidden = true;
     document.getElementById("edit-title").textContent = t("editTitleNew");
   }
   showView(editView);
@@ -635,10 +696,20 @@ cardForm.addEventListener("submit", async (e) => {
     if (res.ok && res.payload) {
       cards.unshift({
         scan_id: res.payload.scan_id,
+        card_id: res.payload.card_id,
         ...body,
         has_image: pendingImageBase64 ? 1 : 0,
         created_at: new Date().toISOString(),
       });
+      // Auto-sync to DTI Connector
+      if (autoSyncEnabled && csConnectorId) {
+        api("/api/cards/sync-dti", { method: "POST", body: {} }).then((syncRes) => {
+          if (syncRes.ok) {
+            const count = syncRes.payload?.synced || 0;
+            showToast(t("syncSuccess").replace("{count}", count));
+          }
+        });
+      }
     }
     pendingImageBase64 = null;
   }
@@ -826,6 +897,7 @@ function applyLocaleToUI() {
   document.getElementById("confirm-ok").textContent = t("confirmOk");
   document.getElementById("webcam-title").textContent = t("webcamTitle");
   document.getElementById("raw-text-label").textContent = t("rawTextLabel");
+  document.getElementById("lbl-card-id").textContent = t("lblCardId");
   uploadBtn.title = t("uploadBtn");
   logoutBtn.textContent = t("logout");
   renderCards();
@@ -858,6 +930,199 @@ logoutBtn.addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+const csToast = document.getElementById("cs-toast");
+let toastTimer = null;
+function showToast(msg) {
+  csToast.textContent = msg;
+  csToast.hidden = false;
+  requestAnimationFrame(() => csToast.classList.add("visible"));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    csToast.classList.remove("visible");
+    setTimeout(() => { csToast.hidden = true; }, 300);
+  }, 2500);
+}
+
+// ---------------------------------------------------------------------------
+// DTI Connector integration
+// ---------------------------------------------------------------------------
+const csDtiButtons = document.getElementById("cs-dti-buttons");
+const csConstructBtn = document.getElementById("cs-construct-btn");
+const csDocsBtn = document.getElementById("cs-docs-btn");
+const csSyncBtn = document.getElementById("cs-sync-btn");
+const csQrBtn = document.getElementById("cs-qr-btn");
+const csAutosyncBtn = document.getElementById("cs-autosync-btn");
+const dtiDialog = document.getElementById("dti-dialog");
+const dtiDialogText = document.getElementById("dti-dialog-text");
+const dtiDialogCancel = document.getElementById("dti-dialog-cancel");
+const dtiDialogOk = document.getElementById("dti-dialog-ok");
+
+let csConnectorId = null;
+let pendingDtiAction = null; // "construct" | "sync"
+
+function showDtiState(hasConnector, connectorId) {
+  csConnectorId = connectorId || null;
+  csDtiButtons.hidden = false;
+  if (hasConnector) {
+    csConstructBtn.hidden = true;
+    csDocsBtn.hidden = false;
+    csDocsBtn.href = "/apps/dti-connector/docs?connector=" + connectorId;
+    csSyncBtn.hidden = false;
+    csQrBtn.hidden = false;
+    csAutosyncBtn.hidden = false;
+    csAutosyncBtn.classList.toggle("active", autoSyncEnabled);
+  } else {
+    csConstructBtn.hidden = false;
+    csDocsBtn.hidden = true;
+    csSyncBtn.hidden = true;
+    csQrBtn.hidden = true;
+    csAutosyncBtn.hidden = true;
+  }
+}
+
+csConstructBtn.addEventListener("click", () => {
+  pendingDtiAction = "construct";
+  dtiDialogText.textContent = t("constructConfirm");
+  dtiDialogOk.textContent = t("constructOk");
+  dtiDialogCancel.textContent = t("dtiCancel");
+  dtiDialog.showModal();
+});
+
+csSyncBtn.addEventListener("click", () => {
+  pendingDtiAction = "sync";
+  dtiDialogText.textContent = t("syncConfirm");
+  dtiDialogOk.textContent = t("syncOk");
+  dtiDialogCancel.textContent = t("dtiCancel");
+  dtiDialog.showModal();
+});
+
+csAutosyncBtn.addEventListener("click", () => {
+  pendingDtiAction = "autosync-toggle";
+  dtiDialogText.textContent = autoSyncEnabled ? t("autosyncDisable") : t("autosyncEnable");
+  dtiDialogOk.textContent = t("autosyncOk");
+  dtiDialogCancel.textContent = t("dtiCancel");
+  dtiDialog.showModal();
+});
+
+dtiDialogCancel.addEventListener("click", () => {
+  dtiDialog.close();
+  pendingDtiAction = null;
+});
+
+dtiDialogOk.addEventListener("click", async () => {
+  dtiDialog.close();
+  if (pendingDtiAction === "construct") {
+    const res = await api("/api/cards/create-dti-connector", { method: "POST", body: {} });
+    if (res.ok && res.payload) {
+      showDtiState(true, res.payload.connector_id);
+    } else {
+      alert(t("constructFailed"));
+    }
+  } else if (pendingDtiAction === "sync") {
+    csSyncBtn.disabled = true;
+    const res = await api("/api/cards/sync-dti", { method: "POST", body: {} });
+    csSyncBtn.disabled = false;
+    if (res.ok) {
+      const count = res.payload?.synced || 0;
+      showToast(t("syncSuccess").replace("{count}", count));
+    } else {
+      showToast(t("syncFailed"));
+    }
+  } else if (pendingDtiAction === "autosync-toggle") {
+    autoSyncEnabled = !autoSyncEnabled;
+    csAutosyncBtn.classList.toggle("active", autoSyncEnabled);
+    await api("/api/cards/settings/auto-sync", { method: "PUT", body: { auto_sync: autoSyncEnabled } });
+    showToast(autoSyncEnabled ? t("autosyncOn") : t("autosyncOff"));
+  }
+  pendingDtiAction = null;
+});
+
+// ---------------------------------------------------------------------------
+// QR Code feature
+// ---------------------------------------------------------------------------
+const qrUrlDialog = document.getElementById("qr-url-dialog");
+const qrUrlInput = document.getElementById("qr-url-input");
+const qrUrlLabel = document.getElementById("qr-url-label");
+const qrUrlOk = document.getElementById("qr-url-ok");
+const qrUrlCancel = document.getElementById("qr-url-cancel");
+const qrModal = document.getElementById("qr-modal");
+const qrModalCanvas = document.getElementById("qr-modal-canvas");
+const qrModalUrl = document.getElementById("qr-modal-url");
+const qrModalClose = document.getElementById("qr-modal-close");
+
+csQrBtn.addEventListener("click", () => {
+  qrUrlLabel.textContent = t("qrUrlLabel");
+  qrUrlOk.textContent = t("qrUrlOk");
+  qrUrlCancel.textContent = t("qrUrlCancel");
+  qrUrlInput.value = qrBaseUrl || "";
+  qrUrlDialog.showModal();
+  qrUrlInput.focus();
+});
+
+qrUrlCancel.addEventListener("click", () => qrUrlDialog.close());
+
+qrUrlOk.addEventListener("click", async () => {
+  const val = qrUrlInput.value.trim();
+  if (!val) {
+    qrBaseUrl = null;
+    await api("/api/cards/settings/qr-base-url", { method: "PUT", body: { qr_base_url: null } });
+    qrUrlDialog.close();
+    renderCards();
+    return;
+  }
+  if (!/^https?:\/\/.+/i.test(val)) {
+    showToast(t("qrUrlInvalid"));
+    return;
+  }
+  qrBaseUrl = val.endsWith("/") ? val : val + "/";
+  await api("/api/cards/settings/qr-base-url", { method: "PUT", body: { qr_base_url: qrBaseUrl } });
+  qrUrlDialog.close();
+  renderCards();
+});
+
+const qrModalCopy = document.getElementById("qr-modal-copy");
+
+function openQrModal(url) {
+  qrModalCanvas.innerHTML = "";
+  qrModalUrl.textContent = url;
+  qrModalCopy.classList.remove("copied");
+  qrModal.classList.add("active");
+  new QRCode(qrModalCanvas, { text: url, width: 256, height: 256, colorDark: "#000", colorLight: "#fff", correctLevel: QRCode.CorrectLevel.H });
+}
+
+function closeQrModal() {
+  qrModal.classList.remove("active");
+  qrModalCanvas.innerHTML = "";
+  qrModalUrl.textContent = "";
+}
+
+qrModalCopy.addEventListener("click", () => {
+  const url = qrModalUrl.textContent;
+  if (!url) return;
+  navigator.clipboard.writeText(url).then(() => {
+    qrModalCopy.classList.add("copied");
+    setTimeout(() => qrModalCopy.classList.remove("copied"), 1500);
+  });
+});
+
+qrModalClose.addEventListener("click", closeQrModal);
+qrModal.addEventListener("click", (e) => { if (e.target === qrModal) closeQrModal(); });
+
+async function checkDtiConnectorStatus() {
+  try {
+    const res = await api("/api/cards/dti-connector-status");
+    if (res.ok && res.payload) {
+      showDtiState(res.payload.exists, res.payload.connector_id);
+    }
+  } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
 async function init() {
   // Load user (/api/me is on the central path, not app-scoped)
   const meRes = await fetch("/api/me").then((r) => r.json()).catch(() => null);
@@ -871,12 +1136,25 @@ async function init() {
 
   setLocale(locale);
 
+  // Load settings from server
+  const qrRes = await api("/api/cards/settings/qr-base-url");
+  if (qrRes.ok && qrRes.payload?.qr_base_url) {
+    qrBaseUrl = qrRes.payload.qr_base_url;
+  }
+  const asRes = await api("/api/cards/settings/auto-sync");
+  if (asRes.ok && asRes.payload) {
+    autoSyncEnabled = asRes.payload.auto_sync === true;
+  }
+
   // Load cards
   const res = await api("/api/cards");
   if (res.ok && res.payload?.cards) {
     cards = res.payload.cards;
   }
   renderCards();
+
+  // Check DTI connector status
+  checkDtiConnectorStatus();
 }
 
 init();

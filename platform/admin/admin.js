@@ -17,6 +17,7 @@ const AVAILABLE_APPS = [
   { id: "kanban", name: "Kanban Board" },
   { id: "dti-connector", name: "DTI Connector" },
   { id: "card-scanner", name: "Card Scanner" },
+  { id: "aas-chat", name: "AAS Chat" },
 ];
 
 const I18N = {
