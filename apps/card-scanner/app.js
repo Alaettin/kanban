@@ -1032,10 +1032,15 @@ dtiDialogOk.addEventListener("click", async () => {
       showToast(t("syncFailed"));
     }
   } else if (pendingDtiAction === "autosync-toggle") {
-    autoSyncEnabled = !autoSyncEnabled;
-    csAutosyncBtn.classList.toggle("active", autoSyncEnabled);
-    await api("/api/cards/settings/auto-sync", { method: "PUT", body: { auto_sync: autoSyncEnabled } });
-    showToast(autoSyncEnabled ? t("autosyncOn") : t("autosyncOff"));
+    const newVal = !autoSyncEnabled;
+    const saveRes = await api("/api/cards/settings/auto-sync", { method: "PUT", body: { auto_sync: newVal } });
+    if (saveRes.ok) {
+      autoSyncEnabled = newVal;
+      csAutosyncBtn.classList.toggle("active", autoSyncEnabled);
+      showToast(autoSyncEnabled ? t("autosyncOn") : t("autosyncOff"));
+    } else {
+      showToast(t("syncFailed"));
+    }
   }
   pendingDtiAction = null;
 });
