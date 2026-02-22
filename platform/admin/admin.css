@@ -461,3 +461,53 @@ body {
   .admin-table-wrap { overflow-x: auto; }
   .admin-table { min-width: 700px; }
 }
+
+@media (max-width: 600px) {
+  .admin-header { padding: 0 0.75rem; height: 52px; }
+  .admin-title { font-size: 0.95rem; }
+  .admin-main { padding: 0.75rem 0.75rem 5rem; }
+  .admin-search { max-width: none; font-size: 16px; }
+
+  .admin-table-wrap {
+    border: none; box-shadow: none;
+    background: transparent; overflow: visible;
+  }
+  .admin-table { min-width: 0; }
+  .admin-table thead { display: none; }
+  .admin-table tbody { display: flex; flex-direction: column; gap: 10px; }
+
+  .admin-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "user actions"
+      "role role"
+      "apps apps";
+    gap: 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .admin-table td { padding: 0; border-bottom: none; }
+  .td-user { grid-area: user; }
+  .td-role { grid-area: role; }
+  .td-apps { grid-area: apps; }
+  .td-created { display: none; }
+  .td-actions { grid-area: actions; align-self: start; }
+
+  .user-avatar { width: 28px; height: 28px; font-size: 0.6rem; }
+  .user-name { font-size: 0.84rem; }
+  .user-email { font-size: 0.72rem; }
+  .role-select { font-size: 0.78rem; }
+  .app-toggles { gap: 0.75rem 1rem; }
+  .app-toggle { font-size: 0.78rem; }
+
+  .save-bar { padding: 0.6rem 0.75rem; gap: 0.75rem; }
+  #save-bar-text { font-size: 0.8rem; }
+  .save-bar .btn { font-size: 0.78rem; padding: 0.4rem 0.7rem; }
+
+  .modal-dialog { padding: 1.25rem; }
+}

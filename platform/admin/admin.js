@@ -224,6 +224,7 @@ function renderUsers() {
 
     // User cell
     const tdUser = document.createElement("td");
+    tdUser.className = "td-user";
     tdUser.innerHTML = `
       <div class="user-cell">
         <div class="user-avatar">${getInitials(u.name)}</div>
@@ -236,6 +237,7 @@ function renderUsers() {
 
     // Role cell
     const tdRole = document.createElement("td");
+    tdRole.className = "td-role";
     if (u.isSuperadmin) {
       tdRole.innerHTML = `<span class="role-badge role-badge-superadmin">${t("superadmin")}</span>`;
     } else {
@@ -250,6 +252,7 @@ function renderUsers() {
 
     // App access cell
     const tdApps = document.createElement("td");
+    tdApps.className = "td-apps";
     if (u.isSuperadmin) {
       tdApps.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">-</span>';
     } else {
@@ -275,12 +278,13 @@ function renderUsers() {
 
     // Created cell
     const tdCreated = document.createElement("td");
-    tdCreated.className = "created-date";
+    tdCreated.className = "created-date td-created";
     tdCreated.textContent = formatDate(u.createdAt);
     tr.appendChild(tdCreated);
 
     // Actions cell
     const tdActions = document.createElement("td");
+    tdActions.className = "td-actions";
     if (u.isSuperadmin) {
       tdActions.innerHTML = "";
     } else {
