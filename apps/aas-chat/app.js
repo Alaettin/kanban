@@ -1207,60 +1207,43 @@ function autoResize() {
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let isRecording = false;
+let micPreText = "";
 
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
-  recognition.continuous = true;
+  recognition.continuous = false;
   recognition.interimResults = true;
-  recognition.lang = locale === "de" ? "de-DE" : "en-US";
-
-  let preRecordText = "";
-  let finalTranscript = "";
 
   recognition.onresult = (e) => {
-    let interim = "";
-    finalTranscript = "";
-    for (let i = 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript;
-      } else {
-        interim += e.results[i][0].transcript;
-      }
-    }
-    const sep = preRecordText && !preRecordText.endsWith(" ") ? " " : "";
-    chatInput.value = preRecordText + sep + finalTranscript + interim;
+    const result = e.results[0];
+    const transcript = result[0].transcript;
+    const sep = micPreText && !micPreText.endsWith(" ") ? " " : "";
+    chatInput.value = micPreText + sep + transcript;
     autoResize();
   };
 
   recognition.onend = () => {
-    if (isRecording) {
-      // Browser stopped unexpectedly — restart
-      recognition.start();
-    }
+    if (isRecording) stopRecording();
   };
 
-  recognition.onerror = (e) => {
-    if (e.error !== "aborted" && e.error !== "no-speech") {
-      stopRecording();
-    }
+  recognition.onerror = () => {
+    if (isRecording) stopRecording();
   };
 }
 
 function startRecording() {
   if (!recognition) return;
   recognition.lang = locale === "de" ? "de-DE" : "en-US";
-  preRecordText = chatInput.value;
-  finalTranscript = "";
+  micPreText = chatInput.value;
   isRecording = true;
   recognition.start();
   micBtn.classList.add("recording");
 }
 
 function stopRecording() {
-  if (!recognition) return;
   isRecording = false;
-  recognition.stop();
   micBtn.classList.remove("recording");
+  try { recognition.stop(); } catch {}
   autoResize();
 }
 
