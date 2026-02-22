@@ -4,6 +4,7 @@ const emptyState = document.getElementById("empty-state");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
+const micBtn = document.getElementById("mic-btn");
 const clearChatInline = document.getElementById("clear-chat-inline");
 const consoleToggleBtn = document.getElementById("console-toggle");
 const devConsole = document.getElementById("dev-console");
@@ -94,6 +95,8 @@ const I18N = {
     errInvalidKey: "Ungültiger API-Schlüssel. Bitte in den Einstellungen prüfen.",
     errRateLimit: "Zu viele Anfragen. Bitte kurz warten.",
     errGeneric: "Fehler bei der KI-Anfrage. Bitte später erneut versuchen.",
+    micTitle: "Spracheingabe",
+    micNotSupported: "Spracheingabe wird von diesem Browser nicht unterstützt.",
   },
   en: {
     brandText: "AAS Chat",
@@ -132,6 +135,8 @@ const I18N = {
     errInvalidKey: "Invalid API key. Please check in settings.",
     errRateLimit: "Too many requests. Please wait a moment.",
     errGeneric: "AI request failed. Please try again later.",
+    micTitle: "Voice input",
+    micNotSupported: "Voice input is not supported by this browser.",
   },
 };
 
@@ -1197,6 +1202,79 @@ function autoResize() {
   chatInput.style.height = Math.min(chatInput.scrollHeight, maxH) + "px";
   sendBtn.disabled = isWaiting || !chatInput.value.trim();
 }
+
+// === Speech-to-text ===
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isRecording = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = locale === "de" ? "de-DE" : "en-US";
+
+  let preRecordText = "";
+  let finalTranscript = "";
+
+  recognition.onresult = (e) => {
+    let interim = "";
+    finalTranscript = "";
+    for (let i = 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        finalTranscript += e.results[i][0].transcript;
+      } else {
+        interim += e.results[i][0].transcript;
+      }
+    }
+    const sep = preRecordText && !preRecordText.endsWith(" ") ? " " : "";
+    chatInput.value = preRecordText + sep + finalTranscript + interim;
+    autoResize();
+  };
+
+  recognition.onend = () => {
+    if (isRecording) {
+      // Browser stopped unexpectedly — restart
+      recognition.start();
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error !== "aborted" && e.error !== "no-speech") {
+      stopRecording();
+    }
+  };
+}
+
+function startRecording() {
+  if (!recognition) return;
+  recognition.lang = locale === "de" ? "de-DE" : "en-US";
+  preRecordText = chatInput.value;
+  finalTranscript = "";
+  isRecording = true;
+  recognition.start();
+  micBtn.classList.add("recording");
+}
+
+function stopRecording() {
+  if (!recognition) return;
+  isRecording = false;
+  recognition.stop();
+  micBtn.classList.remove("recording");
+  autoResize();
+}
+
+micBtn.addEventListener("click", () => {
+  if (!recognition) {
+    alert(t("micNotSupported"));
+    return;
+  }
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
 
 // === Settings ===
 function updateModelDropdown(provider, selectedModel) {

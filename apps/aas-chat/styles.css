@@ -551,6 +551,29 @@ body.sidebar-collapsed .chat-list { display: none; }
 }
 .clear-chat-inline:hover { color: var(--danger); background: rgba(239, 68, 68, 0.08); }
 
+/* Mic button */
+.mic-btn {
+  width: 32px; height: 32px; border-radius: 50%; border: none;
+  background: transparent; color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all var(--transition);
+}
+.mic-btn svg {
+  width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.mic-btn:hover { color: var(--accent); background: var(--accent-light); }
+.mic-btn.recording {
+  color: #fff;
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+  animation: mic-pulse 1.5s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.15); }
+}
+
 /* Send button */
 .send-btn {
   width: 32px; height: 32px; border-radius: 50%; border: none;
