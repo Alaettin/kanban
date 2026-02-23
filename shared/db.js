@@ -11,6 +11,7 @@ function open(dbPath) {
   }
   db = new sqlite3.Database(dbPath);
   db.run("PRAGMA foreign_keys = ON");
+  db.run("PRAGMA journal_mode = WAL");
   return db;
 }
 
