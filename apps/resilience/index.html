@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resilience – Workspace</title>
-  <link rel="stylesheet" href="/apps/resilience/styles.css?v=2" />
+  <link rel="stylesheet" href="/apps/resilience/styles.css?v=14" />
 </head>
 <body>
   <header class="app-header">
@@ -18,6 +18,10 @@
       <span id="brand-text">Resilience</span>
     </div>
     <div class="header-spacer"></div>
+    <div id="global-import-status" class="global-import-status" hidden>
+      <div class="global-import-bar-track"><div class="global-import-bar" id="global-import-bar"></div></div>
+      <span id="global-import-text" class="global-import-text">0/0</span>
+    </div>
     <div class="user-menu-wrap">
       <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
         <span id="user-initials">--</span>
@@ -162,10 +166,116 @@
 
       <!-- Indicators Page -->
       <section id="page-indicators" class="page-section">
-        <div class="page-inner">
+        <div class="page-inner page-inner-wide">
           <div class="page-header">
             <h2 id="indicators-title">Indikatoren</h2>
-            <p id="indicators-desc">Überwache Resilienz-Indikatoren deiner Lieferkette.</p>
+            <p id="indicators-desc">Definiere Resilienz-Indikatoren für deine Lieferkette.</p>
+          </div>
+
+          <!-- List View -->
+          <div id="ind-list-view">
+            <div class="model-toolbar">
+              <div class="model-search-wrap">
+                <svg class="model-search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input id="ind-search" class="model-search" type="text" placeholder="Suchen…" />
+              </div>
+              <span id="ind-count" class="model-count"></span>
+              <button id="ind-add-btn" class="btn btn-primary btn-sm-text" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span id="ind-add-label">Hinzufügen</span>
+              </button>
+            </div>
+            <div class="model-table-wrap">
+              <table class="model-table" id="ind-table">
+                <thead>
+                  <tr>
+                    <th id="ind-th-name">Name</th>
+                    <th id="ind-th-class">Klasse</th>
+                    <th id="ind-th-input">Input</th>
+                    <th id="ind-th-rules">Regeln</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="ind-tbody"></tbody>
+              </table>
+            </div>
+            <div id="ind-empty" class="model-empty" hidden>
+              <p id="ind-empty-text">Noch keine Indikatoren definiert.</p>
+            </div>
+          </div>
+
+          <!-- Detail / Edit View -->
+          <div id="ind-detail-view" hidden>
+            <button id="ind-back-btn" class="news-back-btn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              <span id="ind-back-label">Zurück</span>
+            </button>
+
+            <div class="ind-form">
+              <div class="ind-form-grid">
+                <div class="ind-field">
+                  <label id="ind-name-label" for="ind-name">Name</label>
+                  <input id="ind-name" type="text" class="ind-input" placeholder="Indikator-Name" />
+                </div>
+                <div class="ind-field">
+                  <label id="ind-class-label" for="ind-class-select">Klasse</label>
+                  <select id="ind-class-select" class="settings-select"></select>
+                </div>
+                <div class="ind-field">
+                  <label id="ind-input-type-label" for="ind-input-type">Input-Typ</label>
+                  <select id="ind-input-type" class="settings-select">
+                    <option value="number">Zahl</option>
+                    <option value="text">Text</option>
+                    <option value="boolean">Boolean</option>
+                  </select>
+                </div>
+                <div class="ind-field">
+                  <label id="ind-input-label-label" for="ind-input-label">Input-Bezeichnung</label>
+                  <input id="ind-input-label" type="text" class="ind-input" placeholder="z.B. Magnitude" />
+                </div>
+              </div>
+
+              <div class="ind-section">
+                <h3 id="ind-groups-title">Regelgruppen</h3>
+                <p id="ind-groups-desc" class="ind-section-desc">ODER-verknüpft — erste zutreffende Gruppe bestimmt die Ausgabe.</p>
+              </div>
+              <div id="ind-groups-container"></div>
+              <button id="ind-add-group-btn" class="btn btn-secondary btn-sm-text ind-add-group-btn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span id="ind-add-group-label">ODER-Gruppe hinzufügen</span>
+              </button>
+
+              <div class="ind-section">
+                <h3 id="ind-default-title">Standard-Ausgabe</h3>
+                <p id="ind-default-desc" class="ind-section-desc">Wird verwendet wenn keine Gruppe zutrifft.</p>
+              </div>
+              <div class="ind-default-row">
+                <div class="ind-field-sm">
+                  <label id="ind-default-label-label">Label</label>
+                  <input id="ind-default-label" type="text" class="ind-input" />
+                </div>
+                <div class="ind-field-sm ind-field-color">
+                  <label id="ind-default-color-label">Farbe</label>
+                  <input id="ind-default-color" type="color" class="ind-color-input" value="#9ca3af" />
+                </div>
+                <div class="ind-field-sm">
+                  <label id="ind-default-score-label">Score</label>
+                  <input id="ind-default-score" type="number" class="ind-input ind-score-input" value="0" />
+                </div>
+              </div>
+
+              <div id="ind-detail-hint" class="settings-hint" hidden></div>
+
+              <div class="ind-actions">
+                <button id="ind-delete-btn" class="btn btn-danger btn-sm" type="button" hidden>
+                  <span id="ind-delete-label">Löschen</span>
+                </button>
+                <div class="settings-actions-spacer"></div>
+                <button id="ind-save-btn" class="btn btn-primary" type="button">
+                  <span id="ind-save-label">Speichern</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -263,10 +373,335 @@
 
       <!-- AAS Data Page -->
       <section id="page-aas-data" class="page-section">
-        <div class="page-inner">
+        <div class="page-inner page-inner-wider">
           <div class="page-header">
             <h2 id="aas-data-title">AAS Daten</h2>
             <p id="aas-data-desc">Verwaltungsschalen-Daten zu Lieferanten, Produkten und Materialien.</p>
+          </div>
+
+          <div class="docs-layout">
+            <!-- Internal Navigation -->
+            <nav class="docs-nav" id="aas-data-nav">
+              <button class="docs-nav-item active" data-aas-nav="overview" id="aas-nav-btn-overview" type="button">Übersicht</button>
+              <button class="docs-nav-item" data-aas-nav="sources" id="aas-nav-btn-sources" type="button">Quellen</button>
+              <button class="docs-nav-item" data-aas-nav="groups" id="aas-nav-btn-groups" type="button">Gruppen</button>
+              <button class="docs-nav-item" data-aas-nav="assign" id="aas-nav-btn-assign" type="button">Zuordnung</button>
+            </nav>
+
+            <div class="aas-data-content">
+              <!-- ═══ Overview Section ═══ -->
+              <div id="aas-nav-overview">
+                <!-- Overview List -->
+                <div id="aas-overview-list">
+                  <div class="model-toolbar">
+                    <div class="model-search-wrap">
+                      <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <input id="aas-ov-search" class="model-search" type="text" placeholder="Suchen…" data-i18n-placeholder="aasOvSearch" />
+                    </div>
+                    <button id="aas-ov-import-btn" class="aas-import-btn" type="button">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      <span id="aas-ov-import-label">Import</span>
+                    </button>
+                    <span id="aas-ov-count" class="model-count"></span>
+                  </div>
+                  <div class="model-table-wrap">
+                    <table class="model-table" id="aas-ov-table">
+                      <thead>
+                        <tr>
+                          <th id="aas-ov-th-aasid">AAS ID</th>
+                          <th></th>
+                          <th id="aas-ov-th-source">Quelle</th>
+                          <th id="aas-ov-th-group">Gruppe</th>
+                          <th id="aas-ov-th-imported">Letzter Import</th>
+                          <th></th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="aas-ov-tbody"></tbody>
+                    </table>
+                  </div>
+                  <div id="aas-ov-empty" class="model-empty">Keine AAS IDs vorhanden. Füge Quellen und IDs hinzu.</div>
+                  <div id="aas-ov-pagination" class="news-pagination"></div>
+                </div>
+
+                <!-- Overview Detail (Shell + Submodels) -->
+                <div id="aas-overview-detail" hidden>
+                  <button id="aas-ov-back-btn" class="news-back-btn" type="button">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span id="aas-ov-back-label">Zurück</span>
+                  </button>
+
+                  <!-- Progress Bar -->
+                  <div class="aas-progress" id="aas-progress" hidden>
+                    <div class="aas-progress-track"><div class="aas-progress-bar" id="aas-progress-bar"></div></div>
+                    <span class="aas-progress-text" id="aas-progress-text">0/0</span>
+                  </div>
+
+                  <!-- Shell Info -->
+                  <div id="aas-shell-info" class="aas-shell-card"></div>
+
+                  <!-- Submodels Container -->
+                  <div id="aas-submodels-container"></div>
+                </div>
+              </div>
+
+              <!-- ═══ Sources Section ═══ -->
+              <div id="aas-nav-sources" hidden>
+                <!-- List View -->
+                <div id="src-list-view">
+                  <div class="model-toolbar">
+                    <div class="model-search-wrap">
+                      <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <input id="src-search" class="model-search" type="text" placeholder="Suchen…" data-i18n-placeholder="srcSearch" />
+                    </div>
+                    <span id="src-count" class="model-count"></span>
+                    <button id="src-add-btn" class="btn btn-primary btn-sm-text" type="button">
+                      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      <span id="src-add-label">Hinzufügen</span>
+                    </button>
+                  </div>
+                  <div class="model-table-wrap">
+                    <table class="model-table" id="src-table">
+                      <thead>
+                        <tr>
+                          <th id="src-th-name">Name</th>
+                          <th id="src-th-url">Basis-URL</th>
+                          <th id="src-th-ids">IDs</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="src-tbody"></tbody>
+                    </table>
+                  </div>
+                  <div id="src-empty" class="model-empty">Noch keine Quellen definiert.</div>
+                  <div id="src-pagination" class="news-pagination"></div>
+                </div>
+
+                <!-- Detail / Edit View -->
+                <div id="src-detail-view" hidden>
+                  <button id="src-back-btn" class="news-back-btn" type="button">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span id="src-back-label">Zurück</span>
+                  </button>
+
+                  <div class="src-form">
+                    <div class="src-form-grid">
+                      <div class="ind-field">
+                        <label id="src-lbl-name" for="src-name">Name</label>
+                        <input id="src-name" class="ind-input" type="text" />
+                      </div>
+                      <div class="ind-field">
+                        <label id="src-lbl-url" for="src-url">Basis-URL</label>
+                        <input id="src-url" class="ind-input" type="url" placeholder="https://aas-server.example.com/api/v3.0" />
+                      </div>
+                    </div>
+
+                    <!-- IDs Section with Tabs (hidden until source is saved) -->
+                    <div id="src-ids-section" class="src-section" hidden>
+                      <div class="src-tabs">
+                        <button class="src-tab active" data-tab="all" id="src-tab-all">Alle</button>
+                        <button class="src-tab" data-tab="aas" id="src-tab-aas">AAS IDs</button>
+                        <button class="src-tab" data-tab="item" id="src-tab-item">Item IDs</button>
+                      </div>
+                      <div class="model-search-wrap" style="margin:0.5rem 0">
+                        <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input id="src-id-search" class="model-search" type="text" placeholder="Suchen…" data-i18n-placeholder="srcIdSearch" />
+                      </div>
+
+                      <!-- Tab: Alle -->
+                      <div class="src-tab-content active" id="src-tab-content-all">
+                        <ul id="src-id-list-all" class="src-id-list"></ul>
+                        <div id="src-id-empty-all" class="src-id-empty">Noch keine IDs hinzugefügt.</div>
+                        <div id="src-id-pag-all" class="news-pagination"></div>
+                        <button id="src-delete-all-ids-btn" class="btn btn-danger btn-sm-text" type="button" hidden>
+                          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          <span id="src-delete-all-ids-label">Alle löschen</span>
+                        </button>
+                      </div>
+
+                      <!-- Tab: AAS IDs -->
+                      <div class="src-tab-content" id="src-tab-content-aas">
+                        <div class="src-id-add-row">
+                          <input id="src-aas-input" class="ind-input" type="text" placeholder="https://example.com/aas/Pump-001" />
+                          <button id="src-aas-add-btn" class="btn btn-primary btn-sm-text" type="button">
+                            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            <span id="src-aas-add-label">Hinzufügen</span>
+                          </button>
+                        </div>
+                        <ul id="src-id-list-aas" class="src-id-list"></ul>
+                        <div id="src-id-empty-aas" class="src-id-empty">Noch keine AAS IDs hinzugefügt.</div>
+                        <div id="src-id-pag-aas" class="news-pagination"></div>
+                      </div>
+
+                      <!-- Tab: Item IDs -->
+                      <div class="src-tab-content" id="src-tab-content-item">
+                        <div class="ind-field" style="margin-bottom: 0.5rem;">
+                          <label id="src-prefix-label" for="src-prefix-input">Prefix</label>
+                          <input id="src-prefix-input" class="ind-input" type="text" placeholder="https://example.com/aas/" />
+                        </div>
+                        <div class="src-id-add-row">
+                          <input id="src-item-input" class="ind-input" type="text" placeholder="Pump-001" />
+                          <button id="src-item-add-btn" class="btn btn-primary btn-sm-text" type="button">
+                            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            <span id="src-item-add-label">Hinzufügen</span>
+                          </button>
+                        </div>
+                        <div class="src-id-add-row" style="margin-top: 0.4rem;">
+                          <input id="src-import-url" class="ind-input" type="url" placeholder="https://api.example.com/item-ids" />
+                          <button id="src-import-btn" class="btn btn-secondary btn-sm-text" type="button">
+                            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span id="src-import-label">Importieren</span>
+                          </button>
+                        </div>
+                        <ul id="src-id-list-item" class="src-id-list"></ul>
+                        <div id="src-id-empty-item" class="src-id-empty">Noch keine Item IDs hinzugefügt.</div>
+                        <div id="src-id-pag-item" class="news-pagination"></div>
+                      </div>
+
+                      <div id="src-id-hint" class="settings-hint" hidden></div>
+                    </div>
+
+                    <!-- Available Endpoints (collapsible) -->
+                    <div id="src-endpoints-section" class="src-section" hidden>
+                      <button class="src-collapsible-header" id="src-endpoints-toggle" type="button">
+                        <span id="src-endpoints-title">Verfügbare Endpunkte</span>
+                        <svg class="src-collapsible-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                      <div class="src-collapsible-body" id="src-endpoints-body" hidden>
+                        <ul class="src-endpoint-list">
+                          <li><code>getShell</code> <span class="src-ep-params">(aasId)</span></li>
+                          <li><code>getAssetInformation</code> <span class="src-ep-params">(aasId)</span></li>
+                          <li><code>getSubmodelRefs</code> <span class="src-ep-params">(aasId)</span></li>
+                          <li><code>getSubmodel</code> <span class="src-ep-params">(aasId, submodelId)</span></li>
+                          <li><code>getSubmodelElement</code> <span class="src-ep-params">(submodelId, idShortPath)</span></li>
+                          <li><code>getThumbnail</code> <span class="src-ep-params">(aasId)</span></li>
+                          <li><code>getAttachment</code> <span class="src-ep-params">(submodelId, idShortPath)</span></li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="ind-actions">
+                      <button id="src-delete-btn" class="btn btn-danger" type="button" hidden>Löschen</button>
+                      <button id="src-save-btn" class="btn btn-primary" type="button">Speichern</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ═══ Gruppen (simple CRUD) ═══ -->
+              <div id="aas-nav-groups" hidden>
+                <!-- List -->
+                <div id="grp-list-view">
+                  <div class="model-toolbar">
+                    <div class="model-search-wrap">
+                      <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <input id="grp-search" class="model-search" type="text" placeholder="Gruppen suchen…" />
+                    </div>
+                    <span id="grp-count" class="model-count"></span>
+                    <button id="grp-add-btn" class="btn btn-primary btn-sm-text" type="button">
+                      <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      <span id="grp-add-label">Hinzufügen</span>
+                    </button>
+                  </div>
+                  <div class="model-table-wrap">
+                    <table class="model-table">
+                      <thead><tr><th id="grp-th-name">Name</th><th id="grp-th-count">AAS IDs</th><th></th></tr></thead>
+                      <tbody id="grp-tbody"></tbody>
+                    </table>
+                  </div>
+                  <div id="grp-empty" class="news-empty" hidden><p id="grp-empty-text">Noch keine Gruppen vorhanden.</p></div>
+                  <div id="grp-pagination" class="news-pagination"></div>
+                </div>
+                <!-- Detail -->
+                <div id="grp-detail-view" hidden>
+                  <button id="grp-back-btn" class="btn btn-ghost btn-sm-text" type="button" style="margin-bottom:0.75rem">
+                    <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span id="grp-back-label">Zurück</span>
+                  </button>
+                  <div class="ind-field" style="margin-bottom:1rem">
+                    <label id="grp-name-label" for="grp-name-input">Name</label>
+                    <input id="grp-name-input" class="ind-input" type="text" />
+                  </div>
+                  <div id="grp-hint" class="settings-hint" hidden></div>
+                  <div class="grp-actions">
+                    <button id="grp-save-btn" class="btn btn-primary btn-sm-text" type="button">
+                      <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                      <span id="grp-save-label">Speichern</span>
+                    </button>
+                    <button id="grp-delete-btn" class="btn btn-danger btn-sm-text" type="button" hidden>
+                      <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                      <span id="grp-delete-label">Löschen</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ═══ Zuordnung (group picker + dual panel) ═══ -->
+              <div id="aas-nav-assign" hidden>
+                <div class="ind-field" style="margin-bottom:1rem">
+                  <label id="assign-grp-label">Gruppe</label>
+                  <select id="assign-grp-select" class="ind-input"></select>
+                </div>
+                <div id="assign-hint" class="settings-hint" hidden></div>
+
+                <div id="assign-content" hidden>
+                  <div class="grp-assign">
+                    <!-- ── Available panel ── -->
+                    <div class="grp-assign-panel">
+                      <div class="grp-panel-header">
+                        <div class="grp-panel-title" id="grp-avail-title">Verfügbar</div>
+                        <select id="grp-source-filter" class="ind-input grp-source-select"></select>
+                        <div class="model-search-wrap">
+                          <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                          <input id="grp-avail-search" class="model-search" type="text" placeholder="Verfügbare suchen…" />
+                        </div>
+                      </div>
+                      <div class="grp-panel-main">
+                        <ul id="grp-avail-list" class="grp-id-list"></ul>
+                        <div id="grp-avail-empty" class="grp-panel-empty" hidden>Keine verfügbaren AAS IDs.</div>
+                      </div>
+                      <div class="grp-panel-footer">
+                        <button id="grp-add-all-btn" class="btn btn-secondary btn-sm-text" type="button">
+                          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                          <span id="grp-add-all-label">Alle hinzufügen</span>
+                        </button>
+                        <div id="grp-avail-pag" class="news-pagination" style="margin:0"></div>
+                      </div>
+                    </div>
+                    <!-- ── Assigned panel ── -->
+                    <div class="grp-assign-panel">
+                      <div class="grp-panel-header">
+                        <div class="grp-panel-title" id="grp-assigned-title">Zugeordnet</div>
+                        <div class="model-search-wrap">
+                          <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                          <input id="grp-assigned-search" class="model-search" type="text" placeholder="Zugeordnete suchen…" />
+                        </div>
+                      </div>
+                      <div class="grp-panel-main">
+                        <ul id="grp-assigned-list" class="grp-id-list"></ul>
+                        <div id="grp-assigned-empty" class="grp-panel-empty" hidden>Keine AAS IDs zugeordnet.</div>
+                      </div>
+                      <div class="grp-panel-footer">
+                        <button id="grp-remove-all-btn" class="btn btn-danger btn-sm-text" type="button">
+                          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          <span id="grp-remove-all-label">Alle entfernen</span>
+                        </button>
+                        <div id="grp-assigned-pag" class="news-pagination" style="margin:0"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="grp-actions">
+                    <button id="assign-save-btn" class="btn btn-primary btn-sm-text" type="button">
+                      <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                      <span id="assign-save-label">Speichern</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       </section>
@@ -417,6 +852,17 @@
             </div>
 
             <div class="settings-row">
+              <label id="gdacs-retention-label" for="gdacs-retention-select">Aufbewahrung</label>
+              <select id="gdacs-retention-select" class="settings-select">
+                <option value="7">7 Tage</option>
+                <option value="14">14 Tage</option>
+                <option value="30" selected>30 Tage</option>
+                <option value="60">60 Tage</option>
+                <option value="90">90 Tage</option>
+              </select>
+            </div>
+
+            <div class="settings-row">
               <label id="gdacs-refresh-label" for="gdacs-refresh-select">Abruf-Intervall</label>
               <select id="gdacs-refresh-select" class="settings-select">
                 <option value="15">15 Min.</option>
@@ -437,6 +883,44 @@
               </button>
             </div>
           </div>
+
+          <!-- AAS Import Settings Card -->
+          <div class="settings-card">
+            <h3 id="import-settings-title">AAS Import</h3>
+            <div class="settings-row">
+              <label id="import-interval-label" for="import-interval-select">Auto-Import Intervall</label>
+              <select id="import-interval-select" class="settings-select">
+                <option value="0">Aus</option>
+                <option value="6">6 Std.</option>
+                <option value="12">12 Std.</option>
+                <option value="24">24 Std.</option>
+              </select>
+            </div>
+            <div class="settings-actions">
+              <div class="settings-actions-spacer"></div>
+              <button id="import-settings-save-btn" class="btn btn-primary" type="button">
+                <span id="import-settings-save-label">Speichern</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Indicator Classes Settings Card -->
+          <div class="settings-card">
+            <h3 id="ind-classes-title">Indikator-Klassen</h3>
+
+            <div class="feed-add-row">
+              <input id="ind-class-input" class="feed-url-input" type="text" placeholder="Klasse eingeben…" />
+              <button id="ind-class-add-btn" class="btn btn-primary btn-sm" type="button">
+                <span id="ind-class-add-label">Hinzufügen</span>
+              </button>
+            </div>
+            <div id="ind-class-hint" class="settings-hint" hidden></div>
+
+            <div id="ind-class-list" class="feed-list"></div>
+            <div id="ind-class-list-empty" class="feed-list-empty" hidden>
+              <span id="ind-class-empty-label">Noch keine Klassen definiert.</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -450,6 +934,7 @@
           <div class="docs-layout">
             <nav class="docs-nav" id="docs-nav">
               <button class="docs-nav-item active" data-doc="overview" type="button">Übersicht</button>
+              <button class="docs-nav-item" data-doc="indicators" type="button">Indikatoren</button>
               <button class="docs-nav-item" data-doc="news-feeds" type="button">News Feeds</button>
               <button class="docs-nav-item" data-doc="gdacs-search" type="button">GDACS Suche</button>
               <button class="docs-nav-item" data-doc="gdacs-alerts" type="button">GDACS Alerts</button>
@@ -463,6 +948,6 @@
     </main>
   </div>
 
-  <script src="/apps/resilience/app.js?v=2"></script>
+  <script src="/apps/resilience/app.js?v=13"></script>
 </body>
 </html>

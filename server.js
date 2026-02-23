@@ -471,6 +471,7 @@ async function start() {
   await aasChatRoutes.initAasChatTables();
   await kbRoutes.initKnowledgeBaseTables();
   await resilienceRoutes.initResilienceTables();
+  resilienceRoutes.scheduleImports();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically
