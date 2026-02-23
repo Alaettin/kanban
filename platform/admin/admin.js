@@ -24,6 +24,7 @@ const AVAILABLE_APPS = [
   { id: "card-scanner", name: "Card Scanner" },
   { id: "aas-chat", name: "AAS Chat" },
   { id: "knowledge-base", name: "Knowledge Base" },
+  { id: "resilience", name: "Resilience" },
 ];
 
 const I18N = {

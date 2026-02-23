@@ -810,6 +810,17 @@ function mountRoutes(router) {
     }
   });
 
+  router.delete("/api/connectors/:connectorId/assets", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
+    const cid = req.connector.connector_id;
+    try {
+      await db.run("DELETE FROM dti_asset_values WHERE connector_id = ?", [cid]);
+      await db.run("DELETE FROM dti_assets WHERE connector_id = ?", [cid]);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to delete assets" });
+    }
+  });
+
   router.delete("/api/connectors/:connectorId/assets/:assetId", auth.requireAuth, resolveConnector, requireRole("owner", "editor"), async (req, res) => {
     const cid = req.connector.connector_id;
     const assetId = req.params.assetId;

@@ -197,6 +197,12 @@ const I18N = {
     assetsDeleteConfirmTitle: "Asset löschen",
     assetsDeleteConfirmMsg: "Soll das Asset \"{name}\" wirklich gelöscht werden? Alle zugehörigen Werte gehen verloren.",
     assetsDeleteConfirmOk: "Löschen",
+    assetsDeleteAllLabel: "Alle löschen",
+    assetsDeleteAllConfirmTitle: "Alle Assets löschen?",
+    assetsDeleteAllConfirmMsg: "Alle {count} Assets und deren Werte werden unwiderruflich gelöscht.",
+    assetsDeleteAllConfirmOk: "Alle löschen",
+    assetsDeleteAllSuccess: "Alle Assets gelöscht.",
+    assetsDeleteAllError: "Fehler beim Löschen aller Assets.",
     assetsExportEmpty: "Keine Assets zum Exportieren vorhanden.",
     assetsExportError: "Fehler beim Exportieren.",
     assetsImported: "{count} Assets importiert ({skipped} übersprungen).",
@@ -359,6 +365,12 @@ const I18N = {
     assetsDeleteConfirmTitle: "Delete asset",
     assetsDeleteConfirmMsg: "Are you sure you want to delete the asset \"{name}\"? All associated values will be lost.",
     assetsDeleteConfirmOk: "Delete",
+    assetsDeleteAllLabel: "Delete all",
+    assetsDeleteAllConfirmTitle: "Delete all assets?",
+    assetsDeleteAllConfirmMsg: "All {count} assets and their values will be permanently deleted.",
+    assetsDeleteAllConfirmOk: "Delete all",
+    assetsDeleteAllSuccess: "All assets deleted.",
+    assetsDeleteAllError: "Failed to delete all assets.",
     assetsExportEmpty: "No assets to export.",
     assetsExportError: "Export failed.",
     assetsImported: "{count} assets imported ({skipped} skipped).",
@@ -544,6 +556,7 @@ function applyLocaleToUI() {
   document.getElementById("assets-desc").textContent = t("assetsDesc");
   document.getElementById("assets-chars-label").textContent = t("allowedCharsLabel");
   document.getElementById("assets-add-label").textContent = t("assetsAdd");
+  document.getElementById("assets-delete-all-label").textContent = t("assetsDeleteAllLabel");
   document.getElementById("assets-search").placeholder = t("assetsSearch");
   document.getElementById("assets-col-id-label").textContent = t("assetsColId");
   document.getElementById("assets-back-label").textContent = t("assetsBack");
@@ -1531,7 +1544,9 @@ confirmCancelBtn.addEventListener("click", () => confirmModal.close());
 confirmForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   confirmModal.close();
-  if (pendingConfirmAction === "deleteAsset") {
+  if (pendingConfirmAction === "deleteAllAssets") {
+    await deleteAllAssets();
+  } else if (pendingConfirmAction === "deleteAsset") {
     await deleteAsset(pendingDeleteAssetId);
     pendingDeleteAssetId = "";
   } else if (pendingConfirmAction === "model") {
@@ -2221,6 +2236,7 @@ const assetsTableBody = document.getElementById("assets-table-body");
 const assetsSearchInput = document.getElementById("assets-search");
 const assetsCountEl = document.getElementById("assets-count");
 const assetsAddBtn = document.getElementById("assets-add-btn");
+const assetsDeleteAllBtn = document.getElementById("assets-delete-all-btn");
 const assetsListHint = document.getElementById("assets-list-hint");
 const assetsBackBtn = document.getElementById("assets-back-btn");
 const assetsHierarchyFields = document.getElementById("assets-hierarchy-fields");
@@ -2388,6 +2404,29 @@ async function deleteAsset(assetId) {
     setTimeout(hideAssetsListHint, 3000);
   }
 }
+
+async function deleteAllAssets() {
+  const result = await apiRequest(connApi("/assets"), { method: "DELETE" });
+  if (result.ok) {
+    assetsData = [];
+    renderAssets();
+    showAssetsListHint(t("assetsDeleteAllSuccess"), "success");
+    setTimeout(hideAssetsListHint, 3000);
+  } else {
+    showAssetsListHint(result.payload?.error || t("assetsDeleteAllError"), "error");
+    setTimeout(hideAssetsListHint, 3000);
+  }
+}
+
+assetsDeleteAllBtn.addEventListener("click", () => {
+  if (!assetsData.length) return;
+  pendingConfirmAction = "deleteAllAssets";
+  confirmTitle.textContent = t("assetsDeleteAllConfirmTitle");
+  confirmMessage.textContent = t("assetsDeleteAllConfirmMsg").replace("{count}", assetsData.length);
+  confirmOkBtn.textContent = t("assetsDeleteAllConfirmOk");
+  confirmCancelBtn.textContent = t("confirmCancel");
+  confirmModal.showModal();
+});
 
 async function loadAssets() {
   const result = await apiRequest(connApi("/assets/internal"));

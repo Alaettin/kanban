@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resilience – Workspace</title>
+  <link rel="stylesheet" href="/apps/resilience/styles.css?v=2" />
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+      <span id="brand-text">Resilience</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar" aria-label="Navigation">
+      <nav id="sidebar-nav" class="sidebar-nav">
+        <button class="sidebar-item active" data-page="dashboard" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1"/>
+            <rect x="14" y="3" width="7" height="5" rx="1"/>
+            <rect x="14" y="12" width="7" height="9" rx="1"/>
+            <rect x="3" y="16" width="7" height="5" rx="1"/>
+          </svg>
+          <span class="sidebar-label">Dashboard</span>
+        </button>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title" data-i18n="sectionTools">Tools</div>
+        <button class="sidebar-item" data-page="indicators" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <span class="sidebar-label">Indikatoren</span>
+        </button>
+        <button class="sidebar-item" data-page="gdacs" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span class="sidebar-label">GDACS</span>
+        </button>
+        <button class="sidebar-item" data-page="ai-mapping" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l1.09 3.26L16 6l-2.18 1.74L14.54 11 12 9.27 9.46 11l.72-3.26L8 6l2.91-.74z"/>
+            <path d="M5 15l.55 1.63L7 17.18 5.91 18.1l.36 1.63L5 19l-1.27.73.36-1.63L3 17.18l1.45-.55z"/>
+            <path d="M19 15l.55 1.63L21 17.18l-1.09.92.36 1.63L19 19l-1.27.73.36-1.63L17 17.18l1.45-.55z"/>
+          </svg>
+          <span class="sidebar-label">AI Mapping</span>
+        </button>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title" data-i18n="sectionSources">Quellen &amp; Daten</div>
+        <button class="sidebar-item" data-page="aas-data" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+          <span class="sidebar-label">AAS Daten</span>
+        </button>
+        <button class="sidebar-item" data-page="news-feeds" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span class="sidebar-label">News Feeds</span>
+        </button>
+        <button class="sidebar-item" data-page="gdacs-alerts" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M10.29 7.86L5.82 15.5a1 1 0 0 0 .86 1.5h8.64a1 1 0 0 0 .86-1.5L11.71 7.86a1 1 0 0 0-1.42 0z"/>
+            <line x1="12" y1="10" x2="12" y2="12.5"/>
+            <line x1="12" y1="14.5" x2="12.01" y2="14.5"/>
+          </svg>
+          <span class="sidebar-label">GDACS Alerts</span>
+        </button>
+
+        <div class="sidebar-spacer"></div>
+        <button class="sidebar-item" data-page="settings" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span class="sidebar-label">Einstellungen</span>
+        </button>
+        <button class="sidebar-item" data-page="docs" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <span class="sidebar-label">Dokumentation</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="Navigation einklappen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main id="page-content" class="page-content">
+      <!-- Dashboard Page -->
+      <section id="page-dashboard" class="page-section active">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="dashboard-title">Resilience Dashboard</h2>
+            <p id="dashboard-desc">Übersicht der Resilienz-Tools für deine Lieferkette.</p>
+          </div>
+          <div class="dashboard-grid" id="dashboard-grid">
+            <!-- News tile -->
+            <div class="dash-card" id="dash-news">
+              <div class="dash-card-header">
+                <span class="dash-card-title" id="dash-news-title">Letzte News</span>
+                <a href="#" class="dash-card-link" id="dash-news-link" data-nav="news-feeds">Alle anzeigen &rarr;</a>
+              </div>
+              <div class="dash-card-body" id="dash-news-body">
+                <div class="dash-card-empty" id="dash-news-empty">Keine News vorhanden.</div>
+              </div>
+            </div>
+            <!-- GDACS Alerts tile -->
+            <div class="dash-card" id="dash-alerts">
+              <div class="dash-card-header">
+                <span class="dash-card-title" id="dash-alerts-title">GDACS Alerts</span>
+                <a href="#" class="dash-card-link" id="dash-alerts-link" data-nav="gdacs-alerts">Alle anzeigen &rarr;</a>
+              </div>
+              <div class="dash-card-body" id="dash-alerts-body">
+                <div class="dash-card-empty" id="dash-alerts-empty">Keine Alerts vorhanden.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Indicators Page -->
+      <section id="page-indicators" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="indicators-title">Indikatoren</h2>
+            <p id="indicators-desc">Überwache Resilienz-Indikatoren deiner Lieferkette.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- GDACS Page -->
+      <section id="page-gdacs" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="gdacs-title">GDACS</h2>
+            <p id="gdacs-desc">Naturkatastrophen-Daten vom <a href="https://www.gdacs.org" target="_blank" rel="noopener" class="inline-link" id="gdacs-link">Global Disaster Alert and Coordination System</a>.</p>
+          </div>
+
+          <!-- GDACS Search Card -->
+          <div class="settings-card gdacs-search-card">
+            <h3 id="gdacs-section-title">GDACS Naturkatastrophen</h3>
+
+            <div class="gdacs-search-row">
+              <div class="gdacs-field gdacs-field-country">
+                <label id="gdacs-country-label" for="gdacs-country">Land</label>
+                <input id="gdacs-country" type="text" class="gdacs-input" placeholder="z.B. Germany, Turkey…" />
+              </div>
+              <div class="gdacs-field">
+                <label id="gdacs-days-label" for="gdacs-days">Zeitraum</label>
+                <select id="gdacs-days" class="settings-select">
+                  <option value="7">7 Tage</option>
+                  <option value="14">14 Tage</option>
+                  <option value="30" selected>30 Tage</option>
+                  <option value="90">90 Tage</option>
+                  <option value="365">1 Jahr</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="gdacs-types" id="gdacs-types">
+              <label><input type="checkbox" value="EQ" checked> <span data-gdacs-type="EQ">Erdbeben</span></label>
+              <label><input type="checkbox" value="TC" checked> <span data-gdacs-type="TC">Sturm</span></label>
+              <label><input type="checkbox" value="FL" checked> <span data-gdacs-type="FL">Flut</span></label>
+              <label><input type="checkbox" value="VO" checked> <span data-gdacs-type="VO">Vulkan</span></label>
+              <label><input type="checkbox" value="WF" checked> <span data-gdacs-type="WF">Waldbrand</span></label>
+              <label><input type="checkbox" value="DR" checked> <span data-gdacs-type="DR">Dürre</span></label>
+            </div>
+
+            <div class="gdacs-actions-row">
+              <div class="gdacs-field">
+                <label id="gdacs-alert-label" for="gdacs-alert">Warnstufe</label>
+                <select id="gdacs-alert" class="settings-select">
+                  <option value="Green;Orange;Red" id="gdacs-alert-all">Alle</option>
+                  <option value="Orange;Red" id="gdacs-alert-orange-red">Orange + Rot</option>
+                  <option value="Red" id="gdacs-alert-red">Nur Rot</option>
+                </select>
+              </div>
+              <button id="gdacs-search-btn" class="btn btn-primary btn-sm" type="button">
+                <span id="gdacs-search-label">Suchen</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- GDACS Results -->
+          <div id="gdacs-results">
+            <div id="gdacs-results-count" class="gdacs-results-count" hidden></div>
+            <div id="gdacs-table-wrap" hidden>
+              <table class="news-table gdacs-table">
+                <thead>
+                  <tr>
+                    <th id="gdacs-th-type" class="gdacs-th-type">Typ</th>
+                    <th id="gdacs-th-name">Ereignis</th>
+                    <th id="gdacs-th-country">Land</th>
+                    <th id="gdacs-th-alert">Warnstufe</th>
+                    <th id="gdacs-th-severity" class="gdacs-th-severity">Schwere</th>
+                    <th id="gdacs-th-date">Datum</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="gdacs-tbody"></tbody>
+              </table>
+            </div>
+            <div id="gdacs-empty" class="news-empty" hidden>
+              <p id="gdacs-empty-text">Keine Ereignisse gefunden.</p>
+            </div>
+            <div id="gdacs-error" class="settings-hint hint-error" hidden></div>
+            <div id="gdacs-skeleton" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI Mapping Page -->
+      <section id="page-ai-mapping" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="ai-mapping-title">AI Mapping</h2>
+            <p id="ai-mapping-desc">KI-gestützte Zuordnung und Analyse.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- AAS Data Page -->
+      <section id="page-aas-data" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="aas-data-title">AAS Daten</h2>
+            <p id="aas-data-desc">Verwaltungsschalen-Daten zu Lieferanten, Produkten und Materialien.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- News Feeds Page -->
+      <section id="page-news-feeds" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-header-row">
+              <div>
+                <h2 id="news-feeds-title">News Feeds</h2>
+                <p id="news-feeds-desc">Externe Nachrichten und Informationsquellen.</p>
+              </div>
+              <button id="news-refresh-btn" class="btn btn-secondary btn-sm" type="button">
+                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span id="news-refresh-label">Aktualisieren</span>
+              </button>
+            </div>
+          </div>
+          <!-- List View -->
+          <div id="news-list-view">
+            <div id="news-table-wrap">
+              <table class="news-table" id="news-table">
+                <thead>
+                  <tr>
+                    <th class="news-th-id" id="news-th-id">ID</th>
+                    <th id="news-th-title">Titel</th>
+                    <th id="news-th-stored">Gespeichert</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="news-tbody"></tbody>
+              </table>
+              <div id="news-empty" class="news-empty" hidden>
+                <p id="news-empty-text">Keine News vorhanden. Füge Feeds in den Einstellungen hinzu.</p>
+              </div>
+            </div>
+            <div id="news-pagination" class="news-pagination"></div>
+          </div>
+
+          <!-- Detail View -->
+          <div id="news-detail-view" class="news-detail" hidden>
+            <button id="news-back-btn" class="news-back-btn" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              <span id="news-back-label">Zurück</span>
+            </button>
+            <div id="news-detail-content" class="news-detail-body"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- GDACS Alerts Page -->
+      <section id="page-gdacs-alerts" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-header-row">
+              <div>
+                <h2 id="gdacs-alerts-title">GDACS Alerts</h2>
+                <p id="gdacs-alerts-desc">Gespeicherte Naturkatastrophen-Meldungen für deine überwachten Länder.</p>
+              </div>
+              <button id="alerts-refresh-btn" class="btn btn-secondary btn-sm" type="button">
+                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span id="alerts-refresh-label">Aktualisieren</span>
+              </button>
+            </div>
+          </div>
+          <div id="alerts-content"></div>
+          <div id="alerts-empty" class="news-empty" hidden>
+            <p id="alerts-empty-text">Keine Alerts vorhanden. Füge Länder in den Einstellungen hinzu.</p>
+          </div>
+          <div id="alerts-pagination" class="news-pagination"></div>
+        </div>
+      </section>
+
+      <!-- Settings Page -->
+      <section id="page-settings" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="settings-title">Einstellungen</h2>
+            <p id="settings-desc">Konfiguriere die Resilience-App.</p>
+          </div>
+
+          <!-- News Feeds Settings Card -->
+          <div class="settings-card">
+            <h3 id="feed-section-title">News Feeds</h3>
+
+            <div class="feed-add-row">
+              <input id="feed-url-input" class="feed-url-input" type="url" placeholder="Feed-URL eingeben…" />
+              <button id="feed-add-btn" class="btn btn-primary btn-sm" type="button">
+                <span id="feed-add-label">Hinzufügen</span>
+              </button>
+            </div>
+            <div id="feed-hint" class="settings-hint" hidden></div>
+
+            <div id="feed-list" class="feed-list"></div>
+            <div id="feed-list-empty" class="feed-list-empty" hidden>
+              <span id="feed-empty-label">Noch keine Feeds konfiguriert.</span>
+            </div>
+
+            <div class="settings-row">
+              <label id="retention-label" for="retention-select">Aufbewahrung</label>
+              <select id="retention-select" class="settings-select">
+                <option value="7">7 Tage</option>
+                <option value="14">14 Tage</option>
+                <option value="30" selected>30 Tage</option>
+                <option value="60">60 Tage</option>
+                <option value="90">90 Tage</option>
+              </select>
+            </div>
+
+            <div class="settings-row">
+              <label id="refresh-label" for="refresh-select">Abruf-Intervall</label>
+              <select id="refresh-select" class="settings-select">
+                <option value="15">15 Min.</option>
+                <option value="30">30 Min.</option>
+                <option value="60" selected>1 Std.</option>
+                <option value="360">6 Std.</option>
+                <option value="1440">24 Std.</option>
+              </select>
+            </div>
+
+            <div class="settings-actions">
+              <button id="feed-purge-btn" class="btn btn-danger btn-sm" type="button">
+                <span id="feed-purge-label">Alle News löschen</span>
+              </button>
+              <div class="settings-actions-spacer"></div>
+              <button id="settings-save-btn" class="btn btn-primary" type="button">
+                <span id="settings-save-label">Speichern</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- GDACS Country Watchlist Card -->
+          <div class="settings-card">
+            <h3 id="gdacs-settings-title">GDACS Länderüberwachung</h3>
+
+            <div class="feed-add-row">
+              <input id="gdacs-country-input" class="feed-url-input" type="text" placeholder="Land eingeben…" />
+              <button id="gdacs-country-add-btn" class="btn btn-primary btn-sm" type="button">
+                <span id="gdacs-country-add-label">Hinzufügen</span>
+              </button>
+            </div>
+            <div id="gdacs-country-hint" class="settings-hint" hidden></div>
+
+            <div id="gdacs-country-list" class="feed-list"></div>
+            <div id="gdacs-country-list-empty" class="feed-list-empty" hidden>
+              <span id="gdacs-country-empty-label">Noch keine Länder konfiguriert.</span>
+            </div>
+
+            <div class="settings-row">
+              <label id="gdacs-refresh-label" for="gdacs-refresh-select">Abruf-Intervall</label>
+              <select id="gdacs-refresh-select" class="settings-select">
+                <option value="15">15 Min.</option>
+                <option value="30">30 Min.</option>
+                <option value="60" selected>1 Std.</option>
+                <option value="360">6 Std.</option>
+                <option value="1440">24 Std.</option>
+              </select>
+            </div>
+
+            <div class="settings-actions">
+              <button id="gdacs-purge-btn" class="btn btn-danger btn-sm" type="button">
+                <span id="gdacs-purge-label">Alle Alerts löschen</span>
+              </button>
+              <div class="settings-actions-spacer"></div>
+              <button id="gdacs-settings-save-btn" class="btn btn-primary" type="button">
+                <span id="gdacs-settings-save-label">Speichern</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Docs Page -->
+      <section id="page-docs" class="page-section">
+        <div class="page-inner page-inner-wide">
+          <div class="page-header">
+            <h2 id="docs-title">Dokumentation</h2>
+            <p id="docs-desc">Anleitungen und Informationen zu den Resilienz-Tools.</p>
+          </div>
+          <div class="docs-layout">
+            <nav class="docs-nav" id="docs-nav">
+              <button class="docs-nav-item active" data-doc="overview" type="button">Übersicht</button>
+              <button class="docs-nav-item" data-doc="news-feeds" type="button">News Feeds</button>
+              <button class="docs-nav-item" data-doc="gdacs-search" type="button">GDACS Suche</button>
+              <button class="docs-nav-item" data-doc="gdacs-alerts" type="button">GDACS Alerts</button>
+              <button class="docs-nav-item" data-doc="dashboard" type="button">Dashboard</button>
+              <button class="docs-nav-item" data-doc="settings" type="button">Einstellungen</button>
+            </nav>
+            <div class="docs-content" id="docs-content"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/apps/resilience/app.js?v=2"></script>
+</body>
+</html>

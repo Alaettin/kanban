@@ -24,12 +24,14 @@ const dtiRoutes = require("./apps/dti-connector/routes");
 const cardScannerRoutes = require("./apps/card-scanner/routes");
 const aasChatRoutes = require("./apps/aas-chat/routes");
 const kbRoutes = require("./apps/knowledge-base/routes");
+const resilienceRoutes = require("./apps/resilience/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
 const cardScannerDir = path.join(__dirname, "apps", "card-scanner");
 const aasChatDir = path.join(__dirname, "apps", "aas-chat");
 const kbDir = path.join(__dirname, "apps", "knowledge-base");
+const resilienceDir = path.join(__dirname, "apps", "resilience");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -82,6 +84,15 @@ registry.register({
   icon: "knowledge-base",
   path: "/apps/knowledge-base",
   color: "#f59e0b",
+});
+
+registry.register({
+  id: "resilience",
+  name: "Resilience",
+  description: "Resilienz-Tools für die Lieferkette",
+  icon: "resilience",
+  path: "/apps/resilience",
+  color: "#4f46e5",
 });
 
 // --- Middleware ---
@@ -260,6 +271,25 @@ app.get("/apps/knowledge-base", auth.requireAuthPage, requireAppAccess("knowledg
 const kbRouter = express.Router();
 kbRoutes.mountRoutes(kbRouter);
 app.use("/apps/knowledge-base", kbRouter);
+
+// --- Resilience App ---
+
+app.get("/apps/resilience/styles.css", (req, res) => {
+  res.sendFile(path.join(resilienceDir, "styles.css"));
+});
+
+app.get("/apps/resilience/app.js", (req, res) => {
+  res.sendFile(path.join(resilienceDir, "app.js"));
+});
+
+app.get("/apps/resilience", auth.requireAuthPage, requireAppAccess("resilience"), (req, res) => {
+  res.sendFile(path.join(resilienceDir, "index.html"));
+});
+
+// Resilience API routes (mounted under /apps/resilience)
+const resilienceRouter = express.Router();
+resilienceRoutes.mountRoutes(resilienceRouter);
+app.use("/apps/resilience", resilienceRouter);
 
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
@@ -440,6 +470,7 @@ async function start() {
   await cardScannerRoutes.initCardScannerTables();
   await aasChatRoutes.initAasChatTables();
   await kbRoutes.initKnowledgeBaseTables();
+  await resilienceRoutes.initResilienceTables();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically
@@ -450,6 +481,16 @@ async function start() {
       // ignore
     }
   }, 5 * 60 * 1000);
+
+  // Resilience: refresh feeds + GDACS alerts every 60 seconds
+  setInterval(async () => {
+    try {
+      await resilienceRoutes.refreshAllFeeds();
+      await resilienceRoutes.cleanupExpiredItems();
+      await resilienceRoutes.refreshAllGdacsAlerts();
+      await resilienceRoutes.cleanupGdacsAlerts();
+    } catch { /* ignore */ }
+  }, 60 * 1000);
 
   app.listen(PORT, () => {
     console.log(`Workspace server laeuft auf http://localhost:${PORT}`);
