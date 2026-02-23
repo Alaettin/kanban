@@ -70,14 +70,22 @@ server.tool(
 
 server.tool(
   "readDocument",
-  "Liest den vollständigen extrahierten Text eines Dokuments. Übergib die doc_id aus listDocuments.",
-  { doc_id: z.string().describe("Die ID des Dokuments (aus listDocuments)") },
-  async ({ doc_id }) => {
-    const doc = await db.get(
+  "Liest den vollständigen extrahierten Text eines Dokuments. Du kannst entweder die doc_id ODER den Titel/Namen des Dokuments übergeben. Bei Titelsuche wird eine unscharfe Suche (enthält) durchgeführt.",
+  { query: z.string().describe("doc_id (UUID) oder Titel/Name des Dokuments (Teiltext reicht)") },
+  async ({ query }) => {
+    // Try exact doc_id match first
+    let doc = await db.get(
       "SELECT title, content_text FROM kb_documents WHERE doc_id = ? AND user_id = ?",
-      [doc_id, USER_ID]
+      [query, USER_ID]
     );
-    if (!doc) return textResult("Dokument nicht gefunden.");
+    // Fallback: fuzzy title search
+    if (!doc) {
+      doc = await db.get(
+        "SELECT title, content_text FROM kb_documents WHERE user_id = ? AND LOWER(title) LIKE ? ORDER BY updated_at DESC LIMIT 1",
+        [USER_ID, `%${query.toLowerCase()}%`]
+      );
+    }
+    if (!doc) return textResult(`Dokument "${query}" nicht gefunden. Nutze listDocuments um alle verfügbaren Dokumente zu sehen.`);
     if (!doc.content_text) return textResult(`Dokument "${doc.title}" hat keinen extrahierten Text.`);
     const text = doc.content_text.length > 15000
       ? doc.content_text.slice(0, 15000) + "\n\n[... Text gekürzt, " + doc.content_text.length + " Zeichen insgesamt]"

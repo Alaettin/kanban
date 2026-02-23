@@ -342,6 +342,26 @@ body {
   white-space: nowrap;
 }
 
+/* Last Login */
+
+.td-last-login {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.last-login-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+
+.last-login-link:hover {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+
 /* -- SAVE BAR -- */
 
 .save-bar {
@@ -446,6 +466,132 @@ body {
   gap: 0.5rem;
 }
 
+/* Login History Modal */
+
+.modal-dialog-wide {
+  max-width: 640px;
+}
+
+.login-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.login-history-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all var(--transition);
+}
+
+.btn-icon:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.login-history-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.login-history-empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+  padding: 2rem 0;
+}
+
+.login-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.login-history-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  position: sticky;
+  top: 0;
+}
+
+.login-history-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.login-history-table tr:last-child td {
+  border-bottom: none;
+}
+
+.lh-time {
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.lh-ip code {
+  font-size: 0.78rem;
+  background: var(--surface-3);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--text-2);
+}
+
+.lh-ua {
+  color: var(--muted);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.login-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.lh-total {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.lh-page {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.btn-sm {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+}
+
 /* -- SCROLLBAR -- */
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -459,7 +605,7 @@ body {
   .admin-header { padding: 0 1rem; }
   .admin-main { padding: 1rem; }
   .admin-table-wrap { overflow-x: auto; }
-  .admin-table { min-width: 700px; }
+  .admin-table { min-width: 800px; }
 }
 
 @media (max-width: 600px) {
@@ -496,6 +642,7 @@ body {
   .td-role { grid-area: role; }
   .td-apps { grid-area: apps; }
   .td-created { display: none; }
+  .td-last-login { display: none; }
   .td-actions { grid-area: actions; align-self: start; }
 
   .user-avatar { width: 28px; height: 28px; font-size: 0.6rem; }

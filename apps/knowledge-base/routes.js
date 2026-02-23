@@ -104,8 +104,8 @@ async function initKnowledgeBaseTables() {
 // AI description generation
 // ---------------------------------------------------------------------------
 async function generateDescriptionAI(contentText, provider, model, apiKey) {
-  const truncated = contentText.slice(0, 4000);
-  const prompt = "Generate a concise 1-2 sentence description of this document. Respond only with the description, nothing else.\n\n" + truncated;
+  const truncated = contentText.slice(0, 8000);
+  const prompt = `Erstelle eine aussagekräftige Zusammenfassung dieses Dokuments in 3-5 Sätzen auf Deutsch. Die Zusammenfassung soll die wichtigsten Inhalte, Themen und Kernaussagen abdecken. Antworte NUR mit der Zusammenfassung, ohne Einleitung oder Kommentar.\n\n${truncated}`;
 
   if (provider === "gemini" || provider === "google") {
     const url = `${GEMINI_BASE}/${model || "gemini-2.5-flash"}:generateContent?key=${apiKey}`;
@@ -114,7 +114,7 @@ async function generateDescriptionAI(contentText, provider, model, apiKey) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 256, temperature: 0.3 },
+        generationConfig: { maxOutputTokens: 512, temperature: 0.3 },
       }),
     });
     const data = await res.json();
@@ -129,7 +129,7 @@ async function generateDescriptionAI(contentText, provider, model, apiKey) {
     body: JSON.stringify({
       model: model || "llama-3.1-8b-instant",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 256,
+      max_tokens: 512,
       temperature: 0.3,
     }),
   });

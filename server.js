@@ -281,9 +281,14 @@ app.get("/api/admin/users", auth.requireAdmin, async (req, res) => {
   try {
     const users = await db.all(
       `SELECT u.id, u.email, u.name, u.picture, u.created_at,
-              COALESCE(ur.role, 'user') AS role
+              COALESCE(ur.role, 'user') AS role,
+              ll.last_login
        FROM users u
        LEFT JOIN user_roles ur ON ur.user_id = u.id
+       LEFT JOIN (
+         SELECT user_id, MAX(created_at) AS last_login
+         FROM user_logins GROUP BY user_id
+       ) ll ON ll.user_id = u.id
        ORDER BY u.created_at ASC`
     );
     const access = await db.all("SELECT user_id, app_id FROM user_app_access");
@@ -298,6 +303,7 @@ app.get("/api/admin/users", auth.requireAdmin, async (req, res) => {
       name: u.name,
       picture: u.picture,
       createdAt: u.created_at,
+      lastLogin: u.last_login || null,
       role: u.email === auth.SUPERADMIN_EMAIL ? "superadmin" : u.role,
       isSuperadmin: u.email === auth.SUPERADMIN_EMAIL,
       apps: accessMap[u.id] || [],
@@ -305,6 +311,27 @@ app.get("/api/admin/users", auth.requireAdmin, async (req, res) => {
     res.json({ users: result });
   } catch (err) {
     res.status(500).json({ error: "LOAD_USERS_FAILED" });
+  }
+});
+
+app.get("/api/admin/users/:userId/logins", auth.requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    const logins = await db.all(
+      `SELECT ip_address, user_agent, created_at
+       FROM user_logins WHERE user_id = ?
+       ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [userId, limit, offset]
+    );
+    const countRow = await db.get(
+      "SELECT COUNT(*) AS total FROM user_logins WHERE user_id = ?",
+      [userId]
+    );
+    res.json({ logins, total: countRow.total });
+  } catch {
+    res.status(500).json({ error: "LOAD_LOGINS_FAILED" });
   }
 });
 
@@ -386,6 +413,8 @@ app.delete("/api/admin/users/:userId", auth.requireAdmin, async (req, res) => {
     // 2b. Delete KB documents
     await db.run("DELETE FROM kb_documents WHERE user_id = ?", [userId]);
     await db.run("DELETE FROM kb_settings WHERE user_id = ?", [userId]);
+    // 2c. Delete login history
+    await db.run("DELETE FROM user_logins WHERE user_id = ?", [userId]);
     // 3. Delete platform access tables
     await db.run("DELETE FROM user_app_access WHERE user_id = ?", [userId]);
     await db.run("DELETE FROM user_roles WHERE user_id = ?", [userId]);

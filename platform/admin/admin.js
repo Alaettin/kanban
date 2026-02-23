@@ -12,6 +12,11 @@ const saveBar = document.getElementById("save-bar");
 const saveBarText = document.getElementById("save-bar-text");
 const saveDiscard = document.getElementById("save-discard");
 const saveConfirmBtn = document.getElementById("save-confirm");
+const loginHistoryModal = document.getElementById("login-history-modal");
+const loginHistoryTitle = document.getElementById("login-history-title");
+const loginHistoryContent = document.getElementById("login-history-content");
+const loginHistoryPagination = document.getElementById("login-history-pagination");
+const loginHistoryClose = document.getElementById("login-history-close");
 
 const AVAILABLE_APPS = [
   { id: "kanban", name: "Kanban Board" },
@@ -41,6 +46,17 @@ const I18N = {
     unsaved: "Ungespeicherte Änderungen",
     discard: "Verwerfen",
     save: "Übernehmen",
+    thLastLogin: "Letzter Login",
+    loginHistoryTitle: "Login-Verlauf",
+    loginHistoryFor: "Login-Verlauf von",
+    loginHistoryEmpty: "Keine Logins aufgezeichnet.",
+    loginHistoryIp: "IP-Adresse",
+    loginHistoryAgent: "Browser",
+    loginHistoryTime: "Zeitpunkt",
+    loginHistoryPrev: "Zurück",
+    loginHistoryNext: "Weiter",
+    loginHistoryTotal: "Einträge gesamt",
+    never: "Nie",
   },
   en: {
     title: "User Management",
@@ -61,6 +77,17 @@ const I18N = {
     unsaved: "Unsaved changes",
     discard: "Discard",
     save: "Save",
+    thLastLogin: "Last Login",
+    loginHistoryTitle: "Login History",
+    loginHistoryFor: "Login history of",
+    loginHistoryEmpty: "No logins recorded.",
+    loginHistoryIp: "IP Address",
+    loginHistoryAgent: "Browser",
+    loginHistoryTime: "Timestamp",
+    loginHistoryPrev: "Previous",
+    loginHistoryNext: "Next",
+    loginHistoryTotal: "total entries",
+    never: "Never",
   },
 };
 
@@ -190,6 +217,18 @@ function formatDate(dateStr) {
   });
 }
 
+function formatDateTime(dateStr) {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  return d.toLocaleString(locale === "de" ? "de-DE" : "en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 async function loadUsers() {
   const result = await apiRequest("/api/admin/users");
   if (result.ok && result.payload?.users) {
@@ -283,6 +322,25 @@ function renderUsers() {
     tdCreated.textContent = formatDate(u.createdAt);
     tr.appendChild(tdCreated);
 
+    // Last Login cell
+    const tdLastLogin = document.createElement("td");
+    tdLastLogin.className = "td-last-login";
+    if (u.lastLogin) {
+      const link = document.createElement("a");
+      link.href = "#";
+      link.className = "last-login-link";
+      link.textContent = formatDateTime(u.lastLogin);
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        openLoginHistory(u.id, u.name || u.email);
+      });
+      tdLastLogin.appendChild(link);
+    } else {
+      tdLastLogin.textContent = t("never");
+      tdLastLogin.style.color = "var(--muted)";
+    }
+    tr.appendChild(tdLastLogin);
+
     // Actions cell
     const tdActions = document.createElement("td");
     tdActions.className = "td-actions";
@@ -337,6 +395,90 @@ modalConfirm.addEventListener("click", async () => {
 saveDiscard.addEventListener("click", discardChanges);
 saveConfirmBtn.addEventListener("click", saveChanges);
 
+// Login History
+let loginHistoryUserId = null;
+let loginHistoryPage = 0;
+const LOGIN_HISTORY_PER_PAGE = 20;
+
+async function openLoginHistory(userId, displayName) {
+  loginHistoryUserId = userId;
+  loginHistoryPage = 0;
+  loginHistoryTitle.textContent = `${t("loginHistoryFor")} ${displayName}`;
+  loginHistoryModal.hidden = false;
+  await loadLoginHistory();
+}
+
+function closeLoginHistory() {
+  loginHistoryModal.hidden = true;
+  loginHistoryUserId = null;
+  loginHistoryContent.innerHTML = "";
+  loginHistoryPagination.innerHTML = "";
+}
+
+async function loadLoginHistory() {
+  const offset = loginHistoryPage * LOGIN_HISTORY_PER_PAGE;
+  const result = await apiRequest(
+    `/api/admin/users/${loginHistoryUserId}/logins?limit=${LOGIN_HISTORY_PER_PAGE}&offset=${offset}`
+  );
+  if (!result.ok || !result.payload) return;
+
+  const { logins, total } = result.payload;
+
+  if (logins.length === 0 && loginHistoryPage === 0) {
+    loginHistoryContent.innerHTML = `<p class="login-history-empty">${t("loginHistoryEmpty")}</p>`;
+    loginHistoryPagination.innerHTML = "";
+    return;
+  }
+
+  let html = `<table class="login-history-table">
+    <thead><tr>
+      <th>${t("loginHistoryTime")}</th>
+      <th>${t("loginHistoryIp")}</th>
+      <th>${t("loginHistoryAgent")}</th>
+    </tr></thead><tbody>`;
+
+  for (const login of logins) {
+    const ua = parseUserAgent(login.user_agent);
+    html += `<tr>
+      <td class="lh-time">${formatDateTime(login.created_at)}</td>
+      <td class="lh-ip"><code>${escapeHtml(login.ip_address || "-")}</code></td>
+      <td class="lh-ua" title="${escapeHtml(login.user_agent || "")}">${escapeHtml(ua)}</td>
+    </tr>`;
+  }
+
+  html += "</tbody></table>";
+  loginHistoryContent.innerHTML = html;
+
+  const totalPages = Math.ceil(total / LOGIN_HISTORY_PER_PAGE);
+  let pagHtml = `<span class="lh-total">${total} ${t("loginHistoryTotal")}</span>`;
+  if (totalPages > 1) {
+    pagHtml += `<button class="btn btn-secondary btn-sm" id="lh-prev" ${loginHistoryPage === 0 ? "disabled" : ""}>${t("loginHistoryPrev")}</button>`;
+    pagHtml += `<span class="lh-page">${loginHistoryPage + 1} / ${totalPages}</span>`;
+    pagHtml += `<button class="btn btn-secondary btn-sm" id="lh-next" ${loginHistoryPage >= totalPages - 1 ? "disabled" : ""}>${t("loginHistoryNext")}</button>`;
+  }
+  loginHistoryPagination.innerHTML = pagHtml;
+
+  const prevBtn = document.getElementById("lh-prev");
+  const nextBtn = document.getElementById("lh-next");
+  if (prevBtn) prevBtn.addEventListener("click", () => { loginHistoryPage--; loadLoginHistory(); });
+  if (nextBtn) nextBtn.addEventListener("click", () => { loginHistoryPage++; loadLoginHistory(); });
+}
+
+function parseUserAgent(ua) {
+  if (!ua) return "-";
+  const match = ua.match(/(Chrome|Firefox|Safari|Edge|Opera|MSIE|Trident)[\/\s]([\d.]+)/i);
+  const osMatch = ua.match(/(Windows|Mac OS X|Linux|Android|iOS|iPhone)[\/\s]*([\d._]*)/i);
+  const browser = match ? match[1] + " " + match[2] : "";
+  const os = osMatch ? osMatch[1].replace(/_/g, ".") : "";
+  const result = [browser, os].filter(Boolean).join(" / ");
+  return result || ua.slice(0, 60);
+}
+
+loginHistoryClose.addEventListener("click", closeLoginHistory);
+loginHistoryModal.addEventListener("click", (e) => {
+  if (e.target === loginHistoryModal) closeLoginHistory();
+});
+
 // Locale
 function setLocale(lang) {
   locale = lang;
@@ -357,6 +499,7 @@ function applyLocale() {
   document.getElementById("th-apps").textContent = t("thApps");
   document.getElementById("th-created").textContent = t("thCreated");
   document.getElementById("th-actions").textContent = t("thActions");
+  document.getElementById("th-last-login").textContent = t("thLastLogin");
   modalCancel.textContent = t("modalCancel");
   modalConfirm.textContent = t("modalConfirm");
   updateSaveBar();

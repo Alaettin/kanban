@@ -144,6 +144,23 @@ async function requireAuthPage(req, res, next) {
       return;
     }
     req.user = user;
+
+    // Record login with 30-min dedup so session-resumes are tracked
+    try {
+      const last = await get(
+        "SELECT created_at FROM user_logins WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+        [user.id]
+      );
+      const thirtyMin = 30 * 60 * 1000;
+      if (!last || (Date.now() - new Date(last.created_at + "Z").getTime()) > thirtyMin) {
+        const ip = req.headers["x-forwarded-for"]
+          ? req.headers["x-forwarded-for"].split(",")[0].trim()
+          : req.socket?.remoteAddress || "";
+        const ua = req.headers["user-agent"] || "";
+        recordLogin(user.id, ip, ua).catch(() => {});
+      }
+    } catch { /* don't block page load */ }
+
     next();
   } catch {
     res.redirect("/");
@@ -184,6 +201,13 @@ async function requireAdminPage(req, res, next) {
   } catch {
     res.redirect("/");
   }
+}
+
+async function recordLogin(userId, ipAddress, userAgent) {
+  await run(
+    "INSERT INTO user_logins (user_id, ip_address, user_agent) VALUES (?, ?, ?)",
+    [userId, ipAddress || "", userAgent || ""]
+  );
 }
 
 async function upsertUserFromGoogle(profile) {
@@ -247,6 +271,17 @@ async function initAuthTables() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+  await run(`
+    CREATE TABLE IF NOT EXISTS user_logins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  await run("CREATE INDEX IF NOT EXISTS idx_user_logins_user_id ON user_logins(user_id)");
   // Migration: if user_app_access is empty but users exist, grant all existing users access to all apps
   const accessCount = await get("SELECT COUNT(*) AS cnt FROM user_app_access");
   const userCount = await get("SELECT COUNT(*) AS cnt FROM users");
@@ -360,6 +395,11 @@ function mountAuthRoutes(app) {
       await upsertUserFromGoogle(profile);
       await cleanupAuthTables();
       const session = await createSession(profile.sub);
+      const loginIp = req.headers["x-forwarded-for"]
+        ? req.headers["x-forwarded-for"].split(",")[0].trim()
+        : req.socket?.remoteAddress || "";
+      const loginUa = req.headers["user-agent"] || "";
+      await recordLogin(profile.sub, loginIp, loginUa);
       setCookie(res, "sid", session.sid, {
         path: "/",
         maxAge: Math.floor(SESSION_TTL_MS / 1000),
@@ -413,5 +453,6 @@ module.exports = {
   startMaintenanceJobs,
   isProduction,
   SESSION_TTL_MS,
+  recordLogin,
   SUPERADMIN_EMAIL,
 };
