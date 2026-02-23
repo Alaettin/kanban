@@ -575,24 +575,34 @@ function mountRoutes(router) {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 30, 100);
       const offset = parseInt(req.query.offset) || 0;
+      const q = (req.query.q || "").trim();
+
+      let where = "i.user_id = ?";
+      const params = [req.user.id];
+      if (q) {
+        where += " AND (i.title LIKE ? OR i.guid LIKE ?)";
+        const like = `%${q}%`;
+        params.push(like, like);
+      }
 
       const items = await db.all(
         `SELECT i.item_id, i.guid, i.title, i.link, i.pub_date, i.created_at, f.title AS feed_title
          FROM resilience_feed_items i
          JOIN resilience_feeds f ON f.feed_id = i.feed_id
-         WHERE i.user_id = ?
-         ORDER BY i.pub_date DESC, i.item_id DESC
+         WHERE ${where}
+         ORDER BY i.created_at DESC, i.item_id DESC
          LIMIT ? OFFSET ?`,
-        [req.user.id, limit, offset]
+        [...params, limit, offset]
       );
 
       const countRow = await db.get(
-        "SELECT COUNT(*) AS total FROM resilience_feed_items WHERE user_id = ?",
-        [req.user.id]
+        `SELECT COUNT(*) AS total FROM resilience_feed_items i WHERE ${where}`,
+        params
       );
 
       res.json({ items, total: countRow.total });
-    } catch {
+    } catch (err) {
+      console.error("GET /api/news error:", err);
       res.status(500).json({ error: "LOAD_FAILED" });
     }
   });
@@ -704,8 +714,14 @@ function mountRoutes(router) {
       const offset = parseInt(req.query.offset) || 0;
       const countryId = req.query.country_id || "";
 
-      let where = "a.user_id = ?";
-      const params = [req.user.id];
+      const settings = await db.get(
+        "SELECT gdacs_retention_days FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const retDays = settings?.gdacs_retention_days ?? 30;
+
+      let where = "a.user_id = ? AND a.fetched_at >= datetime('now', '-' || ? || ' days')";
+      const params = [req.user.id, retDays];
       if (countryId) {
         where += " AND a.country_id = ?";
         params.push(countryId);

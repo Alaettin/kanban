@@ -172,6 +172,36 @@
             <p id="indicators-desc">Definiere Resilienz-Indikatoren für deine Lieferkette.</p>
           </div>
 
+          <div class="docs-layout">
+            <nav class="docs-nav" id="ind-nav">
+              <button class="docs-nav-item active" data-ind-nav="classes" id="ind-nav-btn-classes" type="button">Klassen</button>
+              <button class="docs-nav-item" data-ind-nav="indicators" id="ind-nav-btn-indicators" type="button">Indikatoren</button>
+            </nav>
+
+            <div class="ind-nav-content">
+              <!-- ═══ Classes Section ═══ -->
+              <div id="ind-nav-classes">
+                <div class="settings-card">
+                  <h3 id="ind-classes-title">Indikator-Klassen</h3>
+
+                  <div class="feed-add-row">
+                    <input id="ind-class-input" class="feed-url-input" type="text" placeholder="Klasse eingeben…" />
+                    <button id="ind-class-add-btn" class="btn btn-primary btn-sm" type="button">
+                      <span id="ind-class-add-label">Hinzufügen</span>
+                    </button>
+                  </div>
+                  <div id="ind-class-hint" class="settings-hint" hidden></div>
+
+                  <div id="ind-class-list" class="feed-list"></div>
+                  <div id="ind-class-list-empty" class="feed-list-empty" hidden>
+                    <span id="ind-class-empty-label">Noch keine Klassen definiert.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ═══ Indicators Section ═══ -->
+              <div id="ind-nav-indicators" hidden>
+
           <!-- List View -->
           <div id="ind-list-view">
             <div class="model-toolbar">
@@ -277,6 +307,10 @@
               </div>
             </div>
           </div>
+
+              </div><!-- /ind-nav-indicators -->
+            </div><!-- /ind-nav-content -->
+          </div><!-- /docs-layout -->
         </div>
       </section>
 
@@ -723,6 +757,9 @@
           </div>
           <!-- List View -->
           <div id="news-list-view">
+            <div class="news-search-row">
+              <input id="news-search-input" class="news-search-input" type="text" placeholder="News durchsuchen…" />
+            </div>
             <div id="news-table-wrap">
               <table class="news-table" id="news-table">
                 <thead>
@@ -904,23 +941,6 @@
             </div>
           </div>
 
-          <!-- Indicator Classes Settings Card -->
-          <div class="settings-card">
-            <h3 id="ind-classes-title">Indikator-Klassen</h3>
-
-            <div class="feed-add-row">
-              <input id="ind-class-input" class="feed-url-input" type="text" placeholder="Klasse eingeben…" />
-              <button id="ind-class-add-btn" class="btn btn-primary btn-sm" type="button">
-                <span id="ind-class-add-label">Hinzufügen</span>
-              </button>
-            </div>
-            <div id="ind-class-hint" class="settings-hint" hidden></div>
-
-            <div id="ind-class-list" class="feed-list"></div>
-            <div id="ind-class-list-empty" class="feed-list-empty" hidden>
-              <span id="ind-class-empty-label">Noch keine Klassen definiert.</span>
-            </div>
-          </div>
         </div>
       </section>
 

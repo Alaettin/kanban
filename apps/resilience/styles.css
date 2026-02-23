@@ -470,7 +470,7 @@ body.sidebar-collapsed .sidebar-foot {
 
 #page-news-feeds .page-inner,
 #page-gdacs .page-inner {
-  max-width: 900px;
+  max-width: 1100px;
 }
 
 .page-header {
@@ -802,6 +802,24 @@ body.sidebar-collapsed .sidebar-foot {
 }
 
 /* -- NEWS TABLE -- */
+
+.news-search-row {
+  margin-bottom: 0.75rem;
+}
+.news-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.news-search-input:focus {
+  border-color: var(--accent);
+}
 
 .news-table {
   width: 100%;

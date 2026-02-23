@@ -2,7 +2,7 @@
 
 ## Purpose
 This repository contains a multi-app workspace platform with Google login, role-based access control, and SQLite persistence.
-Apps: Kanban Board, DTI Connector, Card Scanner, AAS Chat, Knowledge Base.
+Apps: Kanban Board, DTI Connector, Card Scanner, AAS Chat, Knowledge Base, Resilience.
 Use this file as the default operating guide for any coding agent working in this project.
 
 ## Project Snapshot
@@ -57,6 +57,16 @@ Use this file as the default operating guide for any coding agent working in thi
 - `mcp-server.mjs`: MCP server with 2 tools (`listDocuments`, `readDocument`), env: `KB_USER_ID` + `KB_BASE_PROMPT`
 - File storage: `data/kb-files/{user_id}/{doc_id}{ext}`
 
+### Resilience (`apps/resilience/`)
+- `routes.js`: Settings, feeds CRUD, news API, GDACS search/alerts/refresh, AAS sources/IDs/groups/overview/import, indicators/indicator-classes, country mappings, background jobs (feed refresh, GDACS refresh, import scheduler, cleanup)
+- `app.js`: Multi-page SPA (Dashboard, Indicators, GDACS Search, AAS Data, News Feeds, GDACS Alerts, Settings, Docs), i18n DE+EN, inline editing
+- `index.html` / `styles.css`: All pages with internal navbars (docs-layout pattern)
+- **Pages:** Dashboard (overview cards), Indicators (classes + indicator CRUD with rule groups), GDACS Search (live search + country filter), AAS Daten (overview/sources/groups/assign with internal nav), News Feeds (table + search + pagination), GDACS Alerts (country-grouped alerts), Settings (general + country codes with internal nav), Dokumentation
+- **DB Tables:** `resilience_settings`, `resilience_feeds`, `resilience_feed_items`, `resilience_gdacs_countries`, `resilience_gdacs_alerts`, `resilience_aas_sources`, `resilience_aas_source_ids`, `resilience_aas_groups`, `resilience_aas_imports`, `resilience_indicator_classes`, `resilience_indicators`, `resilience_country_mappings`
+- **Background Jobs (server.js):** `refreshAllFeeds()` + `refreshAllGdacsAlerts()` every 60s, `cleanupExpiredItems()` + `cleanupGdacsAlerts()` per-user retention, `scheduleImports()` per-user auto-import interval
+- **Server-side import:** In-memory `importJobs` map, `POST /api/aas-import` starts background job, `GET /api/aas-import-status` for polling, survives browser refresh
+- **Features:** RSS/Atom/JSON feed aggregation, GDACS disaster alerts with country watchlist, AAS shell+submodel import with progress, indicator rule engine (OR-groups with AND-conditions), country name mapping (ISO↔AAS↔GDACS)
+
 ### Config
 - `package.json`: Scripts and dependencies
 - `.env.example`: Required env var template
@@ -72,6 +82,7 @@ Use this file as the default operating guide for any coding agent working in thi
 - `pdf-parse` (^1.1.1) — PDF text extraction
 - `mammoth` (^1.9.0) — DOCX text extraction (Knowledge Base)
 - `xlsx` (^0.18.5) — Excel text extraction (Knowledge Base)
+- `rss-parser` — RSS/Atom feed parsing (Resilience)
 - `@modelcontextprotocol/sdk` (^1.26.0) — MCP client/server for AAS Chat + Knowledge Base
 
 ## Required Environment Variables
@@ -141,6 +152,42 @@ Use this file as the default operating guide for any coding agent working in thi
 - `POST /api/documents/:docId/generate-description` — AI-generate description (uses Gemini API key from AAS Chat settings)
 - `GET /api/settings` — get KB settings (base_prompt)
 - `PUT /api/settings` — save KB settings
+
+### Resilience (`/apps/resilience/`)
+- `GET/PUT /api/settings` — user settings (retention, refresh intervals, import interval)
+- `POST /api/feeds` — add RSS/Atom/JSON feed
+- `DELETE /api/feeds/:feedId` — remove feed
+- `GET /api/news?limit=&offset=&q=` — paginated news items with search
+- `GET /api/news/:itemId` — single news item detail
+- `DELETE /api/news` — purge all news
+- `GET /api/gdacs/search?days=&eventlist=&alertlevel=&country=` — live GDACS search
+- `GET /api/gdacs/alerts?limit=&offset=&country_id=` — stored GDACS alerts (filtered by retention)
+- `POST /api/gdacs/alerts/refresh` — trigger manual alert refresh
+- `DELETE /api/gdacs/alerts` — purge all alerts
+- `POST /api/gdacs/countries` — add watchlist country
+- `DELETE /api/gdacs/countries/:countryId` — remove watchlist country
+- `GET /api/aas-sources` — list AAS sources with ID counts
+- `POST /api/aas-sources` — add AAS source
+- `DELETE /api/aas-sources/:sourceId` — remove AAS source
+- `GET /api/aas-sources/:sourceId/ids` — list source IDs
+- `POST /api/aas-sources/:sourceId/ids` — add AAS IDs (batch)
+- `DELETE /api/aas-source-ids/:idId` — remove single AAS ID
+- `GET /api/aas-groups` — list AAS groups
+- `POST /api/aas-groups` — create group
+- `DELETE /api/aas-groups/:groupId` — delete group
+- `GET /api/aas-overview?limit=&offset=&q=` — paginated AAS overview (with import status)
+- `PUT /api/aas-overview/assign` — assign/unassign AAS IDs to groups
+- `POST /api/aas-import` — start server-side import job
+- `GET /api/aas-import-status` — poll import progress
+- `GET /api/aas-import/:aasId` — get imported shell+submodels from DB
+- `GET /api/indicator-classes` — list indicator classes
+- `POST /api/indicator-classes` — create class
+- `DELETE /api/indicator-classes/:classId` — delete class
+- `GET /api/indicators` — list indicators
+- `POST /api/indicators` — create/update indicator
+- `DELETE /api/indicators/:indicatorId` — delete indicator
+- `GET /api/country-mappings?limit=&offset=&q=` — paginated country mappings
+- `PUT /api/country-mappings/:isoCode` — update country mapping (AAS/GDACS names)
 
 ## AAS Chat — MCP Tool Sources
 
@@ -227,6 +274,20 @@ Tool source routing: `DTI_TOOL_NAMES.has() ? "dti" : KB_TOOL_NAMES.has() ? "kb" 
 - `kb_documents` (doc_id, user_id, title, description, original_name, mime_type, file_size, content_text, created_at, updated_at)
 - `kb_settings` (user_id, base_prompt)
 
+### Resilience tables
+- `resilience_settings` (user_id PK, retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours)
+- `resilience_feeds` (feed_id, user_id, url, title, last_fetched_at, last_error, created_at)
+- `resilience_feed_items` (item_id, feed_id, user_id, guid, title, link, description, content, pub_date, created_at; UNIQUE(feed_id, guid))
+- `resilience_gdacs_countries` (country_id, user_id, name, created_at)
+- `resilience_gdacs_alerts` (alert_id, user_id, country_id FK, eventid, eventtype, name, country, alertlevel, alertscore, severity, fromdate, todate, url, fetched_at)
+- `resilience_aas_sources` (source_id, user_id, name, base_url, created_at)
+- `resilience_aas_source_ids` (id, source_id FK, aas_id, group_id FK nullable, created_at)
+- `resilience_aas_groups` (group_id, user_id, name, created_at)
+- `resilience_aas_imports` (user_id+aas_id PK, source_id, shell_data TEXT, submodels_data TEXT, imported_at)
+- `resilience_indicator_classes` (class_id, user_id, name, UNIQUE(user_id, name))
+- `resilience_indicators` (indicator_id, user_id, name, class_id FK nullable, input_type, input_label, rule_groups JSON, default_label, default_color, default_score)
+- `resilience_country_mappings` (user_id+iso_code PK, aas_names, gdacs_names)
+
 ## UX/Behavior Notes
 - Sync indicator is a circle near avatar (green/yellow/red states).
 - Project sharing uses a link-based modal.
@@ -266,7 +327,8 @@ After meaningful changes, verify:
 6. Card Scanner: webcam/upload capture, OCR processing, card list with thumbnails, image preview modal, delete with confirmation.
 7. AAS Chat: message send/receive, tool calls (MCP + DTI + KB), slash commands, connector panel, settings save/load, mode toggle, KB toggle.
 8. Knowledge Base: document upload (PDF/DOCX/Excel/TXT), text extraction, AI description, search + pagination, settings.
-9. Admin panel: user roles, app access toggling (incl. knowledge-base), user deletion.
+9. Resilience: feed management, news aggregation, GDACS search/alerts, AAS sources/groups/import, indicators with rule groups, country mappings, settings with retention/intervals.
+10. Admin panel: user roles, app access toggling (incl. knowledge-base), user deletion.
 
 ## Deployment Notes
 - Docker: `docker-compose up -d` (port 3000, volume: `./data:/app/data`)

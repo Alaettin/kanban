@@ -42,6 +42,7 @@ const newsTbody = document.getElementById("news-tbody");
 const newsEmpty = document.getElementById("news-empty");
 const newsPagination = document.getElementById("news-pagination");
 const newsRefreshBtn = document.getElementById("news-refresh-btn");
+const newsSearchInput = document.getElementById("news-search-input");
 
 // GDACS Search DOM refs
 const gdacsCountry = document.getElementById("gdacs-country");
@@ -141,7 +142,7 @@ const I18N = {
     feedInvalidUrl: "Ungültige Feed-URL.",
     feedParseFailed: "Feed konnte nicht gelesen werden.",
     feedExists: "Dieser Feed ist bereits vorhanden.",
-    retentionLabel: "Aufbewahrung",
+    retentionLabel: "News aufbewahren für",
     refreshLabel: "Abruf-Intervall",
     settingsSave: "Speichern",
     settingsSaved: "Einstellungen gespeichert.",
@@ -156,7 +157,7 @@ const I18N = {
     gdacsCountryAdded: "Land hinzugefügt.",
     gdacsCountryRemoved: "Land entfernt.",
     gdacsCountryExists: "Dieses Land ist bereits vorhanden.",
-    gdacsSettingsRetentionLabel: "Aufbewahrung",
+    gdacsSettingsRetentionLabel: "Alerts aufbewahren für",
     gdacsSettingsRefreshLabel: "Abruf-Intervall",
     gdacsSettingsSave: "Speichern",
     gdacsSettingsSaved: "Einstellungen gespeichert.",
@@ -168,6 +169,7 @@ const I18N = {
     newsThTitle: "Titel",
     newsThPublished: "Veröffentlicht",
     newsThStored: "Gespeichert",
+    newsSearchPlaceholder: "News durchsuchen…",
     newsRefresh: "Aktualisieren",
     newsRefreshing: "Lädt…",
     newsEmptyText: "Keine News vorhanden. Füge Feeds in den Einstellungen hinzu.",
@@ -229,6 +231,8 @@ const I18N = {
     dashAlertsEmpty: "Keine Alerts vorhanden.",
     // Indicators
     indicatorsDescNew: "Definiere Resilienz-Indikatoren für deine Lieferkette.",
+    indNavClasses: "Klassen",
+    indNavIndicators: "Indikatoren",
     indSearch: "Suchen…",
     indAdd: "Hinzufügen",
     indEmptyText: "Noch keine Indikatoren definiert.",
@@ -442,7 +446,7 @@ const I18N = {
     feedInvalidUrl: "Invalid feed URL.",
     feedParseFailed: "Could not read feed.",
     feedExists: "This feed already exists.",
-    retentionLabel: "Retention",
+    retentionLabel: "Keep news for",
     refreshLabel: "Refresh interval",
     settingsSave: "Save",
     settingsSaved: "Settings saved.",
@@ -457,7 +461,7 @@ const I18N = {
     gdacsCountryAdded: "Country added.",
     gdacsCountryRemoved: "Country removed.",
     gdacsCountryExists: "This country already exists.",
-    gdacsSettingsRetentionLabel: "Retention",
+    gdacsSettingsRetentionLabel: "Keep alerts for",
     gdacsSettingsRefreshLabel: "Refresh interval",
     gdacsSettingsSave: "Save",
     gdacsSettingsSaved: "Settings saved.",
@@ -469,6 +473,7 @@ const I18N = {
     newsThTitle: "Title",
     newsThPublished: "Published",
     newsThStored: "Stored",
+    newsSearchPlaceholder: "Search news…",
     newsRefresh: "Refresh",
     newsRefreshing: "Loading…",
     newsEmptyText: "No news available. Add feeds in settings.",
@@ -530,6 +535,8 @@ const I18N = {
     dashAlertsEmpty: "No alerts available.",
     // Indicators
     indicatorsDescNew: "Define resilience indicators for your supply chain.",
+    indNavClasses: "Classes",
+    indNavIndicators: "Indicators",
     indSearch: "Search…",
     indAdd: "Add",
     indEmptyText: "No indicators defined yet.",
@@ -677,6 +684,7 @@ let activePage = "dashboard";
 
 // News state
 let newsPage = 0;
+let newsQuery = "";
 const NEWS_PER_PAGE = 30;
 
 // Alerts state
@@ -685,6 +693,9 @@ const ALERTS_PER_PAGE = 30;
 
 // Docs state
 let activeDoc = "overview";
+
+// Indicators nav state
+let activeIndNav = "classes";
 
 // AAS Data nav state
 let activeAasNav = "overview";
@@ -745,7 +756,7 @@ function navigateTo(page) {
   });
 
   if (page === "dashboard") loadDashboard();
-  if (page === "indicators") { showIndList(); loadIndicators(); }
+  if (page === "indicators") { switchIndNav(activeIndNav); }
   if (page === "aas-data") { switchAasNav(activeAasNav); }
   if (page === "gdacs") applyGdacsLocale();
   if (page === "news-feeds") { showNewsList(); loadNews(); }
@@ -906,6 +917,7 @@ function applyLocaleToUI() {
   document.getElementById("news-th-stored").textContent = t("newsThStored");
   document.getElementById("news-empty-text").textContent = t("newsEmptyText");
   document.getElementById("news-refresh-label").textContent = t("newsRefresh");
+  newsSearchInput.placeholder = t("newsSearchPlaceholder");
   document.getElementById("news-back-label").textContent = t("newsBack");
 
   // GDACS Alerts page labels
@@ -1014,7 +1026,11 @@ function applyLocaleToUI() {
   document.getElementById("grp-save-label").textContent = t("grpSave");
   document.getElementById("grp-delete-label").textContent = t("grpDelete");
 
-  // Settings: Indicator classes
+  // Indicators nav
+  document.getElementById("ind-nav-btn-classes").textContent = t("indNavClasses");
+  document.getElementById("ind-nav-btn-indicators").textContent = t("indNavIndicators");
+
+  // Indicator classes
   document.getElementById("ind-classes-title").textContent = t("indClassesTitle");
   document.getElementById("ind-class-input").placeholder = t("indClassInputPlaceholder");
   document.getElementById("ind-class-add-label").textContent = t("indClassAdd");
@@ -1083,6 +1099,15 @@ function formatDate(dateStr) {
   });
 }
 
+function formatDateTime(dateStr) {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "-";
+  const loc = locale === "de" ? "de-DE" : "en-US";
+  return d.toLocaleDateString(loc, { day: "2-digit", month: "2-digit", year: "numeric" })
+    + " " + d.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
+}
+
 function formatDateShort(dateStr) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);
@@ -1138,7 +1163,6 @@ async function loadSettings() {
 
   renderFeedList();
   renderGdacsCountryList();
-  await loadIndClasses();
 }
 
 function renderFeedList() {
@@ -1358,7 +1382,34 @@ document.getElementById("gdacs-purge-btn").addEventListener("click", async () =>
   }
 });
 
-// ── Settings: Indicator Classes ───────────────────────────────────
+// ── Indicators: Nav switching ─────────────────────────────────────
+const indNav = document.getElementById("ind-nav");
+const indNavClasses = document.getElementById("ind-nav-classes");
+const indNavIndicators = document.getElementById("ind-nav-indicators");
+
+indNav.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-ind-nav]");
+  if (!btn) return;
+  switchIndNav(btn.dataset.indNav);
+});
+
+function switchIndNav(nav) {
+  activeIndNav = nav;
+  indNav.querySelectorAll(".docs-nav-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.indNav === nav);
+  });
+  indNavClasses.hidden = nav !== "classes";
+  indNavIndicators.hidden = nav !== "indicators";
+
+  if (nav === "classes") {
+    loadIndClasses();
+  } else if (nav === "indicators") {
+    showIndList();
+    loadIndicators();
+  }
+}
+
+// ── Indicator Classes ────────────────────────────────────────────
 const indClassInput = document.getElementById("ind-class-input");
 const indClassAddBtn = document.getElementById("ind-class-add-btn");
 const indClassHint = document.getElementById("ind-class-hint");
@@ -3049,7 +3100,8 @@ newsBackBtn.addEventListener("click", () => {
 // ── News Feeds: Table ─────────────────────────────────────────────
 async function loadNews() {
   const offset = newsPage * NEWS_PER_PAGE;
-  const result = await apiRequest(`/apps/resilience/api/news?limit=${NEWS_PER_PAGE}&offset=${offset}`);
+  const qParam = newsQuery ? `&q=${encodeURIComponent(newsQuery)}` : "";
+  const result = await apiRequest(`/apps/resilience/api/news?limit=${NEWS_PER_PAGE}&offset=${offset}${qParam}`);
   if (!result.ok || !result.payload) return;
 
   const { items, total } = result.payload;
@@ -3067,7 +3119,7 @@ async function loadNews() {
     tr.innerHTML = `
       <td class="news-td-id" title="${escapeHtml(item.guid || "")}">${escapeHtml(truncateId(item.guid))}</td>
       <td class="news-td-title">${escapeHtml(item.title || "-")}</td>
-      <td class="news-td-stored">${formatDate(item.created_at)}</td>
+      <td class="news-td-stored">${formatDateTime(item.created_at)}</td>
       <td class="news-td-link">${item.link ? `<a class="news-link-btn" href="${escapeHtml(item.link)}" target="_blank" rel="noopener" title="Öffnen"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ""}</td>
     `;
     newsTbody.appendChild(tr);
@@ -3102,6 +3154,17 @@ newsTbody.addEventListener("click", (e) => {
   const tr = e.target.closest("tr[data-item-id]");
   if (!tr) return;
   loadNewsDetail(tr.dataset.itemId);
+});
+
+// ── News Feeds: Search ────────────────────────────────────────────
+let newsSearchTimer = null;
+newsSearchInput.addEventListener("input", () => {
+  clearTimeout(newsSearchTimer);
+  newsSearchTimer = setTimeout(() => {
+    newsQuery = newsSearchInput.value.trim();
+    newsPage = 0;
+    loadNews();
+  }, 400);
 });
 
 async function loadNewsDetail(itemId) {
