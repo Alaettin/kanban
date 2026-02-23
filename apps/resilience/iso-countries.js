@@ -1,1003 +1,1497 @@
 const ISO_COUNTRIES = [
   [
     "AD",
-    "Andorra"
+    "Andorra",
+    "AND",
+    "020"
   ],
   [
     "AE",
-    "United Arab Emirates"
+    "United Arab Emirates",
+    "ARE",
+    "784"
   ],
   [
     "AF",
-    "Afghanistan"
+    "Afghanistan",
+    "AFG",
+    "004"
   ],
   [
     "AG",
-    "Antigua & Barbuda"
+    "Antigua and Barbuda",
+    "ATG",
+    "028"
   ],
   [
     "AI",
-    "Anguilla"
+    "Anguilla",
+    "AIA",
+    "660"
   ],
   [
     "AL",
-    "Albania"
+    "Albania",
+    "ALB",
+    "008"
   ],
   [
     "AM",
-    "Armenia"
+    "Armenia",
+    "ARM",
+    "051"
   ],
   [
     "AO",
-    "Angola"
+    "Angola",
+    "AGO",
+    "024"
   ],
   [
     "AQ",
-    "Antarctica"
+    "Antarctica",
+    "ATA",
+    "010"
   ],
   [
     "AR",
-    "Argentina"
+    "Argentina",
+    "ARG",
+    "032"
   ],
   [
     "AS",
-    "American Samoa"
+    "American Samoa",
+    "ASM",
+    "016"
   ],
   [
     "AT",
-    "Austria"
+    "Austria",
+    "AUT",
+    "040"
   ],
   [
     "AU",
-    "Australia"
+    "Australia",
+    "AUS",
+    "036"
   ],
   [
     "AW",
-    "Aruba"
+    "Aruba",
+    "ABW",
+    "533"
   ],
   [
     "AX",
-    "Åland Islands"
+    "Åland Islands",
+    "ALA",
+    "248"
   ],
   [
     "AZ",
-    "Azerbaijan"
+    "Azerbaijan",
+    "AZE",
+    "031"
   ],
   [
     "BA",
-    "Bosnia & Herzegovina"
+    "Bosnia and Herzegovina",
+    "BIH",
+    "070"
   ],
   [
     "BB",
-    "Barbados"
+    "Barbados",
+    "BRB",
+    "052"
   ],
   [
     "BD",
-    "Bangladesh"
+    "Bangladesh",
+    "BGD",
+    "050"
   ],
   [
     "BE",
-    "Belgium"
+    "Belgium",
+    "BEL",
+    "056"
   ],
   [
     "BF",
-    "Burkina Faso"
+    "Burkina Faso",
+    "BFA",
+    "854"
   ],
   [
     "BG",
-    "Bulgaria"
+    "Bulgaria",
+    "BGR",
+    "100"
   ],
   [
     "BH",
-    "Bahrain"
+    "Bahrain",
+    "BHR",
+    "048"
   ],
   [
     "BI",
-    "Burundi"
+    "Burundi",
+    "BDI",
+    "108"
   ],
   [
     "BJ",
-    "Benin"
+    "Benin",
+    "BEN",
+    "204"
   ],
   [
     "BL",
-    "St. Barthélemy"
+    "Saint Barthélemy",
+    "BLM",
+    "652"
   ],
   [
     "BM",
-    "Bermuda"
+    "Bermuda",
+    "BMU",
+    "060"
   ],
   [
     "BN",
-    "Brunei"
+    "Brunei Darussalam",
+    "BRN",
+    "096"
   ],
   [
     "BO",
-    "Bolivia"
+    "Bolivia",
+    "BOL",
+    "068"
   ],
   [
     "BQ",
-    "Caribbean Netherlands"
+    "Bonaire, Sint Eustatius and Saba",
+    "BES",
+    "535"
   ],
   [
     "BR",
-    "Brazil"
+    "Brazil",
+    "BRA",
+    "076"
   ],
   [
     "BS",
-    "Bahamas"
+    "Bahamas",
+    "BHS",
+    "044"
   ],
   [
     "BT",
-    "Bhutan"
+    "Bhutan",
+    "BTN",
+    "064"
   ],
   [
     "BV",
-    "Bouvet Island"
+    "Bouvet Island",
+    "BVT",
+    "074"
   ],
   [
     "BW",
-    "Botswana"
+    "Botswana",
+    "BWA",
+    "072"
   ],
   [
     "BY",
-    "Belarus"
+    "Belarus",
+    "BLR",
+    "112"
   ],
   [
     "BZ",
-    "Belize"
+    "Belize",
+    "BLZ",
+    "084"
   ],
   [
     "CA",
-    "Canada"
+    "Canada",
+    "CAN",
+    "124"
   ],
   [
     "CC",
-    "Cocos (Keeling) Islands"
+    "Cocos (Keeling) Islands",
+    "CCK",
+    "166"
   ],
   [
     "CD",
-    "Congo - Kinshasa"
+    "Congo, Democratic Republic",
+    "COD",
+    "180"
   ],
   [
     "CF",
-    "Central African Republic"
+    "Central African Republic",
+    "CAF",
+    "140"
   ],
   [
     "CG",
-    "Congo - Brazzaville"
+    "Congo",
+    "COG",
+    "178"
   ],
   [
     "CH",
-    "Switzerland"
+    "Switzerland",
+    "CHE",
+    "756"
   ],
   [
     "CI",
-    "Côte d’Ivoire"
+    "Côte d'Ivoire",
+    "CIV",
+    "384"
   ],
   [
     "CK",
-    "Cook Islands"
+    "Cook Islands",
+    "COK",
+    "184"
   ],
   [
     "CL",
-    "Chile"
+    "Chile",
+    "CHL",
+    "152"
   ],
   [
     "CM",
-    "Cameroon"
+    "Cameroon",
+    "CMR",
+    "120"
   ],
   [
     "CN",
-    "China"
+    "China",
+    "CHN",
+    "156"
   ],
   [
     "CO",
-    "Colombia"
+    "Colombia",
+    "COL",
+    "170"
   ],
   [
     "CR",
-    "Costa Rica"
+    "Costa Rica",
+    "CRI",
+    "188"
   ],
   [
     "CU",
-    "Cuba"
+    "Cuba",
+    "CUB",
+    "192"
   ],
   [
     "CV",
-    "Cape Verde"
+    "Cabo Verde",
+    "CPV",
+    "132"
   ],
   [
     "CW",
-    "Curaçao"
+    "Curaçao",
+    "CUW",
+    "531"
   ],
   [
     "CX",
-    "Christmas Island"
+    "Christmas Island",
+    "CXR",
+    "162"
   ],
   [
     "CY",
-    "Cyprus"
+    "Cyprus",
+    "CYP",
+    "196"
   ],
   [
     "CZ",
-    "Czechia"
+    "Czechia",
+    "CZE",
+    "203"
   ],
   [
     "DE",
-    "Germany"
+    "Germany",
+    "DEU",
+    "276"
   ],
   [
     "DJ",
-    "Djibouti"
+    "Djibouti",
+    "DJI",
+    "262"
   ],
   [
     "DK",
-    "Denmark"
+    "Denmark",
+    "DNK",
+    "208"
   ],
   [
     "DM",
-    "Dominica"
+    "Dominica",
+    "DMA",
+    "212"
   ],
   [
     "DO",
-    "Dominican Republic"
+    "Dominican Republic",
+    "DOM",
+    "214"
   ],
   [
     "DZ",
-    "Algeria"
+    "Algeria",
+    "DZA",
+    "012"
   ],
   [
     "EC",
-    "Ecuador"
+    "Ecuador",
+    "ECU",
+    "218"
   ],
   [
     "EE",
-    "Estonia"
+    "Estonia",
+    "EST",
+    "233"
   ],
   [
     "EG",
-    "Egypt"
+    "Egypt",
+    "EGY",
+    "818"
   ],
   [
     "EH",
-    "Western Sahara"
+    "Western Sahara",
+    "ESH",
+    "732"
   ],
   [
     "ER",
-    "Eritrea"
+    "Eritrea",
+    "ERI",
+    "232"
   ],
   [
     "ES",
-    "Spain"
+    "Spain",
+    "ESP",
+    "724"
   ],
   [
     "ET",
-    "Ethiopia"
+    "Ethiopia",
+    "ETH",
+    "231"
   ],
   [
     "FI",
-    "Finland"
+    "Finland",
+    "FIN",
+    "246"
   ],
   [
     "FJ",
-    "Fiji"
+    "Fiji",
+    "FJI",
+    "242"
   ],
   [
     "FK",
-    "Falkland Islands"
+    "Falkland Islands",
+    "FLK",
+    "238"
   ],
   [
     "FM",
-    "Micronesia"
+    "Micronesia",
+    "FSM",
+    "583"
   ],
   [
     "FO",
-    "Faroe Islands"
+    "Faroe Islands",
+    "FRO",
+    "234"
   ],
   [
     "FR",
-    "France"
+    "France",
+    "FRA",
+    "250"
   ],
   [
     "GA",
-    "Gabon"
+    "Gabon",
+    "GAB",
+    "266"
   ],
   [
     "GB",
-    "United Kingdom"
+    "United Kingdom",
+    "GBR",
+    "826"
   ],
   [
     "GD",
-    "Grenada"
+    "Grenada",
+    "GRD",
+    "308"
   ],
   [
     "GE",
-    "Georgia"
+    "Georgia",
+    "GEO",
+    "268"
   ],
   [
     "GF",
-    "French Guiana"
+    "French Guiana",
+    "GUF",
+    "254"
   ],
   [
     "GG",
-    "Guernsey"
+    "Guernsey",
+    "GGY",
+    "831"
   ],
   [
     "GH",
-    "Ghana"
+    "Ghana",
+    "GHA",
+    "288"
   ],
   [
     "GI",
-    "Gibraltar"
+    "Gibraltar",
+    "GIB",
+    "292"
   ],
   [
     "GL",
-    "Greenland"
+    "Greenland",
+    "GRL",
+    "304"
   ],
   [
     "GM",
-    "Gambia"
+    "Gambia",
+    "GMB",
+    "270"
   ],
   [
     "GN",
-    "Guinea"
+    "Guinea",
+    "GIN",
+    "324"
   ],
   [
     "GP",
-    "Guadeloupe"
+    "Guadeloupe",
+    "GLP",
+    "312"
   ],
   [
     "GQ",
-    "Equatorial Guinea"
+    "Equatorial Guinea",
+    "GNQ",
+    "226"
   ],
   [
     "GR",
-    "Greece"
+    "Greece",
+    "GRC",
+    "300"
   ],
   [
     "GS",
-    "South Georgia & South Sandwich Islands"
+    "South Georgia and the South Sandwich Islands",
+    "SGS",
+    "239"
   ],
   [
     "GT",
-    "Guatemala"
+    "Guatemala",
+    "GTM",
+    "320"
   ],
   [
     "GU",
-    "Guam"
+    "Guam",
+    "GUM",
+    "316"
   ],
   [
     "GW",
-    "Guinea-Bissau"
+    "Guinea-Bissau",
+    "GNB",
+    "624"
   ],
   [
     "GY",
-    "Guyana"
+    "Guyana",
+    "GUY",
+    "328"
   ],
   [
     "HK",
-    "Hong Kong SAR China"
+    "Hong Kong",
+    "HKG",
+    "344"
   ],
   [
     "HM",
-    "Heard & McDonald Islands"
+    "Heard Island and McDonald Islands",
+    "HMD",
+    "334"
   ],
   [
     "HN",
-    "Honduras"
+    "Honduras",
+    "HND",
+    "340"
   ],
   [
     "HR",
-    "Croatia"
+    "Croatia",
+    "HRV",
+    "191"
   ],
   [
     "HT",
-    "Haiti"
+    "Haiti",
+    "HTI",
+    "332"
   ],
   [
     "HU",
-    "Hungary"
+    "Hungary",
+    "HUN",
+    "348"
   ],
   [
     "ID",
-    "Indonesia"
+    "Indonesia",
+    "IDN",
+    "360"
   ],
   [
     "IE",
-    "Ireland"
+    "Ireland",
+    "IRL",
+    "372"
   ],
   [
     "IL",
-    "Israel"
+    "Israel",
+    "ISR",
+    "376"
   ],
   [
     "IM",
-    "Isle of Man"
+    "Isle of Man",
+    "IMN",
+    "833"
   ],
   [
     "IN",
-    "India"
+    "India",
+    "IND",
+    "356"
   ],
   [
     "IO",
-    "British Indian Ocean Territory"
+    "British Indian Ocean Territory",
+    "IOT",
+    "086"
   ],
   [
     "IQ",
-    "Iraq"
+    "Iraq",
+    "IRQ",
+    "368"
   ],
   [
     "IR",
-    "Iran"
+    "Iran",
+    "IRN",
+    "364"
   ],
   [
     "IS",
-    "Iceland"
+    "Iceland",
+    "ISL",
+    "352"
   ],
   [
     "IT",
-    "Italy"
+    "Italy",
+    "ITA",
+    "380"
   ],
   [
     "JE",
-    "Jersey"
+    "Jersey",
+    "JEY",
+    "832"
   ],
   [
     "JM",
-    "Jamaica"
+    "Jamaica",
+    "JAM",
+    "388"
   ],
   [
     "JO",
-    "Jordan"
+    "Jordan",
+    "JOR",
+    "400"
   ],
   [
     "JP",
-    "Japan"
+    "Japan",
+    "JPN",
+    "392"
   ],
   [
     "KE",
-    "Kenya"
+    "Kenya",
+    "KEN",
+    "404"
   ],
   [
     "KG",
-    "Kyrgyzstan"
+    "Kyrgyzstan",
+    "KGZ",
+    "417"
   ],
   [
     "KH",
-    "Cambodia"
+    "Cambodia",
+    "KHM",
+    "116"
   ],
   [
     "KI",
-    "Kiribati"
+    "Kiribati",
+    "KIR",
+    "296"
   ],
   [
     "KM",
-    "Comoros"
+    "Comoros",
+    "COM",
+    "174"
   ],
   [
     "KN",
-    "St. Kitts & Nevis"
+    "Saint Kitts and Nevis",
+    "KNA",
+    "659"
   ],
   [
     "KP",
-    "North Korea"
+    "Korea (North)",
+    "PRK",
+    "408"
   ],
   [
     "KR",
-    "South Korea"
+    "Korea (South)",
+    "KOR",
+    "410"
   ],
   [
     "KW",
-    "Kuwait"
+    "Kuwait",
+    "KWT",
+    "414"
   ],
   [
     "KY",
-    "Cayman Islands"
+    "Cayman Islands",
+    "CYM",
+    "136"
   ],
   [
     "KZ",
-    "Kazakhstan"
+    "Kazakhstan",
+    "KAZ",
+    "398"
   ],
   [
     "LA",
-    "Laos"
+    "Laos",
+    "LAO",
+    "418"
   ],
   [
     "LB",
-    "Lebanon"
+    "Lebanon",
+    "LBN",
+    "422"
   ],
   [
     "LC",
-    "St. Lucia"
+    "Saint Lucia",
+    "LCA",
+    "662"
   ],
   [
     "LI",
-    "Liechtenstein"
+    "Liechtenstein",
+    "LIE",
+    "438"
   ],
   [
     "LK",
-    "Sri Lanka"
+    "Sri Lanka",
+    "LKA",
+    "144"
   ],
   [
     "LR",
-    "Liberia"
+    "Liberia",
+    "LBR",
+    "430"
   ],
   [
     "LS",
-    "Lesotho"
+    "Lesotho",
+    "LSO",
+    "426"
   ],
   [
     "LT",
-    "Lithuania"
+    "Lithuania",
+    "LTU",
+    "440"
   ],
   [
     "LU",
-    "Luxembourg"
+    "Luxembourg",
+    "LUX",
+    "442"
   ],
   [
     "LV",
-    "Latvia"
+    "Latvia",
+    "LVA",
+    "428"
   ],
   [
     "LY",
-    "Libya"
+    "Libya",
+    "LBY",
+    "434"
   ],
   [
     "MA",
-    "Morocco"
+    "Morocco",
+    "MAR",
+    "504"
   ],
   [
     "MC",
-    "Monaco"
+    "Monaco",
+    "MCO",
+    "492"
   ],
   [
     "MD",
-    "Moldova"
+    "Moldova",
+    "MDA",
+    "498"
   ],
   [
     "ME",
-    "Montenegro"
+    "Montenegro",
+    "MNE",
+    "499"
   ],
   [
     "MF",
-    "St. Martin"
+    "Saint Martin (French part)",
+    "MAF",
+    "663"
   ],
   [
     "MG",
-    "Madagascar"
+    "Madagascar",
+    "MDG",
+    "450"
   ],
   [
     "MH",
-    "Marshall Islands"
+    "Marshall Islands",
+    "MHL",
+    "584"
   ],
   [
     "MK",
-    "North Macedonia"
+    "North Macedonia",
+    "MKD",
+    "807"
   ],
   [
     "ML",
-    "Mali"
+    "Mali",
+    "MLI",
+    "466"
   ],
   [
     "MM",
-    "Myanmar (Burma)"
+    "Myanmar",
+    "MMR",
+    "104"
   ],
   [
     "MN",
-    "Mongolia"
+    "Mongolia",
+    "MNG",
+    "496"
   ],
   [
     "MO",
-    "Macao SAR China"
+    "Macao",
+    "MAC",
+    "446"
   ],
   [
     "MP",
-    "Northern Mariana Islands"
+    "Northern Mariana Islands",
+    "MNP",
+    "580"
   ],
   [
     "MQ",
-    "Martinique"
+    "Martinique",
+    "MTQ",
+    "474"
   ],
   [
     "MR",
-    "Mauritania"
+    "Mauritania",
+    "MRT",
+    "478"
   ],
   [
     "MS",
-    "Montserrat"
+    "Montserrat",
+    "MSR",
+    "500"
   ],
   [
     "MT",
-    "Malta"
+    "Malta",
+    "MLT",
+    "470"
   ],
   [
     "MU",
-    "Mauritius"
+    "Mauritius",
+    "MUS",
+    "480"
   ],
   [
     "MV",
-    "Maldives"
+    "Maldives",
+    "MDV",
+    "462"
   ],
   [
     "MW",
-    "Malawi"
+    "Malawi",
+    "MWI",
+    "454"
   ],
   [
     "MX",
-    "Mexico"
+    "Mexico",
+    "MEX",
+    "484"
   ],
   [
     "MY",
-    "Malaysia"
+    "Malaysia",
+    "MYS",
+    "458"
   ],
   [
     "MZ",
-    "Mozambique"
+    "Mozambique",
+    "MOZ",
+    "508"
   ],
   [
     "NA",
-    "Namibia"
+    "Namibia",
+    "NAM",
+    "516"
   ],
   [
     "NC",
-    "New Caledonia"
+    "New Caledonia",
+    "NCL",
+    "540"
   ],
   [
     "NE",
-    "Niger"
+    "Niger",
+    "NER",
+    "562"
   ],
   [
     "NF",
-    "Norfolk Island"
+    "Norfolk Island",
+    "NFK",
+    "574"
   ],
   [
     "NG",
-    "Nigeria"
+    "Nigeria",
+    "NGA",
+    "566"
   ],
   [
     "NI",
-    "Nicaragua"
+    "Nicaragua",
+    "NIC",
+    "558"
   ],
   [
     "NL",
-    "Netherlands"
+    "Netherlands",
+    "NLD",
+    "528"
   ],
   [
     "NO",
-    "Norway"
+    "Norway",
+    "NOR",
+    "578"
   ],
   [
     "NP",
-    "Nepal"
+    "Nepal",
+    "NPL",
+    "524"
   ],
   [
     "NR",
-    "Nauru"
+    "Nauru",
+    "NRU",
+    "520"
   ],
   [
     "NU",
-    "Niue"
+    "Niue",
+    "NIU",
+    "570"
   ],
   [
     "NZ",
-    "New Zealand"
+    "New Zealand",
+    "NZL",
+    "554"
   ],
   [
     "OM",
-    "Oman"
+    "Oman",
+    "OMN",
+    "512"
   ],
   [
     "PA",
-    "Panama"
+    "Panama",
+    "PAN",
+    "591"
   ],
   [
     "PE",
-    "Peru"
+    "Peru",
+    "PER",
+    "604"
   ],
   [
     "PF",
-    "French Polynesia"
+    "French Polynesia",
+    "PYF",
+    "258"
   ],
   [
     "PG",
-    "Papua New Guinea"
+    "Papua New Guinea",
+    "PNG",
+    "598"
   ],
   [
     "PH",
-    "Philippines"
+    "Philippines",
+    "PHL",
+    "608"
   ],
   [
     "PK",
-    "Pakistan"
+    "Pakistan",
+    "PAK",
+    "586"
   ],
   [
     "PL",
-    "Poland"
+    "Poland",
+    "POL",
+    "616"
   ],
   [
     "PM",
-    "St. Pierre & Miquelon"
+    "Saint Pierre and Miquelon",
+    "SPM",
+    "666"
   ],
   [
     "PN",
-    "Pitcairn Islands"
+    "Pitcairn",
+    "PCN",
+    "612"
   ],
   [
     "PR",
-    "Puerto Rico"
+    "Puerto Rico",
+    "PRI",
+    "630"
   ],
   [
     "PS",
-    "Palestinian Territories"
+    "Palestine, State of",
+    "PSE",
+    "275"
   ],
   [
     "PT",
-    "Portugal"
+    "Portugal",
+    "PRT",
+    "620"
   ],
   [
     "PW",
-    "Palau"
+    "Palau",
+    "PLW",
+    "585"
   ],
   [
     "PY",
-    "Paraguay"
+    "Paraguay",
+    "PRY",
+    "600"
   ],
   [
     "QA",
-    "Qatar"
+    "Qatar",
+    "QAT",
+    "634"
   ],
   [
     "RE",
-    "Réunion"
+    "Réunion",
+    "REU",
+    "638"
   ],
   [
     "RO",
-    "Romania"
+    "Romania",
+    "ROU",
+    "642"
   ],
   [
     "RS",
-    "Serbia"
+    "Serbia",
+    "SRB",
+    "688"
   ],
   [
     "RU",
-    "Russia"
+    "Russian Federation",
+    "RUS",
+    "643"
   ],
   [
     "RW",
-    "Rwanda"
+    "Rwanda",
+    "RWA",
+    "646"
   ],
   [
     "SA",
-    "Saudi Arabia"
+    "Saudi Arabia",
+    "SAU",
+    "682"
   ],
   [
     "SB",
-    "Solomon Islands"
+    "Solomon Islands",
+    "SLB",
+    "090"
   ],
   [
     "SC",
-    "Seychelles"
+    "Seychelles",
+    "SYC",
+    "690"
   ],
   [
     "SD",
-    "Sudan"
+    "Sudan",
+    "SDN",
+    "729"
   ],
   [
     "SE",
-    "Sweden"
+    "Sweden",
+    "SWE",
+    "752"
   ],
   [
     "SG",
-    "Singapore"
+    "Singapore",
+    "SGP",
+    "702"
   ],
   [
     "SH",
-    "St. Helena"
+    "Saint Helena",
+    "SHN",
+    "654"
   ],
   [
     "SI",
-    "Slovenia"
+    "Slovenia",
+    "SVN",
+    "705"
   ],
   [
     "SJ",
-    "Svalbard & Jan Mayen"
+    "Svalbard and Jan Mayen",
+    "SJM",
+    "744"
   ],
   [
     "SK",
-    "Slovakia"
+    "Slovakia",
+    "SVK",
+    "703"
   ],
   [
     "SL",
-    "Sierra Leone"
+    "Sierra Leone",
+    "SLE",
+    "694"
   ],
   [
     "SM",
-    "San Marino"
+    "San Marino",
+    "SMR",
+    "674"
   ],
   [
     "SN",
-    "Senegal"
+    "Senegal",
+    "SEN",
+    "686"
   ],
   [
     "SO",
-    "Somalia"
+    "Somalia",
+    "SOM",
+    "706"
   ],
   [
     "SR",
-    "Suriname"
+    "Suriname",
+    "SUR",
+    "740"
   ],
   [
     "SS",
-    "South Sudan"
+    "South Sudan",
+    "SSD",
+    "728"
   ],
   [
     "ST",
-    "São Tomé & Príncipe"
+    "Sao Tome and Principe",
+    "STP",
+    "678"
   ],
   [
     "SV",
-    "El Salvador"
+    "El Salvador",
+    "SLV",
+    "222"
   ],
   [
     "SX",
-    "Sint Maarten"
+    "Sint Maarten (Dutch part)",
+    "SXM",
+    "534"
   ],
   [
     "SY",
-    "Syria"
+    "Syrian Arab Republic",
+    "SYR",
+    "760"
   ],
   [
     "SZ",
-    "Eswatini"
+    "Eswatini",
+    "SWZ",
+    "748"
   ],
   [
     "TC",
-    "Turks & Caicos Islands"
+    "Turks and Caicos Islands",
+    "TCA",
+    "796"
   ],
   [
     "TD",
-    "Chad"
+    "Chad",
+    "TCD",
+    "148"
   ],
   [
     "TF",
-    "French Southern Territories"
+    "French Southern Territories",
+    "ATF",
+    "260"
   ],
   [
     "TG",
-    "Togo"
+    "Togo",
+    "TGO",
+    "768"
   ],
   [
     "TH",
-    "Thailand"
+    "Thailand",
+    "THA",
+    "764"
   ],
   [
     "TJ",
-    "Tajikistan"
+    "Tajikistan",
+    "TJK",
+    "762"
   ],
   [
     "TK",
-    "Tokelau"
+    "Tokelau",
+    "TKL",
+    "772"
   ],
   [
     "TL",
-    "Timor-Leste"
+    "Timor-Leste",
+    "TLS",
+    "626"
   ],
   [
     "TM",
-    "Turkmenistan"
+    "Turkmenistan",
+    "TKM",
+    "795"
   ],
   [
     "TN",
-    "Tunisia"
+    "Tunisia",
+    "TUN",
+    "788"
   ],
   [
     "TO",
-    "Tonga"
+    "Tonga",
+    "TON",
+    "776"
   ],
   [
     "TR",
-    "Türkiye"
+    "Turkey",
+    "TUR",
+    "792"
   ],
   [
     "TT",
-    "Trinidad & Tobago"
+    "Trinidad and Tobago",
+    "TTO",
+    "780"
   ],
   [
     "TV",
-    "Tuvalu"
+    "Tuvalu",
+    "TUV",
+    "798"
   ],
   [
     "TW",
-    "Taiwan"
+    "Taiwan",
+    "TWN",
+    "158"
   ],
   [
     "TZ",
-    "Tanzania"
+    "Tanzania",
+    "TZA",
+    "834"
   ],
   [
     "UA",
-    "Ukraine"
+    "Ukraine",
+    "UKR",
+    "804"
   ],
   [
     "UG",
-    "Uganda"
+    "Uganda",
+    "UGA",
+    "800"
   ],
   [
     "UM",
-    "U.S. Outlying Islands"
+    "United States Minor Outlying Islands",
+    "UMI",
+    "581"
   ],
   [
     "US",
-    "United States"
+    "United States",
+    "USA",
+    "840"
   ],
   [
     "UY",
-    "Uruguay"
+    "Uruguay",
+    "URY",
+    "858"
   ],
   [
     "UZ",
-    "Uzbekistan"
+    "Uzbekistan",
+    "UZB",
+    "860"
   ],
   [
     "VA",
-    "Vatican City"
+    "Holy See",
+    "VAT",
+    "336"
   ],
   [
     "VC",
-    "St. Vincent & Grenadines"
+    "Saint Vincent and the Grenadines",
+    "VCT",
+    "670"
   ],
   [
     "VE",
-    "Venezuela"
+    "Venezuela",
+    "VEN",
+    "862"
   ],
   [
     "VG",
-    "British Virgin Islands"
+    "Virgin Islands (British)",
+    "VGB",
+    "092"
   ],
   [
     "VI",
-    "U.S. Virgin Islands"
+    "Virgin Islands (U.S.)",
+    "VIR",
+    "850"
   ],
   [
     "VN",
-    "Vietnam"
+    "Viet Nam",
+    "VNM",
+    "704"
   ],
   [
     "VU",
-    "Vanuatu"
+    "Vanuatu",
+    "VUT",
+    "548"
   ],
   [
     "WF",
-    "Wallis & Futuna"
+    "Wallis and Futuna",
+    "WLF",
+    "876"
   ],
   [
     "WS",
-    "Samoa"
-  ],
-  [
-    "XK",
-    "Kosovo"
+    "Samoa",
+    "WSM",
+    "882"
   ],
   [
     "YE",
-    "Yemen"
+    "Yemen",
+    "YEM",
+    "887"
   ],
   [
     "YT",
-    "Mayotte"
+    "Mayotte",
+    "MYT",
+    "175"
   ],
   [
     "ZA",
-    "South Africa"
+    "South Africa",
+    "ZAF",
+    "710"
   ],
   [
     "ZM",
-    "Zambia"
+    "Zambia",
+    "ZMB",
+    "894"
   ],
   [
     "ZW",
-    "Zimbabwe"
+    "Zimbabwe",
+    "ZWE",
+    "716"
   ]
 ];
 

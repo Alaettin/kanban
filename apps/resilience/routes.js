@@ -275,11 +275,17 @@ async function initResilienceTables() {
   await db.run(`CREATE TABLE IF NOT EXISTS resilience_country_mappings (
     iso_code    TEXT NOT NULL,
     user_id     TEXT NOT NULL,
+    alpha3      TEXT NOT NULL DEFAULT '',
+    numeric     TEXT NOT NULL DEFAULT '',
     aas_names   TEXT NOT NULL DEFAULT '',
     gdacs_names TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (user_id, iso_code),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
+
+  // Migration: add alpha3/numeric columns
+  try { await db.run("ALTER TABLE resilience_country_mappings ADD COLUMN alpha3 TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
+  try { await db.run("ALTER TABLE resilience_country_mappings ADD COLUMN numeric TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
 
   console.log("[Resilience] Ready.");
 }
@@ -290,9 +296,9 @@ async function seedCountryMappings(userId) {
     [userId]
   );
   if (row) return;
-  const stmt = "INSERT OR IGNORE INTO resilience_country_mappings (iso_code, user_id, gdacs_names) VALUES (?, ?, ?)";
-  for (const [code, name] of ISO_COUNTRIES) {
-    await db.run(stmt, [code, userId, name]);
+  const stmt = "INSERT OR IGNORE INTO resilience_country_mappings (iso_code, user_id, alpha3, numeric, gdacs_names) VALUES (?, ?, ?, ?, ?)";
+  for (const [code, name, alpha3, num] of ISO_COUNTRIES) {
+    await db.run(stmt, [code, userId, alpha3, num, name]);
   }
 }
 
@@ -533,7 +539,7 @@ function mountRoutes(router) {
       }
       const total = (await db.get(`SELECT COUNT(*) AS c FROM resilience_country_mappings WHERE ${where}`, params)).c;
       const items = await db.all(
-        `SELECT iso_code, aas_names, gdacs_names FROM resilience_country_mappings WHERE ${where} ORDER BY iso_code ASC LIMIT ? OFFSET ?`,
+        `SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE ${where} ORDER BY iso_code ASC LIMIT ? OFFSET ?`,
         [...params, limit, offset]
       );
       res.json({ items, total });

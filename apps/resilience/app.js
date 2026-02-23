@@ -349,7 +349,9 @@ const I18N = {
     settingsNavGeneral: "Allgemein",
     settingsNavCountryCodes: "Ländercodes",
     cmSearch: "Suchen…",
-    cmThIso: "ISO",
+    cmThIso: "Alpha-2",
+    cmThAlpha3: "Alpha-3",
+    cmThNumeric: "Numeric",
     cmThAas: "AAS",
     cmThGdacs: "GDACS",
     cmEmpty: "Keine Einträge gefunden.",
@@ -662,7 +664,9 @@ const I18N = {
     settingsNavGeneral: "General",
     settingsNavCountryCodes: "Country Codes",
     cmSearch: "Search…",
-    cmThIso: "ISO",
+    cmThIso: "Alpha-2",
+    cmThAlpha3: "Alpha-3",
+    cmThNumeric: "Numeric",
     cmThAas: "AAS",
     cmThGdacs: "GDACS",
     cmEmpty: "No entries found.",
@@ -948,6 +952,8 @@ function applyLocaleToUI() {
   document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
   cmSearchInput.placeholder = t("cmSearch");
   document.getElementById("cm-th-iso").textContent = t("cmThIso");
+  document.getElementById("cm-th-alpha3").textContent = t("cmThAlpha3");
+  document.getElementById("cm-th-numeric").textContent = t("cmThNumeric");
   document.getElementById("cm-th-aas").textContent = t("cmThAas");
   document.getElementById("cm-th-gdacs").textContent = t("cmThGdacs");
   document.getElementById("cm-empty-label").textContent = t("cmEmpty");
@@ -1491,7 +1497,7 @@ async function loadCountryMappings() {
 
     for (const row of data.items) {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td class="cm-td-iso">${escapeHtml(row.iso_code)}</td><td class="cm-td-editable" data-field="aas_names">${escapeHtml(row.aas_names)}</td><td class="cm-td-editable" data-field="gdacs_names">${escapeHtml(row.gdacs_names)}</td>`;
+      tr.innerHTML = `<td class="cm-td-iso">${escapeHtml(row.iso_code)}</td><td class="cm-td-alpha3">${escapeHtml(row.alpha3)}</td><td class="cm-td-numeric">${escapeHtml(row.numeric)}</td><td class="cm-td-editable" data-field="aas_names">${escapeHtml(row.aas_names)}</td><td class="cm-td-editable" data-field="gdacs_names">${escapeHtml(row.gdacs_names)}</td>`;
       tr.dataset.iso = row.iso_code;
       cmTbody.appendChild(tr);
     }
