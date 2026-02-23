@@ -33,6 +33,17 @@ const gdacsSettingsSaveBtn = document.getElementById("gdacs-settings-save-btn");
 const importIntervalSelect = document.getElementById("import-interval-select");
 const importSettingsSaveBtn = document.getElementById("import-settings-save-btn");
 
+// Country Mappings DOM refs
+const settingsNav = document.getElementById("settings-nav");
+const settingsNavGeneral = document.getElementById("settings-nav-general");
+const settingsNavCC = document.getElementById("settings-nav-country-codes");
+const cmSearchInput = document.getElementById("cm-search-input");
+const cmTbody = document.getElementById("cm-tbody");
+const cmEmpty = document.getElementById("cm-empty");
+const cmPrevBtn = document.getElementById("cm-prev-btn");
+const cmNextBtn = document.getElementById("cm-next-btn");
+const cmPageInfo = document.getElementById("cm-page-info");
+
 // News DOM refs
 const newsListView = document.getElementById("news-list-view");
 const newsDetailView = document.getElementById("news-detail-view");
@@ -335,6 +346,15 @@ const I18N = {
     importInterval12: "12 Std.",
     importInterval24: "24 Std.",
     importSettingsSave: "Speichern",
+    settingsNavGeneral: "Allgemein",
+    settingsNavCountryCodes: "Ländercodes",
+    cmSearch: "Suchen…",
+    cmThIso: "ISO",
+    cmThAas: "AAS",
+    cmThGdacs: "GDACS",
+    cmEmpty: "Keine Einträge gefunden.",
+    cmPrev: "Zurück",
+    cmNext: "Weiter",
     aasOvEmpty: "Keine AAS IDs vorhanden. Füge Quellen und IDs hinzu.",
     aasOvCount: "AAS",
     aasOvBack: "Zurück",
@@ -639,6 +659,15 @@ const I18N = {
     importInterval12: "12 hrs",
     importInterval24: "24 hrs",
     importSettingsSave: "Save",
+    settingsNavGeneral: "General",
+    settingsNavCountryCodes: "Country Codes",
+    cmSearch: "Search…",
+    cmThIso: "ISO",
+    cmThAas: "AAS",
+    cmThGdacs: "GDACS",
+    cmEmpty: "No entries found.",
+    cmPrev: "Previous",
+    cmNext: "Next",
     aasOvEmpty: "No AAS IDs available. Add sources and IDs first.",
     aasOvCount: "AAS",
     aasOvBack: "Back",
@@ -702,6 +731,12 @@ let activeAasNav = "overview";
 let aasOvPage = 0;
 const AAS_OV_PER_PAGE = 20;
 
+// Settings nav state
+let activeSettingsNav = "general";
+let cmPage = 0, cmQuery = "";
+const CM_PER_PAGE = 30;
+let cmDebounceTimer = null;
+
 // Track where news detail was opened from (for back navigation)
 let newsOpenedFrom = null;
 
@@ -761,7 +796,7 @@ function navigateTo(page) {
   if (page === "gdacs") applyGdacsLocale();
   if (page === "news-feeds") { showNewsList(); loadNews(); }
   if (page === "gdacs-alerts") loadGdacsAlerts();
-  if (page === "settings") loadSettings();
+  if (page === "settings") switchSettingsNav(activeSettingsNav);
   if (page === "docs") loadDoc(activeDoc);
 }
 
@@ -907,6 +942,17 @@ function applyLocaleToUI() {
   impOpts[1].textContent = t("importInterval6");
   impOpts[2].textContent = t("importInterval12");
   impOpts[3].textContent = t("importInterval24");
+
+  // Settings nav labels
+  document.getElementById("settings-nav-general-btn").textContent = t("settingsNavGeneral");
+  document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
+  cmSearchInput.placeholder = t("cmSearch");
+  document.getElementById("cm-th-iso").textContent = t("cmThIso");
+  document.getElementById("cm-th-aas").textContent = t("cmThAas");
+  document.getElementById("cm-th-gdacs").textContent = t("cmThGdacs");
+  document.getElementById("cm-empty-label").textContent = t("cmEmpty");
+  cmPrevBtn.textContent = t("cmPrev");
+  cmNextBtn.textContent = t("cmNext");
 
   // GDACS Search labels
   applyGdacsLocale();
@@ -1408,6 +1454,113 @@ function switchIndNav(nav) {
     loadIndicators();
   }
 }
+
+// ── Settings: Nav switching ────────────────────────────────────────
+settingsNav.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-settings-nav]");
+  if (!btn) return;
+  switchSettingsNav(btn.dataset.settingsNav);
+});
+
+function switchSettingsNav(nav) {
+  activeSettingsNav = nav;
+  settingsNav.querySelectorAll(".docs-nav-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.settingsNav === nav);
+  });
+  settingsNavGeneral.hidden = nav !== "general";
+  settingsNavCC.hidden = nav !== "country-codes";
+
+  if (nav === "general") {
+    loadSettings();
+  } else if (nav === "country-codes") {
+    loadCountryMappings();
+  }
+}
+
+// ── Country Mappings ──────────────────────────────────────────────
+async function loadCountryMappings() {
+  try {
+    const offset = cmPage * CM_PER_PAGE;
+    const qs = new URLSearchParams({ limit: CM_PER_PAGE, offset, q: cmQuery });
+    const data = await apiRequest(`/apps/resilience/api/country-mappings?${qs}`);
+    if (!data || data.error) return;
+
+    cmTbody.innerHTML = "";
+    cmEmpty.hidden = data.items.length > 0;
+    document.getElementById("cm-table").hidden = data.items.length === 0;
+
+    for (const row of data.items) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="cm-td-iso">${escapeHtml(row.iso_code)}</td><td class="cm-td-editable" data-field="aas_names">${escapeHtml(row.aas_names)}</td><td class="cm-td-editable" data-field="gdacs_names">${escapeHtml(row.gdacs_names)}</td>`;
+      tr.dataset.iso = row.iso_code;
+      cmTbody.appendChild(tr);
+    }
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(data.total / CM_PER_PAGE));
+    const curPage = cmPage + 1;
+    cmPageInfo.textContent = `${curPage} / ${totalPages} (${data.total})`;
+    cmPrevBtn.disabled = cmPage <= 0;
+    cmNextBtn.disabled = curPage >= totalPages;
+  } catch (err) {
+    console.error("loadCountryMappings error:", err);
+  }
+}
+
+cmPrevBtn.addEventListener("click", () => { if (cmPage > 0) { cmPage--; loadCountryMappings(); } });
+cmNextBtn.addEventListener("click", () => { cmPage++; loadCountryMappings(); });
+
+cmSearchInput.addEventListener("input", () => {
+  clearTimeout(cmDebounceTimer);
+  cmDebounceTimer = setTimeout(() => {
+    cmQuery = cmSearchInput.value.trim();
+    cmPage = 0;
+    loadCountryMappings();
+  }, 400);
+});
+
+// Inline editing
+cmTbody.addEventListener("click", (e) => {
+  const td = e.target.closest(".cm-td-editable");
+  if (!td || td.querySelector("input")) return;
+  const oldVal = td.textContent;
+  const field = td.dataset.field;
+  const iso = td.closest("tr").dataset.iso;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "cm-edit-input";
+  input.value = oldVal;
+  td.textContent = "";
+  td.appendChild(input);
+  input.focus();
+
+  const save = async () => {
+    const newVal = input.value.trim();
+    td.textContent = newVal;
+    if (newVal !== oldVal) {
+      const body = {};
+      // Get sibling value for the other field
+      const tr = td.closest("tr");
+      const aasTd = tr.querySelector('[data-field="aas_names"]');
+      const gdacsTd = tr.querySelector('[data-field="gdacs_names"]');
+      body.aas_names = field === "aas_names" ? newVal : aasTd.textContent;
+      body.gdacs_names = field === "gdacs_names" ? newVal : gdacsTd.textContent;
+      const result = await apiRequest(`/apps/resilience/api/country-mappings/${iso}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!result || result.error) td.textContent = oldVal;
+    }
+  };
+
+  input.addEventListener("blur", save);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { input.removeEventListener("blur", save); save(); }
+    if (ev.key === "Escape") { input.removeEventListener("blur", save); td.textContent = oldVal; }
+  });
+});
 
 // ── Indicator Classes ────────────────────────────────────────────
 const indClassInput = document.getElementById("ind-class-input");

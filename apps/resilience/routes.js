@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const db = require("../../shared/db");
 const auth = require("../../shared/auth");
 const RssParser = require("rss-parser");
+const ISO_COUNTRIES = require("./iso-countries");
 
 const rssParser = new RssParser({ timeout: 15000 });
 
@@ -270,7 +271,29 @@ async function initResilienceTables() {
     PRIMARY KEY (user_id, aas_id)
   )`);
 
+  // Country code mappings (per-user, seeded lazily)
+  await db.run(`CREATE TABLE IF NOT EXISTS resilience_country_mappings (
+    iso_code    TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    aas_names   TEXT NOT NULL DEFAULT '',
+    gdacs_names TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (user_id, iso_code),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
   console.log("[Resilience] Ready.");
+}
+
+async function seedCountryMappings(userId) {
+  const row = await db.get(
+    "SELECT 1 FROM resilience_country_mappings WHERE user_id = ? LIMIT 1",
+    [userId]
+  );
+  if (row) return;
+  const stmt = "INSERT OR IGNORE INTO resilience_country_mappings (iso_code, user_id, gdacs_names) VALUES (?, ?, ?)";
+  for (const [code, name] of ISO_COUNTRIES) {
+    await db.run(stmt, [code, userId, name]);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +513,52 @@ function mountRoutes(router) {
       }
       res.json({ ok: true });
     } catch {
+      res.status(500).json({ error: "SAVE_FAILED" });
+    }
+  });
+
+  // ── Country Mappings ───────────────────────────────────────────
+  router.get("/api/country-mappings", auth.requireAuth, async (req, res) => {
+    try {
+      await seedCountryMappings(req.user.id);
+      const limit = Math.min(parseInt(req.query.limit) || 30, 300);
+      const offset = parseInt(req.query.offset) || 0;
+      const q = (req.query.q || "").trim();
+      let where = "user_id = ?";
+      const params = [req.user.id];
+      if (q) {
+        where += " AND (iso_code LIKE ? OR aas_names LIKE ? OR gdacs_names LIKE ?)";
+        const like = `%${q}%`;
+        params.push(like, like, like);
+      }
+      const total = (await db.get(`SELECT COUNT(*) AS c FROM resilience_country_mappings WHERE ${where}`, params)).c;
+      const items = await db.all(
+        `SELECT iso_code, aas_names, gdacs_names FROM resilience_country_mappings WHERE ${where} ORDER BY iso_code ASC LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      );
+      res.json({ items, total });
+    } catch (err) {
+      console.error("GET /api/country-mappings error:", err);
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  router.put("/api/country-mappings/:isoCode", auth.requireAuth, async (req, res) => {
+    try {
+      const { isoCode } = req.params;
+      const { aas_names, gdacs_names } = req.body || {};
+      const row = await db.get(
+        "SELECT 1 FROM resilience_country_mappings WHERE user_id = ? AND iso_code = ?",
+        [req.user.id, isoCode]
+      );
+      if (!row) return res.status(404).json({ error: "NOT_FOUND" });
+      await db.run(
+        "UPDATE resilience_country_mappings SET aas_names = ?, gdacs_names = ? WHERE user_id = ? AND iso_code = ?",
+        [String(aas_names ?? ""), String(gdacs_names ?? ""), req.user.id, isoCode]
+      );
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("PUT /api/country-mappings error:", err);
       res.status(500).json({ error: "SAVE_FAILED" });
     }
   });

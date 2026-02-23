@@ -2756,3 +2756,11 @@ body.sidebar-collapsed .sidebar-foot {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
+
+/* ── Country Mappings ── */
+#settings-nav-general { max-width: 720px; }
+.cm-th-iso { width: 80px; }
+.cm-td-iso { font-weight: 700; white-space: nowrap; }
+.cm-td-editable { cursor: pointer; min-width: 150px; }
+.cm-td-editable:hover { background: var(--accent-light); }
+.cm-edit-input { width: 100%; border: 1px solid var(--accent); border-radius: 4px; padding: 0.25rem 0.4rem; font: inherit; font-size: 0.82rem; outline: none; }
