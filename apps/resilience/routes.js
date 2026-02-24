@@ -656,17 +656,19 @@ async function runGeocodingJob(userId) {
       const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
 
       let geoResult = null;
-      if (cityRaw) {
-        let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(cityRaw)}`;
-        if (isoCode) url += `&countrycodes=${isoCode.toLowerCase()}`;
+      const queryTerm = cityRaw || countryRaw;
+      if (queryTerm) {
+        const baseUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryTerm)}`;
+        const fetchOpts = { signal: AbortSignal.timeout(15000), headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" } };
         try {
-          const resp = await fetch(url, {
-            signal: AbortSignal.timeout(15000),
-            headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" },
-          });
-          if (resp.ok) {
-            const results = await resp.json();
-            if (results.length > 0) geoResult = results[0];
+          let url = isoCode ? `${baseUrl}&countrycodes=${isoCode.toLowerCase()}` : baseUrl;
+          let resp = await fetch(url, fetchOpts);
+          if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
+          // Retry without countrycodes if filtered query returned nothing
+          if (!geoResult && isoCode) {
+            await new Promise(resolve => setTimeout(resolve, 1100));
+            resp = await fetch(baseUrl, fetchOpts);
+            if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
           }
         } catch { /* timeout or network error */ }
         // Rate limit: 1 request/second
@@ -677,7 +679,7 @@ async function runGeocodingJob(userId) {
 
       // Inject Geocoding submodel
       submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
-      submodels.push(buildGeocodingSubmodel(cityRaw, isoCode, geoResult));
+      submodels.push(buildGeocodingSubmodel(cityRaw || countryRaw, isoCode, geoResult));
       await db.run(
         "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
         [JSON.stringify(submodels), geoResult ? "ok" : "error", m.aas_id, userId]
@@ -1426,7 +1428,7 @@ function mountRoutes(router) {
         "SELECT gdacs_retention_days FROM resilience_settings WHERE user_id = ?", [userId]);
       const retDays = settings?.gdacs_retention_days || 30;
 
-      const { aasEntries, matches, columns } = await buildAasAlertData(userId);
+      const { aasEntries, matches, columns, totalMembers } = await buildAasAlertData(userId);
 
       // Alerts with polygons (filtered by retention)
       const alerts = await db.all(
@@ -1459,11 +1461,22 @@ function mountRoutes(router) {
         .filter(m => m.match_tier === "polygon" || m.match_tier === "distance")
         .map(m => ({ aas_id: m.aas_id, alert_id: m.alert_id, match_tier: m.match_tier, distance_km: m.distance_km }));
 
-      res.json({ alerts: alertsOut, aas: aasOut, matches: mapMatches, columns });
+      res.json({ alerts: alertsOut, aas: aasOut, matches: mapMatches, columns, total_members: totalMembers });
     } catch (err) {
       console.error("GET /api/gdacs/map-data error:", err);
       res.status(500).json({ error: "LOAD_FAILED" });
     }
+  });
+
+  // ── Debug: map stats (temporary) ─────────────────────────────
+  router.get("/api/gdacs/map-debug", auth.requireAuth, async (req, res) => {
+    try {
+      const { aasEntries, totalMembers } = await buildAasAlertData(req.user.id);
+      const withCoords = aasEntries.filter(a => a.lat !== null && a.lon !== null).length;
+      const missing = aasEntries.filter(a => a.lat === null || a.lon === null)
+        .map(a => ({ aas_id: a.aas_id, country: a.country_value, city: a.city_value, iso: a.iso_code }));
+      res.json({ total_members: totalMembers, imported: aasEntries.length, with_coords: withCoords, not_imported: totalMembers - aasEntries.length, no_coords: missing.length, missing });
+    } catch (err) { res.status(500).json({ error: String(err) }); }
   });
 
   // ── GDACS AAS Overview (dashboard tile) ──────────────────────
@@ -2050,24 +2063,25 @@ function mountRoutes(router) {
       const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
 
       let geoResult = null;
-      if (cityRaw) {
-        let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(cityRaw)}`;
-        if (isoCode) url += `&countrycodes=${isoCode.toLowerCase()}`;
+      const queryTerm = cityRaw || countryRaw;
+      if (queryTerm) {
+        const baseUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryTerm)}`;
+        const fetchOpts = { signal: AbortSignal.timeout(15000), headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" } };
         try {
-          const resp = await fetch(url, {
-            signal: AbortSignal.timeout(15000),
-            headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" },
-          });
-          if (resp.ok) {
-            const results = await resp.json();
-            if (results.length > 0) geoResult = results[0];
+          let url = isoCode ? `${baseUrl}&countrycodes=${isoCode.toLowerCase()}` : baseUrl;
+          let resp = await fetch(url, fetchOpts);
+          if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
+          // Retry without countrycodes if filtered query returned nothing
+          if (!geoResult && isoCode) {
+            resp = await fetch(baseUrl, fetchOpts);
+            if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
           }
         } catch { /* timeout or network error */ }
       }
 
       // 3. Geocoding-Submodel injizieren + DB-Update
       submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
-      submodels.push(buildGeocodingSubmodel(cityRaw, isoCode, geoResult));
+      submodels.push(buildGeocodingSubmodel(cityRaw || countryRaw, isoCode, geoResult));
       const geocodedStatus = geoResult ? "ok" : "error";
       await db.run(
         "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
@@ -2615,7 +2629,7 @@ async function buildAasAlertData(userId) {
     }
   }
 
-  return { aasEntries, matches, columns };
+  return { aasEntries, matches, columns, totalMembers: members.length };
 }
 
 // ---------------------------------------------------------------------------

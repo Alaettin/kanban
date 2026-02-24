@@ -25,6 +25,7 @@ const cardScannerRoutes = require("./apps/card-scanner/routes");
 const aasChatRoutes = require("./apps/aas-chat/routes");
 const kbRoutes = require("./apps/knowledge-base/routes");
 const resilienceRoutes = require("./apps/resilience/routes");
+const uccRoutes = require("./apps/use-case-checker/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
@@ -32,6 +33,7 @@ const cardScannerDir = path.join(__dirname, "apps", "card-scanner");
 const aasChatDir = path.join(__dirname, "apps", "aas-chat");
 const kbDir = path.join(__dirname, "apps", "knowledge-base");
 const resilienceDir = path.join(__dirname, "apps", "resilience");
+const uccDir = path.join(__dirname, "apps", "use-case-checker");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -95,6 +97,15 @@ registry.register({
   color: "#4f46e5",
 });
 
+registry.register({
+  id: "use-case-checker",
+  name: "Use Case Checker",
+  description: "Prüfe ob AAS Use Cases erfüllt werden",
+  icon: "use-case-checker",
+  path: "/apps/use-case-checker",
+  color: "#0ea5e9",
+});
+
 // --- Middleware ---
 app.use(express.json({ limit: "5mb" }));
 
@@ -105,6 +116,12 @@ app.get("/dashboard.css", (req, res) => {
 
 app.get("/dashboard.js", (req, res) => {
   res.sendFile(path.join(platformDir, "dashboard.js"));
+});
+app.get("/neoception.png", (req, res) => {
+  res.sendFile(path.join(platformDir, "neoception.png"));
+});
+app.get("/neoception-logo.jpg", (req, res) => {
+  res.sendFile(path.join(platformDir, "neoception-logo.jpg"));
 });
 
 // --- Auth routes ---
@@ -291,6 +308,14 @@ const resilienceRouter = express.Router();
 resilienceRoutes.mountRoutes(resilienceRouter);
 app.use("/apps/resilience", resilienceRouter);
 
+// --- Use Case Checker App ---
+app.get("/apps/use-case-checker/styles.css", (req, res) => res.sendFile(path.join(uccDir, "styles.css")));
+app.get("/apps/use-case-checker/app.js", (req, res) => res.sendFile(path.join(uccDir, "app.js")));
+app.get("/apps/use-case-checker", auth.requireAuthPage, requireAppAccess("use-case-checker"), (req, res) => res.sendFile(path.join(uccDir, "index.html")));
+const uccRouter = express.Router();
+uccRoutes.mountRoutes(uccRouter);
+app.use("/apps/use-case-checker", uccRouter);
+
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
 
@@ -471,6 +496,7 @@ async function start() {
   await aasChatRoutes.initAasChatTables();
   await kbRoutes.initKnowledgeBaseTables();
   await resilienceRoutes.initResilienceTables();
+  await uccRoutes.initUccTables();
   resilienceRoutes.scheduleImports();
   auth.startMaintenanceJobs();
 

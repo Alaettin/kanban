@@ -3630,7 +3630,8 @@ const aasOvList = document.getElementById("aas-overview-list");
 const aasOvDetail = document.getElementById("aas-overview-detail");
 const aasOvTbody = document.getElementById("aas-ov-tbody");
 const aasOvEmpty = document.getElementById("aas-ov-empty");
-const aasOvCount = document.getElementById("aas-ov-count");
+const aasOvTotalCount = document.getElementById("aas-ov-total-count");
+const aasOvGeoCount = document.getElementById("aas-ov-geo-count");
 const aasOvSearch = document.getElementById("aas-ov-search");
 const aasOvBackBtn = document.getElementById("aas-ov-back-btn");
 const aasProgress = document.getElementById("aas-progress");
@@ -3711,7 +3712,9 @@ function renderAasOverview() {
 
   aasOvTbody.innerHTML = "";
   aasOvEmpty.hidden = total > 0;
-  aasOvCount.textContent = total + " " + t("aasOvCount");
+  // Badge stats
+  if (aasOvTotalCount) aasOvTotalCount.textContent = aasOverviewData.length;
+  if (aasOvGeoCount) aasOvGeoCount.textContent = aasOverviewData.filter(e => e.geocoded_status === "ok").length;
 
   for (const entry of pageItems) {
     const tr = document.createElement("tr");

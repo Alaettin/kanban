@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Use Case Checker - Workspace</title>
+  <link rel="stylesheet" href="/apps/use-case-checker/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 11l3 3L22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+      <span id="brand-text">Use Case Checker</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <aside id="sidebar" class="sidebar" aria-label="Navigation">
+      <nav id="sidebar-nav" class="sidebar-nav">
+        <button class="sidebar-item active" data-page="overview" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
+          </svg>
+          <span class="sidebar-label" data-i18n="overview">Übersicht</span>
+        </button>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-title" data-i18n="sectionConfig">Konfiguration</div>
+
+        <button class="sidebar-item" data-page="sources" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+          <span class="sidebar-label" data-i18n="sources">AAS Quellen</span>
+        </button>
+
+        <button class="sidebar-item" data-page="use-cases" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+          <span class="sidebar-label">Use Cases</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="Navigation einklappen">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main id="page-content" class="page-content">
+      <!-- ==================== OVERVIEW PAGE ==================== -->
+      <section id="page-overview" class="page-section active">
+        <div class="page-inner page-inner-wide">
+          <div class="page-header">
+            <div class="page-header-row">
+              <div>
+                <h2 id="overview-title" data-i18n="overviewTitle">AAS Übersicht</h2>
+                <p id="overview-desc" class="page-desc" data-i18n="overviewDesc">Alle AAS aus allen Quellen auf einen Blick.</p>
+              </div>
+              <div class="page-header-actions">
+                <span class="ov-badge badge-total" id="ov-badge-total">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+                  <span id="ov-total-count">0</span> AAS
+                </span>
+                <button id="evaluate-all-btn" class="btn btn-accent" type="button">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/></svg>
+                  <span data-i18n="evaluateAll">Alle auswerten</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="overview-table">
+              <thead>
+                <tr>
+                  <th data-i18n="colAasId">AAS ID</th>
+                  <th data-i18n="colSource">Quelle</th>
+                  <th data-i18n="colStatus">Status</th>
+                  <th data-i18n="colLastEval">Letzte Auswertung</th>
+                  <th data-i18n="colActions">Aktionen</th>
+                </tr>
+              </thead>
+              <tbody id="overview-tbody"></tbody>
+            </table>
+            <div id="overview-empty" class="empty-state" hidden>
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a4 4 0 0 0-8 0v2"/></svg>
+              <p data-i18n="overviewEmpty">Keine AAS registriert. Lege zuerst Quellen an.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SOURCES PAGE ==================== -->
+      <section id="page-sources" class="page-section" hidden>
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-header-row">
+              <div>
+                <h2 data-i18n="sourcesTitle">AAS Quellen</h2>
+                <p class="page-desc" data-i18n="sourcesDesc">Definiere AAS-Repository-Endpunkte und deren AAS IDs.</p>
+              </div>
+              <button id="add-source-btn" class="btn btn-accent" type="button">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span data-i18n="addSource">Quelle hinzufügen</span>
+              </button>
+            </div>
+          </div>
+          <div id="sources-list" class="card-list"></div>
+          <div id="sources-empty" class="empty-state" hidden>
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+            <p data-i18n="noSources">Noch keine Quellen vorhanden.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== USE CASES PAGE ==================== -->
+      <section id="page-use-cases" class="page-section" hidden>
+        <div class="page-inner">
+          <div class="page-header">
+            <div class="page-header-row">
+              <div>
+                <h2 data-i18n="useCasesTitle">Use Cases</h2>
+                <p class="page-desc" data-i18n="useCasesDesc">Definiere Use Cases mit erforderlichen Submodellen.</p>
+              </div>
+              <button id="add-use-case-btn" class="btn btn-accent" type="button">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span data-i18n="addUseCase">Use Case hinzufügen</span>
+              </button>
+            </div>
+          </div>
+          <div id="use-cases-list" class="card-list"></div>
+          <div id="use-cases-empty" class="empty-state" hidden>
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <p data-i18n="noUseCases">Noch keine Use Cases vorhanden.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ==================== SOURCE DIALOG ==================== -->
+  <dialog id="source-dialog" class="ucc-dialog">
+    <div class="dialog-inner">
+      <h3 id="source-dialog-title" data-i18n="addSource">Quelle hinzufügen</h3>
+      <div class="form-group">
+        <label data-i18n="sourceName">Name</label>
+        <input id="source-name-input" type="text" class="form-input" placeholder="z.B. Neoception AAS Server" />
+      </div>
+      <div class="form-group">
+        <label data-i18n="sourceUrl">Basis-URL</label>
+        <input id="source-url-input" type="url" class="form-input" placeholder="https://aas-server.example.com" />
+      </div>
+      <div class="dialog-actions">
+        <button id="source-cancel-btn" class="btn btn-ghost" type="button" data-i18n="cancel">Abbrechen</button>
+        <button id="source-save-btn" class="btn btn-accent" type="button" data-i18n="save">Speichern</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ==================== AAS IDS DIALOG ==================== -->
+  <dialog id="aas-ids-dialog" class="ucc-dialog">
+    <div class="dialog-inner dialog-inner-wide">
+      <h3 id="aas-ids-dialog-title">AAS IDs</h3>
+      <p id="aas-ids-source-info" class="dialog-subtitle"></p>
+      <div id="aas-ids-list" class="aas-ids-list"></div>
+      <div id="aas-ids-empty" class="empty-state-sm" hidden data-i18n="noAasIds">Noch keine AAS IDs für diese Quelle.</div>
+      <div class="form-group">
+        <label data-i18n="addAasIds">AAS IDs hinzufügen</label>
+        <textarea id="aas-ids-textarea" class="form-textarea" rows="4" placeholder="Eine AAS ID pro Zeile"></textarea>
+      </div>
+      <div class="dialog-actions">
+        <button id="aas-ids-close-btn" class="btn btn-ghost" type="button" data-i18n="close">Schließen</button>
+        <button id="aas-ids-add-btn" class="btn btn-accent" type="button" data-i18n="add">Hinzufügen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ==================== USE CASE DIALOG ==================== -->
+  <dialog id="use-case-dialog" class="ucc-dialog">
+    <div class="dialog-inner dialog-inner-wide">
+      <h3 id="use-case-dialog-title" data-i18n="addUseCase">Use Case hinzufügen</h3>
+      <div class="form-group">
+        <label data-i18n="caseName">Name</label>
+        <input id="case-name-input" type="text" class="form-input" placeholder="z.B. Digital Nameplate" />
+      </div>
+      <div class="form-group">
+        <label data-i18n="caseDesc">Beschreibung</label>
+        <textarea id="case-desc-input" class="form-textarea" rows="2" placeholder="Beschreibung des Use Cases..."></textarea>
+      </div>
+      <div class="form-group">
+        <label data-i18n="requiredSubmodels">Erforderliche Submodelle</label>
+        <div id="case-submodels-list" class="submodels-edit-list"></div>
+        <button id="case-add-submodel-btn" class="btn btn-sm btn-ghost" type="button">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span data-i18n="addSubmodel">Submodell hinzufügen</span>
+        </button>
+      </div>
+      <div class="dialog-actions">
+        <button id="case-cancel-btn" class="btn btn-ghost" type="button" data-i18n="cancel">Abbrechen</button>
+        <button id="case-save-btn" class="btn btn-accent" type="button" data-i18n="save">Speichern</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ==================== EVAL DIALOG ==================== -->
+  <dialog id="eval-dialog" class="ucc-dialog eval-dialog">
+    <div class="dialog-inner dialog-inner-wide">
+      <h3 id="eval-dialog-title" data-i18n="evalTitle">Auswertung</h3>
+      <p id="eval-aas-id" class="eval-aas-id"></p>
+
+      <div class="eval-steps">
+        <div class="eval-step" id="eval-step-1">
+          <div class="eval-step-icon">
+            <div class="eval-spinner"></div>
+            <svg class="eval-check" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <svg class="eval-cross" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </div>
+          <span class="eval-step-label" id="eval-step-1-label">Shell herunterladen...</span>
+        </div>
+        <div class="eval-step" id="eval-step-2">
+          <div class="eval-step-icon">
+            <div class="eval-spinner"></div>
+            <svg class="eval-check" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <svg class="eval-cross" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </div>
+          <span class="eval-step-label" id="eval-step-2-label">Submodelle herunterladen...</span>
+        </div>
+        <div class="eval-step" id="eval-step-3">
+          <div class="eval-step-icon">
+            <div class="eval-spinner"></div>
+            <svg class="eval-check" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <span class="eval-step-label" id="eval-step-3-label">Auswertung...</span>
+        </div>
+      </div>
+
+      <div id="eval-results" class="eval-results" hidden>
+        <h4 data-i18n="evalResults">Ergebnisse</h4>
+        <div id="eval-results-list" class="eval-results-list"></div>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="eval-close-btn" class="btn btn-accent" type="button" data-i18n="close">Schließen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ==================== CONFIRM DIALOG ==================== -->
+  <dialog id="confirm-dialog" class="ucc-dialog confirm-dialog">
+    <div class="dialog-inner">
+      <h3 id="confirm-title">Bestätigen</h3>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel-btn" class="btn btn-ghost" type="button" data-i18n="cancel">Abbrechen</button>
+        <button id="confirm-ok-btn" class="btn btn-danger" type="button" data-i18n="delete">Löschen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/apps/use-case-checker/app.js"></script>
+</body>
+</html>

@@ -25,6 +25,7 @@ const AVAILABLE_APPS = [
   { id: "aas-chat", name: "AAS Chat" },
   { id: "knowledge-base", name: "Knowledge Base" },
   { id: "resilience", name: "Resilience" },
+  { id: "use-case-checker", name: "Use Case Checker" },
 ];
 
 const I18N = {

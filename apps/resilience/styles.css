@@ -3125,6 +3125,16 @@ body.sidebar-collapsed .sidebar-foot {
 .map-stat svg { color: var(--muted); }
 #map-stat-alerts svg { color: #dc2626; }
 #map-stat-aas svg { color: #4f46e5; }
+.aas-ov-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.72rem; font-weight: 600; padding: 0.25rem 0.65rem;
+  border-radius: 999px; white-space: nowrap; margin-left: 0.25rem;
+}
+.aas-ov-badge svg { width: 12px; height: 12px; flex-shrink: 0; }
+.badge-total { background: rgba(99,102,241,0.1); color: #4f46e5; }
+.badge-total svg { color: #4f46e5; }
+.badge-geo { background: rgba(16,185,129,0.1); color: #059669; }
+.badge-geo svg { color: #059669; }
 .map-modal-close-btn {
   background: none; border: none; cursor: pointer; padding: 4px;
   border-radius: 6px; color: var(--muted); transition: all 0.15s;
