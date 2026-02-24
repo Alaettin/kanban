@@ -200,6 +200,11 @@ async function initResilienceTables() {
     // column already exists
   }
 
+  // Migration: add geocoding settings
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN geocoding_group_id TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN geocoding_country_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN geocoding_city_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+
   // Indicator classes (user-defined categories)
   await db.run(`CREATE TABLE IF NOT EXISTS resilience_indicator_classes (
     class_id    TEXT PRIMARY KEY,
@@ -325,6 +330,52 @@ async function initResilienceTables() {
   try { await db.run("ALTER TABLE resilience_country_mappings ADD COLUMN alpha3 TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
   try { await db.run("ALTER TABLE resilience_country_mappings ADD COLUMN numeric TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
 
+  // Migration: add geocoded_status to aas_imports (lightweight marker for overview)
+  try { await db.run("ALTER TABLE resilience_aas_imports ADD COLUMN geocoded_status TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
+
+  // Migration: add geo columns to gdacs_alerts
+  try { await db.run("ALTER TABLE resilience_gdacs_alerts ADD COLUMN centroid_lat REAL DEFAULT NULL"); } catch { /* exists */ }
+  try { await db.run("ALTER TABLE resilience_gdacs_alerts ADD COLUMN centroid_lon REAL DEFAULT NULL"); } catch { /* exists */ }
+  try { await db.run("ALTER TABLE resilience_gdacs_alerts ADD COLUMN episodeid TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
+  try { await db.run("ALTER TABLE resilience_gdacs_alerts ADD COLUMN affected_countries TEXT NOT NULL DEFAULT '[]'"); } catch { /* exists */ }
+  try { await db.run("ALTER TABLE resilience_gdacs_alerts ADD COLUMN polygon_fetched INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+
+  // GDACS polygons (separate table — polygon GeoJSON can be 100 KB+)
+  await db.run(`CREATE TABLE IF NOT EXISTS resilience_gdacs_polygons (
+    eventid    TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    geometry   TEXT NOT NULL DEFAULT '[]',
+    fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, eventid),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
+  // Pre-computed AAS ↔ alert matches with quality tier
+  await db.run(`CREATE TABLE IF NOT EXISTS resilience_gdacs_aas_matches (
+    user_id     TEXT NOT NULL,
+    aas_id      TEXT NOT NULL,
+    alert_id    INTEGER NOT NULL,
+    match_tier  TEXT NOT NULL DEFAULT 'country',
+    distance_km REAL DEFAULT NULL,
+    computed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, aas_id, alert_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (alert_id) REFERENCES resilience_gdacs_alerts(alert_id) ON DELETE CASCADE
+  )`);
+
+  // Migration: add distance thresholds to settings
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN gdacs_distance_thresholds TEXT NOT NULL DEFAULT '{"EQ":300,"TC":500,"FL":200,"VO":100,"WF":150,"DR":1000}'`); } catch { /* exists */ }
+
+  // Migration: matching lat/lon paths + dash match filter
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN matching_lat_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN matching_lon_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN dash_aas_match_filter TEXT NOT NULL DEFAULT '["polygon","distance"]'`); } catch { /* exists */ }
+
+  // Migration: city_value + direct coords on aas_map
+  try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN city_value TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN direct_lat REAL DEFAULT NULL`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN direct_lon REAL DEFAULT NULL`); } catch { /* exists */ }
+
   console.log("[Resilience] Ready.");
 }
 
@@ -386,9 +437,11 @@ function parseGdacsFeatures(features) {
     const key = `${p.eventtype}_${p.eventid}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    const coords = f.geometry?.coordinates || [];
     events.push({
       eventid: String(p.eventid || ""),
       eventtype: p.eventtype || "",
+      episodeid: String(p.episodeid || ""),
       name: p.name || "",
       country: p.country || "",
       iso3: p.iso3 || "",
@@ -400,9 +453,59 @@ function parseGdacsFeatures(features) {
       fromdate: p.fromdate || "",
       todate: p.todate || "",
       url: p.url?.report || p.url?.details || "",
+      centroid_lon: coords[0] ?? null,
+      centroid_lat: coords[1] ?? null,
+      affected_countries: JSON.stringify(p.affectedcountries || []),
     });
   }
   return events;
+}
+
+// ---------------------------------------------------------------------------
+// Geo utilities (pure JS — no external dependencies)
+// ---------------------------------------------------------------------------
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pointInRing(lat, lon, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if ((yi > lat) !== (yj > lat) &&
+        lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function pointInGeoJsonGeometry(lat, lon, geometry) {
+  if (geometry.type === "Polygon") {
+    if (!pointInRing(lat, lon, geometry.coordinates[0])) return false;
+    for (let h = 1; h < geometry.coordinates.length; h++) {
+      if (pointInRing(lat, lon, geometry.coordinates[h])) return false;
+    }
+    return true;
+  }
+  if (geometry.type === "MultiPolygon") {
+    for (const poly of geometry.coordinates) {
+      if (!pointInRing(lat, lon, poly[0])) continue;
+      let inHole = false;
+      for (let h = 1; h < poly.length; h++) {
+        if (pointInRing(lat, lon, poly[h])) { inHole = true; break; }
+      }
+      if (!inHole) return true;
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +603,97 @@ async function scheduleImports() {
 }
 
 // ---------------------------------------------------------------------------
+// Geocoding: server-side background job (Nominatim)
+// ---------------------------------------------------------------------------
+const geocodingJobs = {}; // { userId: { total, done, errors, running } }
+
+function buildGeocodingSubmodel(cityRaw, countryIso, result) {
+  const els = [
+    { idShort: "CityRaw", modelType: "Property", valueType: "xs:string", value: cityRaw || "" },
+    { idShort: "CountryISO", modelType: "Property", valueType: "xs:string", value: countryIso || "" },
+    { idShort: "Latitude", modelType: "Property", valueType: "xs:double", value: result ? String(result.lat) : "" },
+    { idShort: "Longitude", modelType: "Property", valueType: "xs:double", value: result ? String(result.lon) : "" },
+    { idShort: "DisplayName", modelType: "Property", valueType: "xs:string", value: result ? (result.display_name || "") : "" },
+    { idShort: "Status", modelType: "Property", valueType: "xs:string", value: result ? "ok" : "error" },
+  ];
+  return { idShort: "Geocoding", modelType: "Submodel", submodelElements: els };
+}
+
+async function runGeocodingJob(userId) {
+  if (geocodingJobs[userId]?.running) return;
+
+  const settings = await db.get(
+    "SELECT geocoding_group_id, geocoding_country_path, geocoding_city_path FROM resilience_settings WHERE user_id = ?",
+    [userId]
+  );
+  if (!settings?.geocoding_group_id || !settings?.geocoding_country_path || !settings?.geocoding_city_path) return;
+
+  const members = await db.all(
+    "SELECT m.aas_id FROM resilience_asset_group_members m JOIN resilience_aas_imports i ON i.aas_id = m.aas_id AND i.user_id = ? WHERE m.group_id = ?",
+    [userId, settings.geocoding_group_id]
+  );
+  if (!members.length) return;
+
+  const job = { total: members.length, done: 0, errors: 0, running: true };
+  geocodingJobs[userId] = job;
+
+  const mappingRows = await db.all(
+    "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+    [userId]
+  );
+
+  for (const m of members) {
+    try {
+      const imp = await db.get(
+        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+        [m.aas_id, userId]
+      );
+      if (!imp?.submodels_data) { job.errors++; job.done++; continue; }
+
+      let submodels = JSON.parse(imp.submodels_data);
+      const countryRaw = extractFirstValue(submodels, settings.geocoding_country_path);
+      const cityRaw = extractFirstValue(submodels, settings.geocoding_city_path);
+      const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
+
+      let geoResult = null;
+      if (cityRaw) {
+        let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(cityRaw)}`;
+        if (isoCode) url += `&countrycodes=${isoCode.toLowerCase()}`;
+        try {
+          const resp = await fetch(url, {
+            signal: AbortSignal.timeout(15000),
+            headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" },
+          });
+          if (resp.ok) {
+            const results = await resp.json();
+            if (results.length > 0) geoResult = results[0];
+          }
+        } catch { /* timeout or network error */ }
+        // Rate limit: 1 request/second
+        await new Promise(resolve => setTimeout(resolve, 1100));
+      }
+
+      if (!geoResult) job.errors++;
+
+      // Inject Geocoding submodel
+      submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
+      submodels.push(buildGeocodingSubmodel(cityRaw, isoCode, geoResult));
+      await db.run(
+        "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
+        [JSON.stringify(submodels), geoResult ? "ok" : "error", m.aas_id, userId]
+      );
+    } catch {
+      job.errors++;
+    }
+    job.done++;
+  }
+  job.running = false;
+
+  // Recompute matches after geocoding (coordinates changed)
+  computeAasAlertMatches(userId).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
 // Shared helper: walk AAS submodel element tree
 // ---------------------------------------------------------------------------
 function walkElements(elements, segments, depth, values) {
@@ -525,7 +719,7 @@ function mountRoutes(router) {
   router.get("/api/settings", auth.requireAuth, async (req, res) => {
     try {
       const settings = await db.get(
-        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns FROM resilience_settings WHERE user_id = ?",
+        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter FROM resilience_settings WHERE user_id = ?",
         [req.user.id]
       );
       const feeds = await db.all(
@@ -536,6 +730,13 @@ function mountRoutes(router) {
         "SELECT country_id, name, created_at FROM resilience_gdacs_countries WHERE user_id = ? ORDER BY created_at ASC",
         [req.user.id]
       );
+      // Resolve matching group name
+      let matchingGroupName = "";
+      const mgId = settings?.gdacs_aas_group_id ?? "";
+      if (mgId) {
+        const grp = await db.get("SELECT name FROM resilience_asset_groups WHERE group_id = ?", [mgId]);
+        matchingGroupName = grp?.name || mgId;
+      }
       res.json({
         retention_days: settings?.retention_days ?? 30,
         refresh_minutes: settings?.refresh_minutes ?? 60,
@@ -545,6 +746,17 @@ function mountRoutes(router) {
         gdacs_aas_group_id: settings?.gdacs_aas_group_id ?? "",
         gdacs_aas_path: settings?.gdacs_aas_path ?? "",
         gdacs_aas_columns: JSON.parse(settings?.gdacs_aas_columns || "[]"),
+        geocoding_group_id: settings?.geocoding_group_id ?? "",
+        geocoding_country_path: settings?.geocoding_country_path ?? "",
+        geocoding_city_path: settings?.geocoding_city_path ?? "",
+        gdacs_distance_thresholds: JSON.parse(settings?.gdacs_distance_thresholds || '{"EQ":300,"TC":500,"FL":200,"VO":100,"WF":150,"DR":1000}'),
+        matching_group_id: mgId,
+        matching_group_name: matchingGroupName,
+        matching_country_path: settings?.gdacs_aas_path ?? "",
+        matching_city_path: settings?.geocoding_city_path ?? "",
+        matching_lat_path: settings?.matching_lat_path ?? "",
+        matching_lon_path: settings?.matching_lon_path ?? "",
+        dash_aas_match_filter: JSON.parse(settings?.dash_aas_match_filter || '["polygon","distance"]'),
         feeds,
         gdacs_countries: gdacsCountries,
       });
@@ -594,6 +806,48 @@ function mountRoutes(router) {
           [JSON.stringify(body.gdacs_aas_columns), req.user.id]);
         // Re-compute mapping so columns_data reflects the new column paths
         try { await refreshGdacsAasMapping(req.user.id); } catch { /* ignore */ }
+      }
+      if (body.geocoding_group_id !== undefined) {
+        await db.run("UPDATE resilience_settings SET geocoding_group_id = ? WHERE user_id = ?",
+          [String(body.geocoding_group_id), req.user.id]);
+      }
+      if (body.geocoding_country_path !== undefined) {
+        await db.run("UPDATE resilience_settings SET geocoding_country_path = ? WHERE user_id = ?",
+          [String(body.geocoding_country_path), req.user.id]);
+      }
+      if (body.geocoding_city_path !== undefined) {
+        await db.run("UPDATE resilience_settings SET geocoding_city_path = ? WHERE user_id = ?",
+          [String(body.geocoding_city_path), req.user.id]);
+      }
+      if (body.gdacs_distance_thresholds !== undefined) {
+        const th = body.gdacs_distance_thresholds;
+        const valid = typeof th === "object" && ["EQ","TC","FL","VO","WF","DR"].every(
+          k => typeof th[k] === "number" && th[k] > 0
+        );
+        if (valid) {
+          await db.run("UPDATE resilience_settings SET gdacs_distance_thresholds = ? WHERE user_id = ?",
+            [JSON.stringify(th), req.user.id]);
+          computeAasAlertMatches(req.user.id).catch(() => {});
+        }
+      }
+      if (body.matching_params) {
+        const p = body.matching_params;
+        await db.run(`UPDATE resilience_settings SET
+          gdacs_aas_group_id=?, gdacs_aas_path=?,
+          geocoding_group_id=?, geocoding_country_path=?, geocoding_city_path=?,
+          matching_lat_path=?, matching_lon_path=?
+          WHERE user_id=?`,
+          [String(p.group_id), String(p.country_path),
+           String(p.group_id), String(p.country_path), String(p.city_path),
+           String(p.lat_path), String(p.lon_path), req.user.id]);
+        refreshGdacsAasMapping(req.user.id).catch(() => {});
+      }
+      if (body.dash_aas_match_filter !== undefined) {
+        const f = body.dash_aas_match_filter;
+        if (Array.isArray(f)) {
+          await db.run("UPDATE resilience_settings SET dash_aas_match_filter = ? WHERE user_id = ?",
+            [JSON.stringify(f), req.user.id]);
+        }
       }
       res.json({ ok: true });
     } catch {
@@ -1130,6 +1384,7 @@ function mountRoutes(router) {
       const items = await db.all(
         `SELECT a.alert_id, a.eventid, a.eventtype, a.name, a.country, a.alertlevel,
                 a.alertscore, a.severity, a.fromdate, a.todate, a.url, a.fetched_at,
+                a.centroid_lat, a.centroid_lon, a.polygon_fetched,
                 c.name AS country_name, c.country_id
          FROM resilience_gdacs_alerts a
          JOIN resilience_gdacs_countries c ON c.country_id = a.country_id
@@ -1168,6 +1423,52 @@ function mountRoutes(router) {
     }
   });
 
+  // ── GDACS Map Data (world map modal) ─────────────────────────
+  router.get("/api/gdacs/map-data", auth.requireAuth, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const settings = await db.get(
+        `SELECT gdacs_retention_days FROM resilience_settings WHERE user_id = ?`, [userId]);
+      const retDays = settings?.gdacs_retention_days || 30;
+
+      const alerts = await db.all(
+        `SELECT a.alert_id, a.eventid, a.eventtype, a.name, a.alertlevel,
+                a.centroid_lat, a.centroid_lon, a.fromdate, a.url,
+                c.name AS country_name
+         FROM resilience_gdacs_alerts a
+         JOIN resilience_gdacs_countries c ON c.country_id = a.country_id
+         WHERE a.fromdate >= datetime('now', '-' || ? || ' days')
+         ORDER BY a.fromdate DESC`, [retDays]);
+
+      const polys = await db.all(
+        `SELECT eventid, geometry FROM resilience_gdacs_polygons WHERE user_id = ?`, [userId]);
+      const polyMap = {};
+      for (const p of polys) polyMap[p.eventid] = JSON.parse(p.geometry || "[]");
+
+      const aasLocations = await db.all(
+        `SELECT m.aas_id, m.direct_lat, m.direct_lon, m.city_value, m.country_value, m.columns_data
+         FROM resilience_gdacs_aas_map m
+         WHERE m.user_id = ? AND m.direct_lat IS NOT NULL AND m.direct_lon IS NOT NULL`, [userId]);
+
+      const colSettings = await db.get(
+        "SELECT gdacs_aas_columns FROM resilience_settings WHERE user_id = ?", [userId]);
+      const columns = JSON.parse(colSettings?.gdacs_aas_columns || "[]");
+
+      const matches = await db.all(
+        `SELECT aas_id, alert_id, match_tier, distance_km
+         FROM resilience_gdacs_aas_matches
+         WHERE user_id = ? AND match_tier IN ('polygon','distance')`, [userId]);
+
+      const alertsOut = alerts.map(a => ({ ...a, polygons: polyMap[a.eventid] || [] }));
+      const aasOut = aasLocations.map(a => ({ ...a, columns_data: JSON.parse(a.columns_data || "{}") }));
+
+      res.json({ alerts: alertsOut, aas: aasOut, matches, columns });
+    } catch (err) {
+      console.error("GET /api/gdacs/map-data error:", err);
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
   // ── GDACS AAS Overview (dashboard tile) ──────────────────────
   router.get("/api/gdacs/aas-overview", auth.requireAuth, async (req, res) => {
     try {
@@ -1184,51 +1485,7 @@ function mountRoutes(router) {
           [req.user.id]
         );
       }
-      if (!mapRows.length) return res.json({ items: [], updated_at: null });
-
-      // Get country mappings for gdacs_names lookup
-      const cmRows = await db.all(
-        "SELECT iso_code, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
-        [req.user.id]
-      );
-      const isoToGdacs = {};
-      for (const r of cmRows) isoToGdacs[r.iso_code] = r.gdacs_names || "";
-
-      // Get all GDACS countries for this user
-      const gdacsCountries = await db.all(
-        "SELECT country_id, name FROM resilience_gdacs_countries WHERE user_id = ?",
-        [req.user.id]
-      );
-
-      // Build iso → country_ids mapping
-      const isoToCountryIds = {};
-      for (const row of mapRows) {
-        if (!row.iso_code) continue;
-        const gdacsNames = isoToGdacs[row.iso_code] || "";
-        const tokens = gdacsNames.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-        const ids = [];
-        for (const gc of gdacsCountries) {
-          if (tokens.includes(gc.name.toLowerCase())) ids.push(gc.country_id);
-        }
-        isoToCountryIds[row.iso_code] = ids;
-      }
-
-      // Fetch alerts for all relevant country_ids
-      const allCountryIds = [...new Set(Object.values(isoToCountryIds).flat())];
-      let alertsByCountryId = {};
-      if (allCountryIds.length) {
-        const ph = allCountryIds.map(() => "?").join(",");
-        const alerts = await db.all(
-          `SELECT alert_id, country_id, eventtype, alertlevel, name, fromdate, url
-           FROM resilience_gdacs_alerts WHERE user_id = ? AND country_id IN (${ph})
-           ORDER BY fromdate DESC`,
-          [req.user.id, ...allCountryIds]
-        );
-        for (const a of alerts) {
-          if (!alertsByCountryId[a.country_id]) alertsByCountryId[a.country_id] = [];
-          alertsByCountryId[a.country_id].push(a);
-        }
-      }
+      if (!mapRows.length) return res.json({ items: [], total: 0, columns: [], updated_at: null });
 
       // Get column definitions from settings
       const colSettings = await db.get(
@@ -1236,29 +1493,66 @@ function mountRoutes(router) {
         [req.user.id]
       );
       const columns = JSON.parse(colSettings?.gdacs_aas_columns || "[]");
+      const columnPaths = columns.map(c => typeof c === "string" ? c : c.path);
 
-      // Build response items — only include rows that have alerts
+      // Fetch pre-computed matches from junction table
+      const matches = await db.all(
+        `SELECT m.aas_id, m.alert_id, m.match_tier, m.distance_km,
+                a.eventtype, a.alertlevel, a.name, a.fromdate, a.url
+         FROM resilience_gdacs_aas_matches m
+         JOIN resilience_gdacs_alerts a ON a.alert_id = m.alert_id
+         WHERE m.user_id = ?
+         ORDER BY a.fromdate DESC`,
+        [req.user.id]
+      );
+
+      // Group matches by aas_id
+      const matchesByAas = {};
+      for (const m of matches) {
+        if (!matchesByAas[m.aas_id]) matchesByAas[m.aas_id] = [];
+        matchesByAas[m.aas_id].push({
+          alert_id: m.alert_id,
+          eventtype: m.eventtype,
+          alertlevel: m.alertlevel,
+          name: m.name,
+          fromdate: m.fromdate,
+          url: m.url,
+          match_tier: m.match_tier,
+          distance_km: m.distance_km,
+        });
+      }
+
+      // Optional match_filter: comma-separated tiers (polygon,distance,country)
+      const filterParam = (req.query.match_filter || "").trim();
+      const tierFilter = filterParam ? new Set(filterParam.split(",").map(s => s.trim())) : null;
+
+      // Build response items — only include rows that have matches
       const allItems = [];
       for (const row of mapRows) {
-        const countryIds = isoToCountryIds[row.iso_code] || [];
-        const alerts = countryIds.flatMap(cid => alertsByCountryId[cid] || []);
-        if (!alerts.length) continue;
+        let rowAlerts = matchesByAas[row.aas_id] || [];
+        if (tierFilter) rowAlerts = rowAlerts.filter(a => tierFilter.has(a.match_tier));
+        if (!rowAlerts.length) continue;
         allItems.push({
           aas_id: row.aas_id,
           country_value: row.country_value,
           iso_code: row.iso_code,
           columns_data: JSON.parse(row.columns_data || "{}"),
-          alerts,
+          alerts: rowAlerts,
         });
       }
 
       // Sorting by column path
       const sortBy = req.query.sort || "";
       const sortDir = req.query.sort_dir === "desc" ? -1 : 1;
-      if (sortBy && columns.includes(sortBy)) {
+      if (sortBy && columnPaths.includes(sortBy)) {
         allItems.sort((a, b) => {
-          const va = (a.columns_data[sortBy] || "").toLowerCase();
-          const vb = (b.columns_data[sortBy] || "").toLowerCase();
+          const ra = a.columns_data[sortBy] || "";
+          const rb = b.columns_data[sortBy] || "";
+          const na = Number(ra), nb = Number(rb);
+          if (ra !== "" && rb !== "" && !isNaN(na) && !isNaN(nb)) {
+            return (na - nb) * sortDir;
+          }
+          const va = ra.toLowerCase(), vb = rb.toLowerCase();
           return va < vb ? -sortDir : va > vb ? sortDir : 0;
         });
       }
@@ -1719,7 +2013,7 @@ function mountRoutes(router) {
         `SELECT i.entry_id, i.aas_id, i.entry_type, i.item_id,
                 s.source_id, s.name AS source_name, s.base_url,
                 g.group_id, g.name AS group_name,
-                imp.imported_at
+                imp.imported_at, imp.geocoded_status
          FROM resilience_aas_source_ids i
          JOIN resilience_aas_sources s ON s.source_id = i.source_id
          LEFT JOIN resilience_asset_group_members m ON m.aas_id = i.aas_id
@@ -1766,6 +2060,125 @@ function mountRoutes(router) {
     } catch {
       res.status(500).json({ error: "LOAD_FAILED" });
     }
+  });
+
+  // ── Geocoding: start background job ──────────────────────────
+  router.post("/api/geocoding/run", auth.requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    if (geocodingJobs[userId]?.running) return res.json({ ok: true, already: true });
+    res.json({ ok: true });
+    runGeocodingJob(userId);
+  });
+
+  // ── Geocoding: single-AAS import + geocode ──────────────────
+  router.post("/api/geocoding/run-single", auth.requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    const { aas_id } = req.body;
+    if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
+
+    try {
+      // 1. Settings laden (Pfade für Geocoding)
+      const settings = await db.get(
+        `SELECT geocoding_country_path, geocoding_city_path
+         FROM resilience_settings WHERE user_id = ?`, [userId]);
+      if (!settings?.geocoding_country_path || !settings?.geocoding_city_path)
+        return res.status(400).json({ error: "NO_GEOCODING_PATHS" });
+
+      // 2. AAS-Quelle finden
+      const entry = await db.get(
+        `SELECT i.aas_id, i.source_id, s.base_url
+         FROM resilience_aas_source_ids i
+         JOIN resilience_aas_sources s ON s.source_id = i.source_id
+         WHERE i.aas_id = ? AND s.user_id = ?`, [aas_id, userId]);
+      if (!entry) return res.status(404).json({ error: "AAS_NOT_FOUND" });
+
+      // 3. Import: Shell + Submodels von AAS-Quelle fetchen
+      const baseUrl = entry.base_url.replace(/\/+$/, "");
+      const encoded = toBase64Url(entry.aas_id);
+      const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
+        signal: AbortSignal.timeout(15000),
+        headers: { Accept: "application/json" },
+      });
+      if (!shellResp.ok) return res.status(502).json({ error: "AAS_FETCH_FAILED" });
+      const shellData = await shellResp.json();
+
+      const submodelRefs = shellData.submodels || [];
+      let submodels = [];
+      for (const ref of submodelRefs) {
+        const smId = ref.keys?.[0]?.value;
+        if (!smId) continue;
+        try {
+          const smEncoded = toBase64Url(smId);
+          const smResp = await fetch(`${baseUrl}/shells/${encoded}/submodels/${smEncoded}`, {
+            signal: AbortSignal.timeout(15000),
+            headers: { Accept: "application/json" },
+          });
+          if (smResp.ok) submodels.push(await smResp.json());
+        } catch { /* skip */ }
+      }
+
+      const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+      await db.run(
+        `INSERT INTO resilience_aas_imports (aas_id, user_id, source_id, shell_data, submodels_data, imported_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, aas_id) DO UPDATE SET
+           source_id=excluded.source_id, shell_data=excluded.shell_data,
+           submodels_data=excluded.submodels_data, imported_at=excluded.imported_at`,
+        [entry.aas_id, userId, entry.source_id, JSON.stringify(shellData), JSON.stringify(submodels), now]
+      );
+
+      // 4. Geocoding: City+Country extrahieren → Nominatim
+      const countryRaw = extractFirstValue(submodels, settings.geocoding_country_path);
+      const cityRaw = extractFirstValue(submodels, settings.geocoding_city_path);
+
+      const mappingRows = await db.all(
+        "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+        [userId]
+      );
+      const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
+
+      let geoResult = null;
+      if (cityRaw) {
+        let url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(cityRaw)}`;
+        if (isoCode) url += `&countrycodes=${isoCode.toLowerCase()}`;
+        try {
+          const resp = await fetch(url, {
+            signal: AbortSignal.timeout(15000),
+            headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" },
+          });
+          if (resp.ok) {
+            const results = await resp.json();
+            if (results.length > 0) geoResult = results[0];
+          }
+        } catch { /* timeout or network error */ }
+      }
+
+      // 5. Geocoding-Submodel injizieren + DB-Update
+      submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
+      submodels.push(buildGeocodingSubmodel(cityRaw, isoCode, geoResult));
+      const geocodedStatus = geoResult ? "ok" : "error";
+      await db.run(
+        "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
+        [JSON.stringify(submodels), geocodedStatus, entry.aas_id, userId]
+      );
+
+      // 6. Matches neu berechnen (fire-and-forget)
+      computeAasAlertMatches(userId).catch(() => {});
+
+      res.json({ ok: true, geocoded_status: geocodedStatus });
+    } catch (err) {
+      if (err.name === "TimeoutError" || err.name === "AbortError") {
+        return res.status(504).json({ error: "AAS_TIMEOUT" });
+      }
+      res.status(500).json({ error: "GEOCODING_FAILED" });
+    }
+  });
+
+  // ── Geocoding: poll status ──────────────────────────────────
+  router.get("/api/geocoding/status", auth.requireAuth, (req, res) => {
+    const job = geocodingJobs[req.user.id];
+    if (!job) return res.json({ running: false });
+    res.json({ running: job.running, total: job.total, done: job.done, errors: job.errors });
   });
 
   // ── AAS Proxy: get shell (query params to avoid %2F routing issues) ──
@@ -2036,18 +2449,217 @@ async function refreshUserGdacsAlerts(userId) {
         if (ev.fromdate && new Date(ev.fromdate).getTime() < fromDate.getTime()) continue;
         try {
           await db.run(
-            `INSERT OR IGNORE INTO resilience_gdacs_alerts
-             (user_id, country_id, eventid, eventtype, name, country, alertlevel, alertscore, severity, fromdate, todate, url)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, c.country_id, ev.eventid, ev.eventtype, ev.name, ev.country, ev.alertlevel, ev.alertscore, ev.severity, ev.fromdate, ev.todate, ev.url]
+            `INSERT INTO resilience_gdacs_alerts
+             (user_id, country_id, eventid, eventtype, episodeid, name, country, alertlevel, alertscore, severity, fromdate, todate, url, centroid_lat, centroid_lon, affected_countries)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(user_id, eventid) DO UPDATE SET
+               alertlevel=excluded.alertlevel, alertscore=excluded.alertscore,
+               severity=excluded.severity, todate=excluded.todate,
+               centroid_lat=excluded.centroid_lat, centroid_lon=excluded.centroid_lon,
+               episodeid=excluded.episodeid, affected_countries=excluded.affected_countries`,
+            [userId, c.country_id, ev.eventid, ev.eventtype, ev.episodeid, ev.name, ev.country, ev.alertlevel, ev.alertscore, ev.severity, ev.fromdate, ev.todate, ev.url, ev.centroid_lat, ev.centroid_lon, ev.affected_countries]
           );
-        } catch { /* skip duplicates */ }
+        } catch { /* skip errors */ }
       }
     } catch { /* skip country on error */ }
   }
 
   // Also refresh AAS country mapping cache
   try { await refreshGdacsAasMapping(userId); } catch { /* ignore */ }
+
+  // Fire polygon fetch + match recomputation as background task
+  fetchAlertPolygons(userId).then(() => {
+    computeAasAlertMatches(userId).catch(() => {});
+  }).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// Background: fetch polygon geometries for alerts (async secondary pass)
+// ---------------------------------------------------------------------------
+async function fetchAlertPolygons(userId) {
+  const alerts = await db.all(
+    `SELECT alert_id, eventid, eventtype, episodeid
+     FROM resilience_gdacs_alerts
+     WHERE user_id = ? AND polygon_fetched = 0 AND episodeid != ''`,
+    [userId]
+  );
+  for (const a of alerts) {
+    try {
+      const url = `https://www.gdacs.org/gdacsapi/api/polygons/getgeometry?eventtype=${a.eventtype}&eventid=${a.eventid}&episodeid=${a.episodeid}`;
+      const resp = await fetch(url, {
+        signal: AbortSignal.timeout(20000),
+        headers: { Accept: "application/json" },
+      });
+      if (resp.ok) {
+        const geoJson = await resp.json();
+        const polyFeatures = (geoJson.features || []).filter(f =>
+          f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
+        );
+        const geometries = polyFeatures.map(f => ({
+          type: f.geometry.type,
+          coordinates: f.geometry.coordinates,
+          label: f.properties?.polygonlabel || "",
+          class: f.properties?.Class || "",
+        }));
+        await db.run(
+          `INSERT OR REPLACE INTO resilience_gdacs_polygons (eventid, user_id, geometry, fetched_at)
+           VALUES (?, ?, ?, datetime('now'))`,
+          [a.eventid, userId, JSON.stringify(geometries)]
+        );
+      }
+      await db.run("UPDATE resilience_gdacs_alerts SET polygon_fetched = 1 WHERE alert_id = ?", [a.alert_id]);
+      await new Promise(resolve => setTimeout(resolve, 1100));
+    } catch {
+      await db.run("UPDATE resilience_gdacs_alerts SET polygon_fetched = 1 WHERE alert_id = ?", [a.alert_id]).catch(() => {});
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compute pre-matched AAS ↔ alert pairs with quality tiers
+// ---------------------------------------------------------------------------
+async function computeAasAlertMatches(userId) {
+  const settings = await db.get(
+    "SELECT gdacs_aas_group_id, gdacs_aas_path, gdacs_distance_thresholds FROM resilience_settings WHERE user_id = ?",
+    [userId]
+  );
+  if (!settings?.gdacs_aas_group_id) return;
+
+  const thresholds = JSON.parse(settings.gdacs_distance_thresholds || '{"EQ":300,"TC":500,"FL":200,"VO":100,"WF":150,"DR":1000}');
+
+  // Get AAS mapping rows (including direct coords)
+  const mapRows = await db.all(
+    "SELECT aas_id, iso_code, direct_lat, direct_lon FROM resilience_gdacs_aas_map WHERE user_id = ?",
+    [userId]
+  );
+  if (!mapRows.length) return;
+
+  // Resolve coordinates for each AAS: Prio 1 = direct, Prio 2 = geocoded submodel
+  const aasGeo = [];
+  for (const m of mapRows) {
+    let lat = null, lon = null;
+    // Prio 1: Direct coordinates from AAS paths
+    if (m.direct_lat != null && m.direct_lon != null) {
+      lat = m.direct_lat;
+      lon = m.direct_lon;
+    }
+    // Prio 2: Geocoded coordinates from Geocoding submodel
+    if (lat === null) {
+      const imp = await db.get(
+        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+        [m.aas_id, userId]
+      );
+      if (imp?.submodels_data) {
+        try {
+          const submodels = JSON.parse(imp.submodels_data);
+          const geo = submodels.find(sm => sm.idShort === "Geocoding");
+          if (geo) {
+            const els = geo.submodelElements || [];
+            const latEl = els.find(e => e.idShort === "Latitude");
+            const lonEl = els.find(e => e.idShort === "Longitude");
+            if (latEl?.value) lat = parseFloat(latEl.value);
+            if (lonEl?.value) lon = parseFloat(lonEl.value);
+            if (isNaN(lat) || isNaN(lon)) { lat = null; lon = null; }
+          }
+        } catch { /* skip */ }
+      }
+    }
+    aasGeo.push({ aas_id: m.aas_id, iso_code: m.iso_code, lat, lon });
+  }
+
+  // Get all alerts with centroids
+  const alerts = await db.all(
+    `SELECT alert_id, eventid, eventtype, centroid_lat, centroid_lon, country_id
+     FROM resilience_gdacs_alerts WHERE user_id = ?`,
+    [userId]
+  );
+
+  // Pre-load polygons
+  const polyRows = await db.all(
+    "SELECT eventid, geometry FROM resilience_gdacs_polygons WHERE user_id = ?",
+    [userId]
+  );
+  const polyMap = {};
+  for (const pr of polyRows) {
+    try { polyMap[pr.eventid] = JSON.parse(pr.geometry || "[]"); } catch { polyMap[pr.eventid] = []; }
+  }
+
+  // Build ISO → country_id mapping for Tier 3
+  const cmRows = await db.all(
+    "SELECT iso_code, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+    [userId]
+  );
+  const isoToGdacs = {};
+  for (const r of cmRows) isoToGdacs[r.iso_code] = r.gdacs_names || "";
+
+  const gdacsCountries = await db.all(
+    "SELECT country_id, name FROM resilience_gdacs_countries WHERE user_id = ?",
+    [userId]
+  );
+  const isoToCountryIds = {};
+  for (const aas of aasGeo) {
+    if (!aas.iso_code || isoToCountryIds[aas.iso_code]) continue;
+    const gdacsNames = isoToGdacs[aas.iso_code] || "";
+    const tokens = gdacsNames.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    const ids = [];
+    for (const gc of gdacsCountries) {
+      if (tokens.includes(gc.name.toLowerCase())) ids.push(gc.country_id);
+    }
+    isoToCountryIds[aas.iso_code] = ids;
+  }
+
+  // Compute all matches in memory first to avoid race conditions
+  const newMatches = [];
+  for (const aas of aasGeo) {
+    for (const alert of alerts) {
+      let matchTier = null;
+      let distKm = null;
+
+      // Tier 1: Polygon match
+      if (aas.lat !== null && aas.lon !== null && polyMap[alert.eventid]?.length) {
+        for (const geom of polyMap[alert.eventid]) {
+          if (pointInGeoJsonGeometry(aas.lat, aas.lon, geom)) {
+            matchTier = "polygon";
+            break;
+          }
+        }
+      }
+
+      // Tier 2: Distance match
+      if (!matchTier && aas.lat !== null && aas.lon !== null &&
+          alert.centroid_lat != null && alert.centroid_lon != null) {
+        const d = haversineKm(aas.lat, aas.lon, alert.centroid_lat, alert.centroid_lon);
+        const threshold = thresholds[alert.eventtype] ?? 300;
+        if (d <= threshold) {
+          matchTier = "distance";
+          distKm = Math.round(d * 10) / 10;
+        }
+      }
+
+      // Tier 3: Country match
+      if (!matchTier && aas.iso_code) {
+        const countryIds = isoToCountryIds[aas.iso_code] || [];
+        if (countryIds.includes(alert.country_id)) {
+          matchTier = "country";
+        }
+      }
+
+      if (matchTier) {
+        newMatches.push([userId, aas.aas_id, alert.alert_id, matchTier, distKm]);
+      }
+    }
+  }
+
+  // Atomic: delete old + insert all new (minimizes window for dashboard reads)
+  await db.run("DELETE FROM resilience_gdacs_aas_matches WHERE user_id = ?", [userId]);
+  for (const row of newMatches) {
+    await db.run(
+      `INSERT INTO resilience_gdacs_aas_matches
+       (user_id, aas_id, alert_id, match_tier, distance_km, computed_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      row
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2137,14 +2749,19 @@ function extractFirstValue(submodels, pathStr) {
 
 async function refreshGdacsAasMapping(userId) {
   const settings = await db.get(
-    "SELECT gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns FROM resilience_settings WHERE user_id = ?",
+    "SELECT gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_city_path, matching_lat_path, matching_lon_path FROM resilience_settings WHERE user_id = ?",
     [userId]
   );
   const groupId = settings?.gdacs_aas_group_id;
   const aasPath = settings?.gdacs_aas_path;
   if (!groupId || !aasPath) return;
 
-  const columnPaths = JSON.parse(settings?.gdacs_aas_columns || "[]");
+  const cityPath = settings?.geocoding_city_path || "";
+  const latPath = settings?.matching_lat_path || "";
+  const lonPath = settings?.matching_lon_path || "";
+
+  const columnsRaw = JSON.parse(settings?.gdacs_aas_columns || "[]");
+  const columnPaths = columnsRaw.map(c => typeof c === "string" ? c : c.path);
 
   const members = await db.all(
     "SELECT aas_id FROM resilience_asset_group_members WHERE group_id = ?",
@@ -2166,21 +2783,27 @@ async function refreshGdacsAasMapping(userId) {
     );
     let countryValue = "";
     let isoCode = "";
+    let cityValue = "";
+    let directLat = null;
+    let directLon = null;
     const colData = {};
     if (imp?.submodels_data) {
       try {
         const submodels = JSON.parse(imp.submodels_data);
         countryValue = extractFirstValue(submodels, aasPath);
         if (countryValue) isoCode = matchCountryValue(countryValue, mappingRows);
+        if (cityPath) cityValue = extractFirstValue(submodels, cityPath);
+        if (latPath) { const v = parseFloat(extractFirstValue(submodels, latPath)); if (!isNaN(v)) directLat = v; }
+        if (lonPath) { const v = parseFloat(extractFirstValue(submodels, lonPath)); if (!isNaN(v)) directLon = v; }
         for (const cp of columnPaths) {
           colData[cp] = extractFirstValue(submodels, cp);
         }
       } catch { /* skip bad JSON */ }
     }
     await db.run(
-      `INSERT OR REPLACE INTO resilience_gdacs_aas_map (user_id, aas_id, country_value, iso_code, columns_data, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-      [userId, m.aas_id, countryValue, isoCode, JSON.stringify(colData)]
+      `INSERT OR REPLACE INTO resilience_gdacs_aas_map (user_id, aas_id, country_value, iso_code, columns_data, city_value, direct_lat, direct_lon, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      [userId, m.aas_id, countryValue, isoCode, JSON.stringify(colData), cityValue, directLat, directLon]
     );
   }
 
@@ -2190,6 +2813,9 @@ async function refreshGdacsAasMapping(userId) {
     `DELETE FROM resilience_gdacs_aas_map WHERE user_id = ? AND aas_id NOT IN (${placeholders})`,
     [userId, ...validIds]
   );
+
+  // Recompute matches after mapping update
+  computeAasAlertMatches(userId).catch(() => {});
 }
 
-module.exports = { initResilienceTables, mountRoutes, refreshAllFeeds, cleanupExpiredItems, refreshAllGdacsAlerts, cleanupGdacsAlerts, refreshGdacsAasMapping, scheduleImports };
+module.exports = { initResilienceTables, mountRoutes, refreshAllFeeds, cleanupExpiredItems, refreshAllGdacsAlerts, cleanupGdacsAlerts, refreshGdacsAasMapping, scheduleImports, computeAasAlertMatches };

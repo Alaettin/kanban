@@ -92,11 +92,11 @@ async function initAasChatTables() {
 // System prompts
 // ---------------------------------------------------------------------------
 const SYSTEM_PROMPT =
-  "Du bist ein hilfreicher Assistent für Fragen rund um die Verwaltungsschale (Asset Administration Shell / AAS). " +
+  "Du bist ein hilfreicher Assistent für Fragen rund um die Asset Administration Shell (kurz AAS). " +
   "Antworte klar und präzise. Wenn du etwas nicht weißt, sage es ehrlich.";
 
 const BASE_SYSTEM_PROMPT =
-  "Du bist ein hilfreicher Assistent für Fragen rund um die Verwaltungsschale (Asset Administration Shell / AAS). " +
+  "Du bist ein hilfreicher Assistent für Fragen rund um die Asset Administration Shell (kurz AAS). " +
   "Antworte klar und präzise. Wenn du etwas nicht weißt, sage es ehrlich.";
 
 function buildSystemPrompt(baseOverride, aasInstructions, dtiInstructions, mcpResources, mcpPrompts, kbInstructions) {

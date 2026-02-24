@@ -50,6 +50,25 @@ const cmConfirmModal = document.getElementById("cm-confirm-modal");
 const cmConfirmCancel = document.getElementById("cm-confirm-cancel");
 const cmConfirmForm = document.getElementById("cm-confirm-form");
 
+// Single-AAS Geocoding
+const geoSingleModal = document.getElementById("geo-single-modal");
+const geoSingleOkBtn = document.getElementById("geo-single-ok");
+const geoSingleOkLabel = document.getElementById("geo-single-ok-label");
+const geoSingleCancelBtn = document.getElementById("geo-single-cancel");
+let geoSinglePendingAasId = null;
+
+// Map modal DOM refs
+const mapModal = document.getElementById("map-modal");
+const mapCloseBtn = document.getElementById("map-modal-close");
+const mapFilterBtn = document.getElementById("map-filter-btn");
+const mapFilterLabel = document.getElementById("map-filter-label");
+const mapDistBtn = document.getElementById("map-dist-btn");
+const dashAasMapBtn = document.getElementById("dash-aas-map-btn");
+let mapInstance = null;
+let mapMatchesOnly = false;
+let mapShowDist = true;
+let mapCachedData = null;
+
 // News DOM refs
 const newsListView = document.getElementById("news-list-view");
 const newsDetailView = document.getElementById("news-detail-view");
@@ -185,6 +204,57 @@ const I18N = {
     gdacsColsBtn: "Wählen",
     gdacsColsSaved: "Spaltenauswahl gespeichert.",
     gdacsColsCount: "{n} Spalten ausgewählt",
+    // Geocoding
+    geocodingTitle: "Geocoding",
+    geocodingStart: "Starten",
+    geocodingStep3Country: "Wähle die Property für das Land.",
+    geocodingStep3City: "Wähle nun die Property für die Stadt.",
+    geocodingCountryLabel: "Land",
+    geocodingCityLabel: "Stadt",
+    geocodingDone: "Geocoding abgeschlossen",
+    geocodingErrors: "Fehler",
+    // Geo-Matching
+    matchPolygon: "Polygon-Match (hohe Genauigkeit)",
+    matchDistance: "Distanz-Match ({km} km)",
+    matchCountry: "Länderzuordnung (niedrige Genauigkeit)",
+    thresholdLabel: "Matching-Radius (km)",
+    // Matching-Parameter Wizard
+    matchingLabel: "Matching-Parameter",
+    matchingEmpty: "Nicht konfiguriert",
+    matchingBtn: "Konfigurieren",
+    matchingCountryStep: "Wähle den Pfad für das Land.",
+    matchingCityStep: "Wähle den Pfad für die Stadt.",
+    matchingLatStep: "Wähle den Pfad für Latitude.",
+    matchingLonStep: "Wähle den Pfad für Longitude.",
+    matchingSkip: "Überspringen",
+    matchingSaved: "Matching-Parameter gespeichert.",
+    matchingCountry: "Land",
+    matchingCity: "Stadt",
+    matchingLat: "Lat",
+    matchingLon: "Lon",
+    // Single-AAS Geocoding
+    geoSingleTitle: "Import & Geocoding",
+    geoSingleDesc: "AAS-Daten werden neu importiert und geocodiert.",
+    geoSingleCancel: "Abbrechen",
+    geoSingleStart: "Starten",
+    geoSingleSuccess: "Geocoding erfolgreich.",
+    geoSingleError: "Geocoding fehlgeschlagen.",
+    geoSingleNoPaths: "Matching-Parameter müssen zuerst konfiguriert werden.",
+    // World Map
+    mapTitle: "Weltkarte",
+    mapBtnTitle: "Karte anzeigen",
+    mapPopupAlerts: "Betroffene Alerts",
+    mapFilterMatches: "Nur Matches",
+    mapFilterAll: "Alle anzeigen",
+    // Dashboard AAS Tile Settings
+    dashAasSettingsTitle: "Kachel-Einstellungen",
+    dashAasFilterLabel: "Match-Qualität anzeigen",
+    dashAasFilterPolygon: "Polygon",
+    dashAasFilterDistance: "Distanz",
+    dashAasFilterCountry: "Land",
+    dashAasColsLabel: "Spaltenauswahl",
+    dashAasColsBtn: "Spalten wählen",
+    dashAasSettingsSave: "Speichern",
     gdacsSettingsRetentionLabel: "Alerts aufbewahren für",
     gdacsSettingsRefreshLabel: "Abruf-Intervall",
     gdacsSettingsSave: "Speichern",
@@ -555,6 +625,57 @@ const I18N = {
     gdacsColsBtn: "Select",
     gdacsColsSaved: "Column selection saved.",
     gdacsColsCount: "{n} columns selected",
+    // Geocoding
+    geocodingTitle: "Geocoding",
+    geocodingStart: "Start",
+    geocodingStep3Country: "Select the property for the country.",
+    geocodingStep3City: "Now select the property for the city.",
+    geocodingCountryLabel: "Country",
+    geocodingCityLabel: "City",
+    geocodingDone: "Geocoding complete",
+    geocodingErrors: "errors",
+    // Geo-Matching
+    matchPolygon: "Polygon match (high accuracy)",
+    matchDistance: "Distance match ({km} km)",
+    matchCountry: "Country match (low accuracy)",
+    thresholdLabel: "Matching radius (km)",
+    // Matching-Parameter Wizard
+    matchingLabel: "Matching Parameters",
+    matchingEmpty: "Not configured",
+    matchingBtn: "Configure",
+    matchingCountryStep: "Select the path for the country.",
+    matchingCityStep: "Select the path for the city.",
+    matchingLatStep: "Select the path for latitude.",
+    matchingLonStep: "Select the path for longitude.",
+    matchingSkip: "Skip",
+    matchingSaved: "Matching parameters saved.",
+    matchingCountry: "Country",
+    matchingCity: "City",
+    matchingLat: "Lat",
+    matchingLon: "Lon",
+    // Single-AAS Geocoding
+    geoSingleTitle: "Import & Geocoding",
+    geoSingleDesc: "AAS data will be re-imported and geocoded.",
+    geoSingleCancel: "Cancel",
+    geoSingleStart: "Start",
+    geoSingleSuccess: "Geocoding successful.",
+    geoSingleError: "Geocoding failed.",
+    geoSingleNoPaths: "Matching parameters must be configured first.",
+    // World Map
+    mapTitle: "World Map",
+    mapBtnTitle: "Show map",
+    mapPopupAlerts: "Affected alerts",
+    mapFilterMatches: "Matches only",
+    mapFilterAll: "Show all",
+    // Dashboard AAS Tile Settings
+    dashAasSettingsTitle: "Tile Settings",
+    dashAasFilterLabel: "Show match quality",
+    dashAasFilterPolygon: "Polygon",
+    dashAasFilterDistance: "Distance",
+    dashAasFilterCountry: "Country",
+    dashAasColsLabel: "Column Selection",
+    dashAasColsBtn: "Select Columns",
+    dashAasSettingsSave: "Save",
     gdacsSettingsRetentionLabel: "Keep alerts for",
     gdacsSettingsRefreshLabel: "Refresh interval",
     gdacsSettingsSave: "Save",
@@ -1041,14 +1162,29 @@ function applyLocaleToUI() {
   gdacsCountryInput.placeholder = t("gdacsCountryInputPlaceholder");
   document.getElementById("gdacs-country-add-label").textContent = t("gdacsCountryAdd");
   document.getElementById("gdacs-country-empty-label").textContent = t("gdacsCountryEmpty");
-  document.getElementById("gdacs-aas-source-label").textContent = t("gdacsAasSourceLabel");
-  document.getElementById("gdacs-aas-source-btn-label").textContent = t("gdacsAasSourceBtn");
-  document.getElementById("gdacs-cols-label").textContent = t("gdacsColsLabel");
-  document.getElementById("gdacs-cols-btn-label").textContent = t("gdacsColsBtn");
+  document.getElementById("gdacs-matching-label").textContent = t("matchingLabel");
+  document.getElementById("gdacs-matching-btn-label").textContent = t("matchingBtn");
+  // Single-AAS geocoding dialog
+  document.getElementById("geo-single-title").textContent = t("geoSingleTitle");
+  document.getElementById("geo-single-desc").textContent = t("geoSingleDesc");
+  // World map modal labels
+  document.getElementById("map-modal-title").textContent = t("mapTitle");
+  dashAasMapBtn.title = t("mapBtnTitle");
+  mapFilterLabel.textContent = mapMatchesOnly ? t("mapFilterAll") : t("mapFilterMatches");
+  // Dashboard tile settings labels
+  document.getElementById("dash-aas-settings-title").textContent = t("dashAasSettingsTitle");
+  document.getElementById("dash-aas-filter-label").textContent = t("dashAasFilterLabel");
+  document.getElementById("dash-aas-filter-polygon-label").textContent = t("dashAasFilterPolygon");
+  document.getElementById("dash-aas-filter-distance-label").textContent = t("dashAasFilterDistance");
+  document.getElementById("dash-aas-filter-country-label").textContent = t("dashAasFilterCountry");
+  document.getElementById("dash-aas-cols-label").textContent = t("dashAasColsLabel");
+  document.getElementById("dash-aas-cols-btn-label").textContent = t("dashAasColsBtn");
+  document.getElementById("dash-aas-settings-save").textContent = t("dashAasSettingsSave");
   document.getElementById("gdacs-retention-label").textContent = t("gdacsSettingsRetentionLabel");
   document.getElementById("gdacs-refresh-label").textContent = t("gdacsSettingsRefreshLabel");
   document.getElementById("gdacs-settings-save-label").textContent = t("gdacsSettingsSave");
   document.getElementById("gdacs-purge-label").textContent = t("gdacsPurge");
+  document.getElementById("gdacs-threshold-label").textContent = t("thresholdLabel");
 
   for (const opt of gdacsRetentionSelect.options) {
     opt.textContent = t("ret." + opt.value);
@@ -1325,14 +1461,16 @@ function hideGdacsCountryHint() {
 // ── Settings: Feed management ─────────────────────────────────────
 let cachedFeeds = [];
 let cachedGdacsCountries = [];
+let cachedDashMatchFilter = ["polygon", "distance"];
 
 async function loadSettings() {
   const result = await apiRequest("/apps/resilience/api/settings");
   if (!result.ok || !result.payload) return;
 
-  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns } = result.payload;
+  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter } = result.payload;
   cachedFeeds = feeds || [];
   cachedGdacsCountries = gdacs_countries || [];
+  cachedDashMatchFilter = dash_aas_match_filter || ["polygon", "distance"];
 
   retentionSelect.value = String(retention_days);
   refreshSelect.value = String(refresh_minutes);
@@ -1340,19 +1478,35 @@ async function loadSettings() {
   gdacsRetentionSelect.value = String(gdacs_retention_days || 30);
   importIntervalSelect.value = String(import_interval_hours || 0);
 
-  // GDACS AAS source display
-  if (gdacs_aas_group_id && gdacs_aas_path) {
-    // Resolve group name
-    const gRes = await apiRequest("/apps/resilience/api/asset-groups");
-    const groups = gRes.ok ? (gRes.payload.groups || []) : [];
-    const group = groups.find(g => g.group_id === gdacs_aas_group_id);
-    updateGdacsAasSourceDisplay(group ? group.name : gdacs_aas_group_id, gdacs_aas_path);
-  } else {
-    updateGdacsAasSourceDisplay("", "");
+  // Matching-Parameter display
+  if (matching_group_id) {
+    updateMatchingDisplay(matching_group_name || matching_group_id, {
+      country: matching_country_path || "", city: matching_city_path || "",
+      lat: matching_lat_path || "", lon: matching_lon_path || "",
+    });
   }
 
-  // GDACS columns display
+  // GDACS columns display (dashboard tile settings)
   updateGdacsColsDisplay(gdacs_aas_columns || []);
+
+  // Match filter checkboxes
+  const filterPolygon = document.getElementById("dash-filter-polygon");
+  const filterDistance = document.getElementById("dash-filter-distance");
+  const filterCountry = document.getElementById("dash-filter-country");
+  if (filterPolygon) filterPolygon.checked = cachedDashMatchFilter.includes("polygon");
+  if (filterDistance) filterDistance.checked = cachedDashMatchFilter.includes("distance");
+  if (filterCountry) filterCountry.checked = cachedDashMatchFilter.includes("country");
+
+  // GDACS distance thresholds
+  if (gdacs_distance_thresholds) {
+    try {
+      const th = typeof gdacs_distance_thresholds === "string" ? JSON.parse(gdacs_distance_thresholds) : gdacs_distance_thresholds;
+      for (const [type, km] of Object.entries(th)) {
+        const inp = document.getElementById(`threshold-${type}`);
+        if (inp) inp.value = String(km);
+      }
+    } catch (_) { /* ignore parse errors */ }
+  }
 
   renderFeedList();
   renderGdacsCountryList();
@@ -1384,12 +1538,22 @@ function renderFeedList() {
   }
 }
 
+let gdacsCountryPage = 1;
+const GDACS_COUNTRY_PAGE_SIZE = 10;
+
 function renderGdacsCountryList() {
   gdacsCountryList.innerHTML = "";
   gdacsCountryListEmpty.hidden = cachedGdacsCountries.length > 0;
   gdacsCountryList.hidden = cachedGdacsCountries.length === 0;
 
-  for (const country of cachedGdacsCountries) {
+  const total = cachedGdacsCountries.length;
+  const totalPages = Math.ceil(total / GDACS_COUNTRY_PAGE_SIZE) || 1;
+  if (gdacsCountryPage > totalPages) gdacsCountryPage = totalPages;
+
+  const start = (gdacsCountryPage - 1) * GDACS_COUNTRY_PAGE_SIZE;
+  const pageItems = cachedGdacsCountries.slice(start, start + GDACS_COUNTRY_PAGE_SIZE);
+
+  for (const country of pageItems) {
     const item = document.createElement("div");
     item.className = "feed-list-item";
     item.innerHTML = `
@@ -1400,6 +1564,18 @@ function renderGdacsCountryList() {
       </button>
     `;
     gdacsCountryList.appendChild(item);
+  }
+
+  // Pagination controls
+  if (totalPages > 1) {
+    const pag = document.createElement("div");
+    pag.className = "gdacs-country-pagination";
+    pag.innerHTML = `
+      <button class="btn btn-sm gdacs-country-pg-btn" data-pg="prev" ${gdacsCountryPage <= 1 ? "disabled" : ""}>\u2039</button>
+      <span class="gdacs-country-pg-info">${gdacsCountryPage} / ${totalPages}</span>
+      <button class="btn btn-sm gdacs-country-pg-btn" data-pg="next" ${gdacsCountryPage >= totalPages ? "disabled" : ""}>\u203A</button>
+    `;
+    gdacsCountryList.appendChild(pag);
   }
 }
 
@@ -1500,6 +1676,7 @@ gdacsCountryAddBtn.addEventListener("click", async () => {
 
   if (result.ok && result.payload) {
     cachedGdacsCountries.push(result.payload);
+    gdacsCountryPage = Math.ceil(cachedGdacsCountries.length / GDACS_COUNTRY_PAGE_SIZE);
     renderGdacsCountryList();
     gdacsCountryInput.value = "";
     showGdacsCountryHint(t("gdacsCountryAdded"), "success");
@@ -1517,6 +1694,15 @@ gdacsCountryInput.addEventListener("keydown", (e) => {
 
 // Remove country
 gdacsCountryList.addEventListener("click", async (e) => {
+  // Pagination
+  const pgBtn = e.target.closest(".gdacs-country-pg-btn");
+  if (pgBtn) {
+    if (pgBtn.dataset.pg === "prev" && gdacsCountryPage > 1) gdacsCountryPage--;
+    else if (pgBtn.dataset.pg === "next") gdacsCountryPage++;
+    renderGdacsCountryList();
+    return;
+  }
+  // Remove
   const btn = e.target.closest(".feed-remove-btn");
   if (!btn) return;
   const countryId = btn.dataset.countryId;
@@ -1535,11 +1721,17 @@ gdacsCountryList.addEventListener("click", async (e) => {
 // Save GDACS settings
 gdacsSettingsSaveBtn.addEventListener("click", async () => {
   gdacsSettingsSaveBtn.disabled = true;
+  const gdacs_distance_thresholds = {};
+  for (const type of ["EQ", "TC", "FL", "VO", "WF", "DR"]) {
+    const inp = document.getElementById(`threshold-${type}`);
+    gdacs_distance_thresholds[type] = inp ? parseInt(inp.value) || 300 : 300;
+  }
   const result = await apiRequest("/apps/resilience/api/settings", {
     method: "PUT",
     body: {
       gdacs_refresh_minutes: parseInt(gdacsRefreshSelect.value),
       gdacs_retention_days: parseInt(gdacsRetentionSelect.value),
+      gdacs_distance_thresholds,
     },
   });
   gdacsSettingsSaveBtn.disabled = false;
@@ -1615,18 +1807,47 @@ function updateGdacsAasSourceDisplay(groupName, path) {
   }
 }
 
-// GDACS columns display helper
+// GDACS columns display helper (now in dashboard tile settings modal)
 let cachedGdacsColumns = [];
 function updateGdacsColsDisplay(columns) {
   cachedGdacsColumns = columns || [];
-  const textEl = document.getElementById("gdacs-cols-text");
+  const textEl = document.getElementById("dash-aas-cols-text");
+  if (!textEl) return;
   if (!columns || !columns.length) {
     textEl.className = "gdacs-aas-source-empty";
     textEl.textContent = t("gdacsColsEmpty");
   } else {
     textEl.className = "gdacs-aas-source-filled";
-    textEl.innerHTML = columns.map(p => `<span class="gdacs-src-path">${escapeHtml(p)}</span>`).join("");
+    textEl.innerHTML = columns.map(c => {
+      const p = typeof c === "string" ? c : c.path;
+      const tp = typeof c === "string" ? "" : c.type;
+      const typeHtml = tp ? ` <span class="gdacs-src-type">[${escapeHtml(tp)}]</span>` : "";
+      return `<span class="gdacs-src-path">${escapeHtml(p)}${typeHtml}</span>`;
+    }).join("");
   }
+}
+
+// Matching-Parameter display
+function updateMatchingDisplay(groupName, paths) {
+  const el = document.getElementById("gdacs-matching-paths");
+  if (!groupName && !paths.country && !paths.city && !paths.lat && !paths.lon) {
+    el.innerHTML = `<span class="gdacs-aas-source-empty">${t("matchingEmpty")}</span>`;
+    return;
+  }
+  const items = [
+    { key: "country", label: t("matchingCountry"), path: paths.country },
+    { key: "city", label: t("matchingCity"), path: paths.city },
+    { key: "lat", label: t("matchingLat"), path: paths.lat },
+    { key: "lon", label: t("matchingLon"), path: paths.lon },
+  ];
+  let html = `<div class="gdacs-matching-group">${escapeHtml(groupName)}</div>`;
+  for (const item of items) {
+    const val = item.path
+      ? `<span class="gdacs-matching-path-value">${escapeHtml(item.path)}</span>`
+      : `<span class="gdacs-matching-path-skip">&mdash;</span>`;
+    html += `<div class="gdacs-matching-path-item"><span class="gdacs-matching-path-label">${item.label}:</span> ${val}</div>`;
+  }
+  el.innerHTML = html;
 }
 
 // ── Indicators: Nav switching ─────────────────────────────────────
@@ -1839,12 +2060,20 @@ let aasCmSelectedAas = null;
 let aasCmSelectedPath = "";
 let aasCmSelectedPaths = []; // multi-select for columns mode
 let aasCmMatchResults = null;
-let aasCmMode = "import"; // "import", "picker", or "columns"
+let aasCmMode = "import"; // "import", "picker", "columns", "geocoding", or "matching"
+let aasCmGeoCountryPath = "";
+let aasCmGeoCityPath = "";
+let aasCmGeoPhase = "country"; // "country" or "city"
+// Matching-Parameter Wizard state
+let aasCmMatchingPaths = { country: "", city: "", lat: "", lon: "" };
+let aasCmMatchingPhase = "country";
+const MATCHING_PHASES = ["country", "city", "lat", "lon"];
+const aasCmSkipBtn = document.getElementById("aas-cm-skip-btn");
 
 function showAasCmStep(step) {
   aasCmCurrentStep = step;
   document.getElementById("aas-cm-success").hidden = true;
-  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns") ? 3 : 4;
+  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns" || aasCmMode === "geocoding" || aasCmMode === "matching") ? 3 : 4;
   for (let i = 1; i <= 4; i++) {
     document.getElementById(`aas-cm-step-${i}`).hidden = i !== step;
     const dot = aasCmSteps.querySelector(`[data-step="${i}"]`);
@@ -1863,7 +2092,16 @@ function showAasCmStep(step) {
   }
   aasCmBackBtn.hidden = step <= 1;
   aasCmApplyBtn.hidden = true;
-  if (step === 3 && aasCmMode === "columns" && aasCmSelectedPaths.length > 0) {
+  aasCmSkipBtn.hidden = true;
+  if (step === 3 && aasCmMode === "matching") {
+    updateMatchingPhaseUI();
+  } else if (step === 3 && aasCmMode === "geocoding") {
+    document.getElementById("aas-cm-step3-desc").textContent = t("geocodingStep3Country");
+    if (aasCmGeoCountryPath && aasCmGeoCityPath) {
+      aasCmApplyBtn.hidden = false;
+      aasCmApplyBtn.textContent = t("geocodingStart");
+    }
+  } else if (step === 3 && aasCmMode === "columns" && aasCmSelectedPaths.length > 0) {
     aasCmApplyBtn.hidden = false;
     aasCmApplyBtn.textContent = t("gdacsColsBtn");
   } else if (step === 3 && aasCmSelectedPath) {
@@ -1882,7 +2120,13 @@ function openAasCmModal(mode) {
   aasCmSelectedPath = "";
   aasCmSelectedPaths = [];
   aasCmMatchResults = null;
-  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), import: t("aasCmTitle") };
+  aasCmGeoCountryPath = "";
+  aasCmGeoCityPath = "";
+  aasCmGeoPhase = "country";
+  aasCmMatchingPaths = { country: "", city: "", lat: "", lon: "" };
+  aasCmMatchingPhase = "country";
+  aasCmSkipBtn.hidden = true;
+  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle") };
   document.getElementById("aas-cm-title").textContent = titles[mode] || titles.import;
   document.getElementById("aas-cm-step1-desc").textContent = t("aasCmStep1Desc");
   document.getElementById("aas-cm-selected-path").hidden = true;
@@ -1899,16 +2143,82 @@ function openAasCmModal(mode) {
 }
 
 document.getElementById("cm-aas-import-btn").addEventListener("click", () => openAasCmModal("import"));
-document.getElementById("gdacs-aas-source-btn").addEventListener("click", () => openAasCmModal("picker"));
-document.getElementById("gdacs-cols-btn").addEventListener("click", () => openAasCmModal("columns"));
+document.getElementById("gdacs-matching-btn").addEventListener("click", () => openAasCmModal("matching"));
+document.getElementById("aas-ov-geocoding-btn").addEventListener("click", () => openAasCmModal("geocoding"));
 
 // Close / cancel
 aasCmCloseBtn.addEventListener("click", () => aasCmModal.close());
 aasCmCancelBtn.addEventListener("click", () => aasCmModal.close());
 aasCmBackBtn.addEventListener("click", () => {
   if (aasCmCurrentStep > 1) {
-    if (aasCmCurrentStep === 3) aasCmSelectedPath = "";
+    if (aasCmCurrentStep === 3) {
+      aasCmSelectedPath = "";
+      if (aasCmMode === "geocoding") {
+        aasCmGeoCountryPath = "";
+        aasCmGeoCityPath = "";
+        aasCmGeoPhase = "country";
+      }
+      if (aasCmMode === "matching") {
+        aasCmMatchingPaths = { country: "", city: "", lat: "", lon: "" };
+        aasCmMatchingPhase = "country";
+        aasCmSkipBtn.hidden = true;
+      }
+    }
     showAasCmStep(aasCmCurrentStep - 1);
+  }
+});
+
+// Matching Wizard: Phase UI + advance logic
+const MATCHING_PHASE_KEYS = { country: "matchingCountryStep", city: "matchingCityStep", lat: "matchingLatStep", lon: "matchingLonStep" };
+const MATCHING_PHASE_LABELS = { country: "matchingCountry", city: "matchingCity", lat: "matchingLat", lon: "matchingLon" };
+
+function updateMatchingPhaseUI() {
+  const desc = document.getElementById("aas-cm-step3-desc");
+  desc.textContent = t(MATCHING_PHASE_KEYS[aasCmMatchingPhase]);
+  aasCmSkipBtn.hidden = false;
+  aasCmSkipBtn.textContent = t("matchingSkip");
+  aasCmApplyBtn.hidden = true;
+  // Show summary of already-selected paths
+  const pathDisplay = document.getElementById("aas-cm-selected-path");
+  const selected = MATCHING_PHASES.filter(p => aasCmMatchingPaths[p]);
+  if (selected.length) {
+    pathDisplay.hidden = false;
+    pathDisplay.innerHTML = selected.map(p =>
+      `<span class="aas-cm-matching-tag aas-cm-matching-${p}">${t(MATCHING_PHASE_LABELS[p])}: ${escapeHtml(aasCmMatchingPaths[p])}</span>`
+    ).join(" ");
+  } else {
+    pathDisplay.hidden = true;
+  }
+  // Remove prior phase highlights from tree
+  document.querySelectorAll(".aas-cm-matching-country, .aas-cm-matching-city, .aas-cm-matching-lat, .aas-cm-matching-lon").forEach(el => {
+    el.classList.remove("aas-cm-matching-country", "aas-cm-matching-city", "aas-cm-matching-lat", "aas-cm-matching-lon");
+  });
+}
+
+function advanceMatchingPhase() {
+  const idx = MATCHING_PHASES.indexOf(aasCmMatchingPhase);
+  if (idx < MATCHING_PHASES.length - 1) {
+    aasCmMatchingPhase = MATCHING_PHASES[idx + 1];
+    updateMatchingPhaseUI();
+  } else {
+    // All phases done — show apply button
+    aasCmSkipBtn.hidden = true;
+    const pathDisplay = document.getElementById("aas-cm-selected-path");
+    pathDisplay.hidden = false;
+    pathDisplay.innerHTML = MATCHING_PHASES.map(p => {
+      const val = aasCmMatchingPaths[p];
+      return `<span class="aas-cm-matching-tag aas-cm-matching-${p}">${t(MATCHING_PHASE_LABELS[p])}: ${val ? escapeHtml(val) : "—"}</span>`;
+    }).join(" ");
+    document.getElementById("aas-cm-step3-desc").textContent = t("matchingSaved").replace("gespeichert.", "").replace("saved.", "").trim() || t("matchingLabel");
+    aasCmApplyBtn.hidden = false;
+    aasCmApplyBtn.textContent = t("gdacsSettingsSave");
+  }
+}
+
+aasCmSkipBtn.addEventListener("click", () => {
+  if (aasCmMode === "matching") {
+    aasCmMatchingPaths[aasCmMatchingPhase] = "";
+    advanceMatchingPhase();
   }
 });
 
@@ -1996,11 +2306,13 @@ function renderSelectableEl(el, depth, parentPath) {
   switch (mt) {
     case "Property": {
       const val = el.value ?? "";
-      return `<li class="aas-el-item aas-cm-prop-item" data-idshort-path="${escapeHtml(path)}"><span class="aas-el-name">${escapeHtml(name)}</span> = <span class="aas-el-value">${escapeHtml(String(val))}</span></li>`;
+      const vt = el.valueType || "";
+      const vtHtml = vt ? `<span class="aas-el-type">[${escapeHtml(vt)}]</span>` : "";
+      return `<li class="aas-el-item aas-cm-prop-item" data-idshort-path="${escapeHtml(path)}" data-value-type="${escapeHtml(vt)}"><span class="aas-el-name">${escapeHtml(name)}</span> ${vtHtml} = <span class="aas-el-value">${escapeHtml(String(val))}</span></li>`;
     }
     case "MultiLanguageProperty": {
       const parts = (el.value || []).map(l => `${l.language}: ${l.text}`).join(", ");
-      return `<li class="aas-el-item aas-cm-prop-item" data-idshort-path="${escapeHtml(path)}"><span class="aas-el-name">${escapeHtml(name)}</span> = <span class="aas-el-value">${escapeHtml(parts)}</span></li>`;
+      return `<li class="aas-el-item aas-cm-prop-item" data-idshort-path="${escapeHtml(path)}" data-value-type="MLProperty"><span class="aas-el-name">${escapeHtml(name)}</span> <span class="aas-el-type">[MLProperty]</span> = <span class="aas-el-value">${escapeHtml(parts)}</span></li>`;
     }
     case "SubmodelElementCollection":
     case "SubmodelElementList": {
@@ -2028,14 +2340,44 @@ aasCmTree.addEventListener("click", (e) => {
   const path = propEl.dataset.idshortPath;
   const pathDisplay = document.getElementById("aas-cm-selected-path");
 
-  if (aasCmMode === "columns") {
-    // Multi-select: toggle
-    const idx = aasCmSelectedPaths.indexOf(path);
+  if (aasCmMode === "matching") {
+    // Multi-phase: country → city → lat → lon
+    propEl.classList.add(`aas-cm-matching-${aasCmMatchingPhase}`);
+    aasCmMatchingPaths[aasCmMatchingPhase] = path;
+    advanceMatchingPhase();
+  } else if (aasCmMode === "geocoding") {
+    // Two-phase: first country, then city
+    if (aasCmGeoPhase === "country") {
+      // Remove previous country highlight
+      aasCmTree.querySelectorAll(".aas-cm-geo-country").forEach(el => el.classList.remove("aas-cm-geo-country"));
+      propEl.classList.add("aas-cm-geo-country");
+      aasCmGeoCountryPath = path;
+      // Show label
+      pathDisplay.innerHTML = `<span class="geo-path-label geo-country">${t("geocodingCountryLabel")}: ${escapeHtml(path)}</span>`;
+      pathDisplay.hidden = false;
+      // Advance to city phase
+      aasCmGeoPhase = "city";
+      document.getElementById("aas-cm-step3-desc").textContent = t("geocodingStep3City");
+    } else {
+      // City phase
+      aasCmTree.querySelectorAll(".aas-cm-geo-city").forEach(el => el.classList.remove("aas-cm-geo-city"));
+      propEl.classList.add("aas-cm-geo-city");
+      aasCmGeoCityPath = path;
+      // Show both labels
+      pathDisplay.innerHTML = `<span class="geo-path-label geo-country">${t("geocodingCountryLabel")}: ${escapeHtml(aasCmGeoCountryPath)}</span> <span class="geo-path-label geo-city">${t("geocodingCityLabel")}: ${escapeHtml(aasCmGeoCityPath)}</span>`;
+      pathDisplay.hidden = false;
+      aasCmApplyBtn.hidden = false;
+      aasCmApplyBtn.textContent = t("geocodingStart");
+    }
+  } else if (aasCmMode === "columns") {
+    // Multi-select: toggle {path, type} objects
+    const valueType = propEl.dataset.valueType || "";
+    const idx = aasCmSelectedPaths.findIndex(c => c.path === path);
     if (idx >= 0) {
       aasCmSelectedPaths.splice(idx, 1);
       propEl.classList.remove("aas-cm-prop-selected");
     } else {
-      aasCmSelectedPaths.push(path);
+      aasCmSelectedPaths.push({ path, type: valueType });
       propEl.classList.add("aas-cm-prop-selected");
     }
     if (aasCmSelectedPaths.length) {
@@ -2061,6 +2403,50 @@ aasCmTree.addEventListener("click", (e) => {
 
 // Apply / Übernehmen button
 aasCmApplyBtn.addEventListener("click", async () => {
+  if (aasCmCurrentStep === 3 && aasCmMode === "matching") {
+    // Matching mode: save all 4 paths + group
+    aasCmApplyBtn.disabled = true;
+    const res = await apiRequest("/apps/resilience/api/settings", {
+      method: "PUT",
+      body: {
+        matching_params: {
+          group_id: aasCmSelectedGroup.group_id,
+          country_path: aasCmMatchingPaths.country,
+          city_path: aasCmMatchingPaths.city,
+          lat_path: aasCmMatchingPaths.lat,
+          lon_path: aasCmMatchingPaths.lon,
+        },
+      },
+    });
+    aasCmApplyBtn.disabled = false;
+    if (res.ok) {
+      updateMatchingDisplay(aasCmSelectedGroup.name, aasCmMatchingPaths);
+      showGdacsCountryHint(t("matchingSaved"), "success");
+      setTimeout(hideGdacsCountryHint, 3000);
+      aasCmModal.close();
+    }
+    return;
+  }
+  if (aasCmCurrentStep === 3 && aasCmMode === "geocoding" && aasCmGeoCountryPath && aasCmGeoCityPath) {
+    // Geocoding mode: save settings + trigger job
+    aasCmApplyBtn.disabled = true;
+    const saveRes = await apiRequest("/apps/resilience/api/settings", {
+      method: "PUT",
+      body: {
+        geocoding_group_id: aasCmSelectedGroup.group_id,
+        geocoding_country_path: aasCmGeoCountryPath,
+        geocoding_city_path: aasCmGeoCityPath,
+      },
+    });
+    if (!saveRes.ok) { aasCmApplyBtn.disabled = false; return; }
+    const runRes = await apiRequest("/apps/resilience/api/geocoding/run", { method: "POST" });
+    aasCmApplyBtn.disabled = false;
+    if (runRes.ok) {
+      aasCmModal.close();
+      startGeocodingPolling();
+    }
+    return;
+  }
   if (aasCmCurrentStep === 3 && aasCmSelectedPaths.length > 0 && aasCmMode === "columns") {
     // Columns mode: save selected paths
     aasCmApplyBtn.disabled = true;
@@ -2074,6 +2460,9 @@ aasCmApplyBtn.addEventListener("click", async () => {
       showGdacsCountryHint(t("gdacsColsSaved"), "success");
       setTimeout(hideGdacsCountryHint, 3000);
       aasCmModal.close();
+      // Refresh dashboard to apply new columns
+      dashAasPage = 0;
+      loadDashboard();
     }
     return;
   }
@@ -3251,7 +3640,13 @@ function renderAasOverview() {
     const viewBtn = entry.imported_at
       ? `<button class="aas-ov-view-btn" data-view-aas="${escapeHtml(entry.aas_id)}" title="${t("aasOvView")}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`
       : "";
-    tr.innerHTML = `<td class="src-td-url">${escapeHtml(idDisplay)}</td><td class="aas-ov-copy-cell"><button class="aas-ov-copy-btn" data-copy="${escapeHtml(entry.aas_id)}" title="Copy AAS ID"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td><td>${escapeHtml(entry.source_name)}</td><td>${grpDisplay}</td><td>${impDisplay}</td><td class="aas-ov-status-cell">${statusIcon}</td><td class="aas-ov-view-cell">${viewBtn}</td>`;
+    const geoSvg = entry.geocoded_status === "ok"
+      ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+      : entry.geocoded_status === "error"
+        ? `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+        : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+    const geoBtn = `<button class="aas-ov-geo-btn" data-geo-aas="${escapeHtml(entry.aas_id)}" title="Import &amp; Geocoding">${geoSvg}</button>`;
+    tr.innerHTML = `<td class="src-td-url">${escapeHtml(idDisplay)}</td><td class="aas-ov-copy-cell"><button class="aas-ov-copy-btn" data-copy="${escapeHtml(entry.aas_id)}" title="Copy AAS ID"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td><td>${escapeHtml(entry.source_name)}</td><td>${grpDisplay}</td><td>${impDisplay}</td><td class="aas-ov-status-cell">${statusIcon}</td><td class="aas-ov-geo-cell">${geoBtn}</td><td class="aas-ov-view-cell">${viewBtn}</td>`;
     aasOvTbody.appendChild(tr);
   }
 
@@ -3274,6 +3669,246 @@ function renderAasOverview() {
 }
 
 aasOvSearch.addEventListener("input", () => { aasOvPage = 0; renderAasOverview(); });
+
+// ── Single-AAS Import & Geocoding ──────────────────────────
+aasOvTbody.addEventListener("click", (e) => {
+  const geoBtn = e.target.closest(".aas-ov-geo-btn");
+  if (!geoBtn) return;
+  const aasId = geoBtn.dataset.geoAas;
+  if (aasId) openGeoSingleModal(aasId);
+});
+
+function openGeoSingleModal(aasId) {
+  geoSinglePendingAasId = aasId;
+  document.getElementById("geo-single-title").textContent = t("geoSingleTitle");
+  document.getElementById("geo-single-desc").textContent = t("geoSingleDesc");
+  document.getElementById("geo-single-aas-id").textContent = aasId;
+  geoSingleCancelBtn.textContent = t("geoSingleCancel");
+  geoSingleOkLabel.textContent = t("geoSingleStart");
+  geoSingleOkBtn.disabled = false;
+  geoSingleModal.showModal();
+}
+
+geoSingleCancelBtn.addEventListener("click", () => geoSingleModal.close());
+geoSingleModal.addEventListener("click", (e) => { if (e.target === geoSingleModal) geoSingleModal.close(); });
+
+geoSingleOkBtn.addEventListener("click", async () => {
+  if (!geoSinglePendingAasId) return;
+  geoSingleOkBtn.disabled = true;
+  geoSingleOkLabel.textContent = "\u2026";
+
+  const res = await apiRequest("/apps/resilience/api/geocoding/run-single", {
+    method: "POST",
+    body: { aas_id: geoSinglePendingAasId },
+  });
+
+  geoSingleModal.close();
+
+  if (res.ok) {
+    const status = res.payload.geocoded_status;
+    const btn = aasOvTbody.querySelector(`[data-geo-aas="${CSS.escape(geoSinglePendingAasId)}"]`);
+    if (btn) {
+      btn.innerHTML = status === "ok"
+        ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+        : `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    }
+    const entry = aasOverviewData.find(e => e.aas_id === geoSinglePendingAasId);
+    if (entry) { entry.geocoded_status = status; entry.imported_at = entry.imported_at || new Date().toISOString().replace("T", " ").slice(0, 19); }
+    showGdacsCountryHint(status === "ok" ? t("geoSingleSuccess") : t("geoSingleError"), status === "ok" ? "success" : "error");
+  } else if (res.payload?.error === "NO_GEOCODING_PATHS") {
+    showGdacsCountryHint(t("geoSingleNoPaths"), "error");
+  }
+
+  geoSinglePendingAasId = null;
+});
+
+// ── World Map Modal ──────────────────────────────────────────
+dashAasMapBtn.addEventListener("click", () => openMapModal());
+mapCloseBtn.addEventListener("click", () => mapModal.close());
+mapModal.addEventListener("click", (e) => { if (e.target === mapModal) mapModal.close(); });
+
+async function openMapModal() {
+  document.getElementById("map-modal-title").textContent = t("mapTitle");
+  mapFilterLabel.textContent = mapMatchesOnly ? t("mapFilterAll") : t("mapFilterMatches");
+  mapFilterBtn.classList.toggle("active", mapMatchesOnly);
+  mapDistBtn.style.display = mapMatchesOnly ? "" : "none";
+  mapModal.showModal();
+
+  if (!mapInstance) {
+    mapInstance = L.map("map-container", { zoomControl: true, scrollWheelZoom: true })
+      .setView([20, 0], 2);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 18,
+    }).addTo(mapInstance);
+  }
+
+  setTimeout(() => mapInstance.invalidateSize(), 100);
+  await loadMapData();
+}
+
+mapFilterBtn.addEventListener("click", () => {
+  mapMatchesOnly = !mapMatchesOnly;
+  mapFilterLabel.textContent = mapMatchesOnly ? t("mapFilterAll") : t("mapFilterMatches");
+  mapFilterBtn.classList.toggle("active", mapMatchesOnly);
+  mapDistBtn.style.display = mapMatchesOnly ? "" : "none";
+  if (mapCachedData) renderMapLayers(mapCachedData);
+});
+
+mapDistBtn.addEventListener("click", () => {
+  mapShowDist = !mapShowDist;
+  mapDistBtn.classList.toggle("active", mapShowDist);
+  if (mapCachedData) renderMapLayers(mapCachedData);
+});
+
+async function loadMapData() {
+  const res = await apiRequest("/apps/resilience/api/gdacs/map-data");
+  if (!res.ok || !res.payload) return;
+  mapCachedData = res.payload;
+  renderMapLayers(mapCachedData);
+}
+
+function renderMapLayers(data) {
+  mapInstance.eachLayer(l => { if (!(l instanceof L.TileLayer)) mapInstance.removeLayer(l); });
+
+  const { alerts, aas, matches, columns } = data;
+
+  const matchByAas = {};
+  for (const m of matches) (matchByAas[m.aas_id] ||= []).push(m);
+
+  // Set of alert_ids that have matches (for filter mode)
+  const matchedAlertIds = new Set(matches.map(m => m.alert_id));
+  const matchedAasIds = new Set(matches.map(m => m.aas_id));
+
+  const alertById = {};
+  for (const a of alerts) alertById[a.alert_id] = a;
+
+  // Which alerts/aas to show?
+  const visAlerts = mapMatchesOnly ? alerts.filter(a => matchedAlertIds.has(a.alert_id)) : alerts;
+  const visAas = mapMatchesOnly ? aas.filter(l => matchedAasIds.has(l.aas_id)) : aas;
+
+  // Update header stats
+  document.getElementById("map-stat-alerts-count").textContent = visAlerts.length;
+  document.getElementById("map-stat-aas-count").textContent = visAas.length;
+
+  // ── Polygons first (non-interactive, drawn below markers) ──
+  const POLY_COLOR = "#059669";
+  for (const alert of visAlerts) {
+    if (!alert.polygons?.length) continue;
+    for (const geom of alert.polygons) {
+      L.geoJSON({ type: "Feature", geometry: { type: geom.type, coordinates: geom.coordinates } }, {
+        style: { color: POLY_COLOR, weight: 2, fillColor: POLY_COLOR, fillOpacity: 0.12 },
+        interactive: false,
+      }).addTo(mapInstance);
+    }
+  }
+
+  // ── Disaster dots (red) ──
+  const ALERT_COLOR = "#dc2626";
+  for (const alert of visAlerts) {
+    if (alert.centroid_lat == null || alert.centroid_lon == null) continue;
+    const tip = `<b>${escapeHtml(alert.name)}</b><br>${alert.eventtype} \u00b7 ${alert.alertlevel}<br>${escapeHtml(alert.country_name)}`;
+    L.circleMarker([alert.centroid_lat, alert.centroid_lon], {
+      radius: 7, color: ALERT_COLOR, fillColor: ALERT_COLOR, fillOpacity: 0.8, weight: 2,
+    }).bindTooltip(tip, { direction: "top", offset: [0, -8] }).addTo(mapInstance);
+  }
+
+  // ── Suppliers (AAS): group by coordinates, show count ──
+  const AAS_COLOR = "#4f46e5";
+  const coordGroups = {};
+  for (const loc of visAas) {
+    const key = `${loc.direct_lat},${loc.direct_lon}`;
+    (coordGroups[key] ||= []).push(loc);
+  }
+
+  for (const key of Object.keys(coordGroups)) {
+    const group = coordGroups[key];
+    const [lat, lon] = key.split(",").map(Number);
+    const count = group.length;
+
+    // Build tooltip for all entities at this location
+    const tipParts = [];
+    for (const loc of group) {
+      const aasMatches = matchByAas[loc.aas_id] || [];
+      let part = `<b>${escapeHtml(loc.aas_id)}</b>`;
+      if (columns?.length && loc.columns_data) {
+        for (const col of columns) {
+          const path = typeof col === "string" ? col : col.path;
+          const label = typeof col === "string" ? col.split("/").pop() : (col.label || col.path.split("/").pop());
+          const val = loc.columns_data[path];
+          if (val) part += `<br>${escapeHtml(label)}: ${escapeHtml(String(val))}`;
+        }
+      }
+      if (loc.city_value || loc.country_value) {
+        part += `<br>${escapeHtml(loc.city_value || "")}${loc.city_value && loc.country_value ? ", " : ""}${escapeHtml(loc.country_value || "")}`;
+      }
+      if (aasMatches.length) {
+        part += `<br><b>${t("mapPopupAlerts")}:</b>`;
+        for (const m of aasMatches) {
+          const al = alertById[m.alert_id];
+          if (!al) continue;
+          part += `<br>\u00b7 ${escapeHtml(al.name)} (${m.match_tier}`;
+          if (m.distance_km != null) part += `, ${m.distance_km} km`;
+          part += `)`;
+        }
+      }
+      tipParts.push(part);
+    }
+    const tip = tipParts.join(`<hr style="margin:4px 0;border:0;border-top:1px solid #dde4ed">`);
+
+    // Marker: divIcon with count if >1, else circleMarker
+    if (count > 1) {
+      L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: "map-aas-cluster",
+          html: `${count}`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        }),
+      }).bindTooltip(tip, { direction: "top", offset: [0, -12], maxWidth: 360 }).addTo(mapInstance);
+    } else {
+      L.circleMarker([lat, lon], {
+        radius: 7, color: AAS_COLOR, fillColor: AAS_COLOR, fillOpacity: 0.85, weight: 2,
+      }).bindTooltip(tip, { direction: "top", offset: [0, -8], maxWidth: 360 }).addTo(mapInstance);
+    }
+
+    // ── Distance lines with km label (only in matches-only mode) ──
+    if (mapMatchesOnly && mapShowDist) {
+      for (const loc of group) {
+        const aasMatches = matchByAas[loc.aas_id] || [];
+        for (const m of aasMatches) {
+          if (m.match_tier !== "distance") continue;
+          const al = alertById[m.alert_id];
+          if (!al || al.centroid_lat == null) continue;
+          L.polyline(
+            [[lat, lon], [al.centroid_lat, al.centroid_lon]],
+            { color: "#d97706", weight: 1.5, opacity: 0.6, dashArray: "6 4" }
+          ).addTo(mapInstance);
+          if (m.distance_km != null) {
+            const midLat = (lat + al.centroid_lat) / 2;
+            const midLon = (lon + al.centroid_lon) / 2;
+            L.marker([midLat, midLon], {
+              icon: L.divIcon({
+                className: "map-dist-label",
+                html: `${Math.round(m.distance_km)} km`,
+                iconSize: [60, 16],
+                iconAnchor: [30, 8],
+              }),
+              interactive: false,
+            }).addTo(mapInstance);
+          }
+        }
+      }
+    }
+  }
+
+  // Auto-zoom
+  const allPoints = [
+    ...visAlerts.filter(a => a.centroid_lat != null).map(a => [a.centroid_lat, a.centroid_lon]),
+    ...visAas.map(l => [l.direct_lat, l.direct_lon]),
+  ];
+  if (allPoints.length) mapInstance.fitBounds(L.latLngBounds(allPoints).pad(0.1));
+}
 
 // Import all AAS IDs (server-side)
 aasOvImportBtn.addEventListener("click", async () => {
@@ -3321,6 +3956,46 @@ function startImportPolling() {
 (async () => {
   const result = await apiRequest("/apps/resilience/api/aas-import-status");
   if (result.ok && result.payload?.running) startImportPolling();
+})();
+
+// ── Geocoding polling ─────────────────────────────────────────────
+let geocodingPollTimer = null;
+
+function startGeocodingPolling() {
+  if (geocodingPollTimer) return;
+  globalImportStatus.hidden = false;
+  globalImportStatus.className = "global-import-status";
+  globalImportBar.style.width = "0%";
+  globalImportText.textContent = "Geocoding: 0 / 0";
+
+  geocodingPollTimer = setInterval(async () => {
+    const result = await apiRequest("/apps/resilience/api/geocoding/status");
+    if (!result.ok || !result.payload) return;
+    const { running, total, done, errors } = result.payload;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    globalImportBar.style.width = pct + "%";
+    globalImportText.textContent = `Geocoding: ${done} / ${total}`;
+
+    if (!running) {
+      clearInterval(geocodingPollTimer);
+      geocodingPollTimer = null;
+      if (errors > 0) {
+        globalImportStatus.className = "global-import-status error";
+        globalImportText.textContent = `${t("geocodingDone")} — ${errors} ${t("geocodingErrors")}`;
+      } else {
+        globalImportStatus.className = "global-import-status done";
+        globalImportText.textContent = t("geocodingDone");
+      }
+      if (activePage === "aas-data" && activeAasNav === "overview") loadAasOverview();
+      setTimeout(() => { globalImportStatus.hidden = true; }, 4000);
+    }
+  }, 2000);
+}
+
+// Check if geocoding is running on page load (survives F5)
+(async () => {
+  const result = await apiRequest("/apps/resilience/api/geocoding/status");
+  if (result.ok && result.payload?.running) startGeocodingPolling();
 })();
 
 // Overview table click handler (copy, view, row click)
@@ -4162,13 +4837,15 @@ async function performGdacsSearch() {
 
 // ── Dashboard ─────────────────────────────────────────────────────
 async function loadDashboard() {
+  dashAasPage = 0;
   const dashNewsBody = document.getElementById("dash-news-body");
   const dashAlertsBody = document.getElementById("dash-alerts-body");
 
+  const matchFilter = cachedDashMatchFilter.join(",");
   const [newsResult, alertsResult, aasOverviewResult] = await Promise.all([
     apiRequest("/apps/resilience/api/news?limit=8"),
     apiRequest("/apps/resilience/api/gdacs/alerts?limit=8"),
-    apiRequest("/apps/resilience/api/gdacs/aas-overview"),
+    apiRequest(`/apps/resilience/api/gdacs/aas-overview?match_filter=${encodeURIComponent(matchFilter)}`),
   ]);
 
   // News tile
@@ -4207,16 +4884,11 @@ async function loadDashboard() {
   }
 
   // AAS Country Overview tile
-  const dashAasOverview = document.getElementById("dash-aas-overview");
   const dashAasBody = document.getElementById("dash-aas-body");
   const dashAasFooter = document.getElementById("dash-aas-footer");
   if (aasOverviewResult.ok && aasOverviewResult.payload && aasOverviewResult.payload.total > 0) {
-    dashAasOverview.hidden = false;
-    const { items, total, columns, updated_at } = aasOverviewResult.payload;
+    const { items, total, columns } = aasOverviewResult.payload;
     dashAasColumns = columns || [];
-    if (updated_at) {
-      document.getElementById("dash-aas-updated").textContent = t("dashAasUpdated").replace("{time}", formatDateShort(updated_at));
-    }
     renderDashAasRows(items, dashAasColumns);
     // Pagination
     const pages = Math.ceil(total / 20);
@@ -4229,7 +4901,8 @@ async function loadDashboard() {
       dashAasFooter.hidden = true;
     }
   } else {
-    dashAasOverview.hidden = true;
+    dashAasBody.innerHTML = `<div class="dash-card-empty">${t("dashAasEmpty")}</div>`;
+    dashAasFooter.hidden = true;
   }
 }
 
@@ -4241,25 +4914,44 @@ let dashAasSortDir = "asc";
 function renderDashAasRows(items, columns) {
   const body = document.getElementById("dash-aas-body");
   const cols = columns || [];
+  const showAasId = !cols.length;
   // Header row with sortable columns
-  const colHeaders = cols.map(p => {
-    const label = p.includes(".") ? p.split(".").pop() : p;
-    const active = dashAasSortBy === p;
-    const arrow = active ? (dashAasSortDir === "asc" ? " \u25B2" : " \u25BC") : "";
-    return `<span class="dash-aas-col-header dash-aas-sortable${active ? " dash-aas-sort-active" : ""}" data-sort-col="${escapeHtml(p)}" title="${escapeHtml(p)}">${escapeHtml(label)}${arrow}</span>`;
-  }).join("");
+  let colHeaders = "";
+  if (showAasId) {
+    colHeaders = `<span class="dash-aas-col-header">AAS ID</span>`;
+  } else {
+    colHeaders = cols.map(c => {
+      const p = typeof c === "string" ? c : c.path;
+      const label = p.includes(".") ? p.split(".").pop() : p;
+      const active = dashAasSortBy === p;
+      const arrow = active ? (dashAasSortDir === "asc" ? " \u25B2" : " \u25BC") : "";
+      return `<span class="dash-aas-col-header dash-aas-sortable${active ? " dash-aas-sort-active" : ""}" data-sort-col="${escapeHtml(p)}" title="${escapeHtml(p)}">${escapeHtml(label)}${arrow}</span>`;
+    }).join("");
+  }
   const headerHtml = `<div class="dash-aas-row dash-aas-header">${colHeaders}<span class="dash-aas-alerts">Alerts</span></div>`;
   // Data rows
   const rowsHtml = items.map((row) => {
-    const colCells = cols.map(p => {
-      const val = (row.columns_data && row.columns_data[p]) || "";
-      return `<span class="dash-aas-col-cell" title="${escapeHtml(p)}: ${escapeHtml(val)}">${escapeHtml(val) || "\u2014"}</span>`;
-    }).join("");
+    let colCells = "";
+    if (showAasId) {
+      const shortId = row.aas_id.length > 40 ? "\u2026" + row.aas_id.slice(-36) : row.aas_id;
+      colCells = `<span class="dash-aas-col-cell" title="${escapeHtml(row.aas_id)}">${escapeHtml(shortId)}</span>`;
+    } else {
+      colCells = cols.map(c => {
+        const p = typeof c === "string" ? c : c.path;
+        const val = (row.columns_data && row.columns_data[p]) || "";
+        return `<span class="dash-aas-col-cell" title="${escapeHtml(p)}: ${escapeHtml(val)}">${escapeHtml(val) || "\u2014"}</span>`;
+      }).join("");
+    }
     const alertsHtml = row.alerts.map((a) => {
       const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
       const ac = a.alertlevel === "Red" ? "alert-red" : a.alertlevel === "Orange" ? "alert-orange" : "alert-green";
       const link = a.url ? ` href="${escapeHtml(a.url)}" target="_blank" rel="noopener"` : "";
-      return `<a class="dash-aas-alert-chip"${link}>${icon}<span class="alert-badge ${ac}">${escapeHtml(a.alertlevel)}</span></a>`;
+      const mt = a.match_tier || "country";
+      const matchCls = `match-${mt}`;
+      let matchTip = t("matchCountry");
+      if (mt === "polygon") matchTip = t("matchPolygon");
+      else if (mt === "distance") matchTip = t("matchDistance").replace("{km}", a.distance_km != null ? Math.round(a.distance_km) : "?");
+      return `<a class="dash-aas-alert-chip ${matchCls}" title="${escapeHtml(matchTip)}"${link}><span class="match-dot"></span>${icon}<span class="alert-badge ${ac}">${escapeHtml(a.alertlevel)}</span></a>`;
     }).join("");
     return `<div class="dash-aas-row">${colCells}<span class="dash-aas-alerts">${alertsHtml}</span></div>`;
   }).join("");
@@ -4283,7 +4975,8 @@ document.getElementById("dash-aas-body").addEventListener("click", (e) => {
 
 async function loadDashAasPage(page) {
   dashAasPage = page;
-  let url = `/apps/resilience/api/gdacs/aas-overview?limit=20&offset=${page * 20}`;
+  const mf = cachedDashMatchFilter.join(",");
+  let url = `/apps/resilience/api/gdacs/aas-overview?limit=20&offset=${page * 20}&match_filter=${encodeURIComponent(mf)}`;
   if (dashAasSortBy) url += `&sort=${encodeURIComponent(dashAasSortBy)}&sort_dir=${dashAasSortDir}`;
   const res = await apiRequest(url);
   if (!res.ok || !res.payload) return;
@@ -4300,6 +4993,39 @@ async function loadDashAasPage(page) {
 
 document.getElementById("dash-aas-prev").addEventListener("click", () => { if (dashAasPage > 0) loadDashAasPage(dashAasPage - 1); });
 document.getElementById("dash-aas-next").addEventListener("click", () => loadDashAasPage(dashAasPage + 1));
+
+// Dashboard AAS Tile Settings modal
+const dashAasSettingsModal = document.getElementById("dash-aas-settings-modal");
+document.getElementById("dash-aas-settings-btn").addEventListener("click", () => {
+  // Sync checkboxes with current filter
+  document.getElementById("dash-filter-polygon").checked = cachedDashMatchFilter.includes("polygon");
+  document.getElementById("dash-filter-distance").checked = cachedDashMatchFilter.includes("distance");
+  document.getElementById("dash-filter-country").checked = cachedDashMatchFilter.includes("country");
+  updateGdacsColsDisplay(cachedGdacsColumns);
+  dashAasSettingsModal.showModal();
+});
+document.getElementById("dash-aas-settings-close").addEventListener("click", () => dashAasSettingsModal.close());
+document.getElementById("dash-aas-cols-btn").addEventListener("click", () => {
+  dashAasSettingsModal.close();
+  openAasCmModal("columns");
+});
+document.getElementById("dash-aas-settings-save").addEventListener("click", async () => {
+  const filter = [];
+  if (document.getElementById("dash-filter-polygon").checked) filter.push("polygon");
+  if (document.getElementById("dash-filter-distance").checked) filter.push("distance");
+  if (document.getElementById("dash-filter-country").checked) filter.push("country");
+  cachedDashMatchFilter = filter;
+  const btn = document.getElementById("dash-aas-settings-save");
+  btn.disabled = true;
+  await apiRequest("/apps/resilience/api/settings", {
+    method: "PUT",
+    body: { dash_aas_match_filter: filter },
+  });
+  btn.disabled = false;
+  dashAasSettingsModal.close();
+  dashAasPage = 0;
+  loadDashboard();
+});
 
 // Dashboard click handlers
 document.getElementById("dashboard-grid").addEventListener("click", (e) => {
@@ -4373,11 +5099,15 @@ async function loadGdacsAlerts() {
     for (const a of countryItems) {
       const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
       const alertClass = a.alertlevel === "Red" ? "alert-red" : a.alertlevel === "Orange" ? "alert-orange" : "alert-green";
+      const coordTxt = a.centroid_lat != null ? `${a.centroid_lat.toFixed(2)}, ${a.centroid_lon.toFixed(2)}` : "\u2014";
+      const polyBadge = a.polygon_fetched ? "\uD83D\uDDFA" : "";
       html += `<tr>
         <td style="width:32px;text-align:center;font-size:1.1rem">${icon}</td>
         <td style="font-weight:600">${escapeHtml(a.name || "-")}</td>
         <td><span class="alert-badge ${alertClass}">${escapeHtml(a.alertlevel)}</span></td>
         <td class="alerts-td-severity" style="color:var(--muted);font-size:0.78rem">${escapeHtml(a.severity || "-")}</td>
+        <td style="font-size:0.72rem;color:var(--muted)">${coordTxt}</td>
+        <td style="text-align:center;font-size:0.9rem" title="${a.polygon_fetched ? "Polygon" : ""}">${polyBadge}</td>
         <td style="color:var(--muted);white-space:nowrap;font-size:0.78rem">${formatDate(a.fromdate)}</td>
         <td style="width:32px;text-align:center">${a.url ? `<a class="news-link-btn" href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ""}</td>
       </tr>`;
@@ -4420,12 +5150,15 @@ const DOCS = {
         <p>Die Resilience App bietet Tools zur Überwachung und Analyse der Lieferkettenresilienz. Sie kombiniert externe Datenquellen mit KI-gestützter Analyse.</p>
         <h3>Features</h3>
         <ul>
-          <li><strong>Dashboard</strong> — Schnellübersicht mit den wichtigsten Informationen auf einen Blick.</li>
+          <li><strong>Dashboard</strong> — Schnellübersicht mit News, GDACS Alerts und einer AAS-Risikotabelle mit farbigen Match-Qualitäts-Indikatoren.</li>
           <li><strong>News Feeds</strong> — Automatischer Abruf von Nachrichten aus konfigurierten RSS/Atom-Quellen.</li>
           <li><strong>GDACS Suche</strong> — Suche nach Naturkatastrophen weltweit über das Global Disaster Alert and Coordination System.</li>
           <li><strong>GDACS Alerts</strong> — Automatische Überwachung ausgewählter Länder auf Naturkatastrophen.</li>
+          <li><strong>AAS Daten</strong> — Verwaltungsschalen importieren, in Gruppen organisieren und mit Geocoding-Koordinaten anreichern.</li>
+          <li><strong>Geo-Matching</strong> — Smartes 3-Stufen-Matching (Polygon → Distanz → Land) zwischen GDACS-Alerts und AAS-Standorten.</li>
           <li><strong>Indikatoren</strong> — Definiere Resilienz-Indikatoren mit flexiblen UND/ODER-Regelgruppen.</li>
-          <li><strong>AI Mapping</strong> — KI-gestützte Zuordnung und Analyse (in Entwicklung).</li>
+          <li><strong>Ländercodes</strong> — Mapping-Tabelle zwischen ISO-Codes, GDACS-Namen und AAS-Ländernamen.</li>
+          <li><strong>AI Chat</strong> — KI-Assistent für Fragen zur App und den Daten.</li>
         </ul>
       `,
     },
@@ -4499,8 +5232,109 @@ const DOCS = {
         <ul>
           <li><strong>Letzte News</strong> — Zeigt die neuesten 8 News-Einträge aus deinen konfigurierten Feeds.</li>
           <li><strong>GDACS Alerts</strong> — Zeigt die neuesten 8 GDACS-Alerts für deine überwachten Länder.</li>
+          <li><strong>Naturkatastrophen &amp; Lieferkettenrisiken</strong> — Zeigt AAS-Standorte mit zugeordneten Alerts. Konfigurierbare Spalten, Sortierung und Paginierung.</li>
         </ul>
-        <p>Klicke auf „Alle anzeigen" um zur vollständigen Ansicht zu wechseln.</p>
+        <h3>Alert-Chips mit Match-Qualität</h3>
+        <p>Jeder Alert-Chip in der AAS-Tabelle zeigt die Genauigkeit der Zuordnung:</p>
+        <ul>
+          <li><span style="color:#059669">&#9679;</span> <strong>Grün (Polygon)</strong> — AAS-Standort liegt innerhalb des Alert-Polygons. Höchste Genauigkeit.</li>
+          <li><span style="color:#d97706">&#9679;</span> <strong>Amber (Distanz)</strong> — AAS-Standort liegt innerhalb des konfigurierten Radius vom Alert-Zentroid.</li>
+          <li><span style="color:#9ca3af">&#9679;</span> <strong>Grau (Land)</strong> — Zuordnung nur über Ländernamen. Niedrigste Genauigkeit.</li>
+        </ul>
+        <p>Alle drei Kacheln sind immer sichtbar, auch wenn keine Daten vorhanden sind.</p>
+      `,
+    },
+    "aas-data": {
+      title: "AAS Daten",
+      html: `
+        <h2>AAS Daten</h2>
+        <p>Verwaltungsschalen-Daten (Asset Administration Shells) zu Lieferanten, Produkten und Materialien.</p>
+        <h3>Übersicht</h3>
+        <p>Die Übersicht zeigt alle importierten AAS IDs mit Quelle, Gruppe, Import-Status und Geocoding-Status.</p>
+        <h3>Quellen</h3>
+        <p>AAS-Quellen sind Server-Endpunkte (z.B. BaSyx-Server). Jede Quelle hat eine Basis-URL und eine Liste von AAS IDs und Item IDs.</p>
+        <h3>Gruppen</h3>
+        <p>AAS IDs können in Gruppen organisiert werden. Gruppen werden für die GDACS-Zuordnung und das Geo-Matching verwendet.</p>
+        <h3>Zuordnung</h3>
+        <p>Weise AAS IDs einer Gruppe zu. Die Zuordnung erfolgt über ein Dual-Panel-Interface mit verfügbaren und zugeordneten IDs.</p>
+        <h3>Import</h3>
+        <p>AAS-Daten werden im Hintergrund importiert. Der Import-Fortschritt wird in der Header-Leiste angezeigt. Ein Auto-Import-Intervall kann in den Einstellungen konfiguriert werden.</p>
+        <h3>Geocoding</h3>
+        <p>Über die Geocoding-Funktion werden AAS-Standorte mit Koordinaten angereichert:</p>
+        <ol>
+          <li>Wähle eine Gruppe und eine AAS aus.</li>
+          <li>Navigiere im Submodel-Baum und wähle die Property für das <strong>Land</strong>.</li>
+          <li>Wähle anschließend die Property für die <strong>Stadt</strong>.</li>
+          <li>Klicke auf „Starten" — der Geocoding-Job läuft im Hintergrund über Nominatim.</li>
+        </ol>
+        <p>Die Koordinaten (Latitude/Longitude) werden als Geocoding-Submodel in der AAS gespeichert und für das Geo-Matching verwendet.</p>
+      `,
+    },
+    "geo-matching": {
+      title: "Geo-Matching",
+      html: `
+        <h2>GDACS-AAS Geo-Matching</h2>
+        <p>Das Geo-Matching ordnet GDACS-Naturkatastrophen den AAS-Standorten zu — intelligent in drei Stufen.</p>
+        <h3>3-Stufen-Matching</h3>
+        <ol>
+          <li><strong>Polygon-Match</strong> (höchste Genauigkeit) — Prüft ob die AAS-Koordinaten innerhalb des Alert-Polygons liegen. GDACS stellt für die meisten Alerts detaillierte Polygone bereit (Erdbeben-Intensitätszonen, Sturmradien, Überschwemmungsgebiete etc.).</li>
+          <li><strong>Distanz-Match</strong> (mittlere Genauigkeit) — Berechnet die Entfernung (Haversine-Formel) zwischen AAS-Standort und Alert-Zentroid. Matcht wenn die Distanz unter dem konfigurierten Schwellwert liegt.</li>
+          <li><strong>Land-Match</strong> (Fallback) — Klassisches Matching über ISO-Ländercodes. Wird verwendet wenn keine Koordinaten verfügbar sind.</li>
+        </ol>
+        <h3>Schwellwerte konfigurieren</h3>
+        <p>In <strong>Einstellungen → GDACS → Matching-Radius</strong> kannst du pro Ereignistyp den Distanz-Schwellwert in km festlegen:</p>
+        <ul>
+          <li>🌍 <strong>EQ</strong> (Erdbeben) — Standard: 300 km</li>
+          <li>🌀 <strong>TC</strong> (Sturm) — Standard: 500 km</li>
+          <li>🌊 <strong>FL</strong> (Flut) — Standard: 200 km</li>
+          <li>🌋 <strong>VO</strong> (Vulkan) — Standard: 100 km</li>
+          <li>🔥 <strong>WF</strong> (Waldbrand) — Standard: 150 km</li>
+          <li>☀️ <strong>DR</strong> (Dürre) — Standard: 1000 km</li>
+        </ul>
+        <h3>Matching-Parameter Wizard</h3>
+        <p>Unter <strong>Einstellungen → GDACS → Matching-Parameter</strong> konfigurierst du 4 Pfade in einem Wizard:</p>
+        <ol>
+          <li><strong>Land</strong> — Pfad zum Ländernamen (optional, kann übersprungen werden)</li>
+          <li><strong>Stadt</strong> — Pfad zum Stadtnamen (optional)</li>
+          <li><strong>Latitude</strong> — Pfad zum Breitengrad (optional)</li>
+          <li><strong>Longitude</strong> — Pfad zum Längengrad (optional)</li>
+        </ol>
+        <p>Das Matching nutzt pro AAS die beste verfügbare Genauigkeit:</p>
+        <ul>
+          <li><strong>Prio 1:</strong> Lat + Lon direkt vorhanden → Koordinaten-Matching</li>
+          <li><strong>Prio 2:</strong> Stadt + Land → manuelles Geocoding → dann Koordinaten-Matching</li>
+          <li><strong>Prio 3:</strong> Nur Land → ISO-Code-Vergleich</li>
+        </ul>
+        <h3>Automatische Berechnung</h3>
+        <p>Die Matches werden automatisch neu berechnet nach:</p>
+        <ul>
+          <li>Neuen GDACS-Alert-Abrufen (inkl. Polygon-Fetch)</li>
+          <li>Änderungen der Matching-Parameter</li>
+          <li>Abschluss eines Geocoding-Jobs</li>
+          <li>Änderung der Distanz-Schwellwerte</li>
+        </ul>
+      `,
+    },
+    "country-codes": {
+      title: "Ländercodes",
+      html: `
+        <h2>Ländercodes</h2>
+        <p>Die Ländercodes-Tabelle verwaltet das Mapping zwischen verschiedenen Namenskonventionen.</p>
+        <h3>Spalten</h3>
+        <ul>
+          <li><strong>Alpha-2</strong> — ISO 3166-1 Alpha-2 Code (z.B. DE, US, TR)</li>
+          <li><strong>Alpha-3</strong> — ISO 3166-1 Alpha-3 Code (z.B. DEU, USA, TUR)</li>
+          <li><strong>Numeric</strong> — ISO 3166-1 numerischer Code</li>
+          <li><strong>AAS</strong> — Ländername wie er in der AAS vorkommt</li>
+          <li><strong>GDACS</strong> — Ländername wie er von GDACS verwendet wird</li>
+        </ul>
+        <h3>Funktionen</h3>
+        <ul>
+          <li><strong>Suche</strong> — Filtere die Tabelle nach beliebigem Text.</li>
+          <li><strong>Import/Export</strong> — Sichere oder lade die Mappings als JSON-Datei.</li>
+          <li><strong>AAS-Import</strong> — Übernimm Ländernamen automatisch aus importierten AAS-Daten.</li>
+          <li><strong>Zurücksetzen</strong> — Setze alle Mappings auf die Standardwerte zurück.</li>
+        </ul>
       `,
     },
     settings: {
@@ -4516,10 +5350,22 @@ const DOCS = {
         </ul>
         <h3>GDACS Länderüberwachung</h3>
         <ul>
-          <li><strong>Land hinzufügen</strong> — Gib einen englischen Ländernamen ein (z.B. „Germany").</li>
-          <li><strong>Abruf-Intervall</strong> — Wie oft GDACS-Daten für deine Länder abgerufen werden.</li>
-          <li><strong>Alerts löschen</strong> — Entfernt alle gespeicherten GDACS-Alerts.</li>
+          <li><strong>Land hinzufügen</strong> — Gib einen englischen Ländernamen ein (z.B. „Germany"). Die Liste ist paginiert (10 pro Seite).</li>
+          <li><strong>Matching-Parameter</strong> — Konfiguriere 4 Pfade (Land, Stadt, Lat, Lon) über den Wizard. Die Pfade werden für das 3-Stufen-Geo-Matching verwendet.</li>
+          <li><strong>Matching-Radius</strong> — Konfiguriere pro Ereignistyp den Distanz-Schwellwert für das Geo-Matching.</li>
+          <li><strong>Aufbewahrung / Intervall</strong> — Wie lange und wie oft GDACS-Daten abgerufen werden.</li>
         </ul>
+        <h3>Dashboard Kachel-Einstellungen</h3>
+        <ul>
+          <li><strong>Match-Qualität Filter</strong> — Wähle welche Match-Typen (Polygon, Distanz, Land) auf dem Dashboard angezeigt werden.</li>
+          <li><strong>Spaltenauswahl</strong> — Wähle AAS-Properties als Spalten. Ohne Spalten wird nur die AAS ID angezeigt.</li>
+        </ul>
+        <h3>AAS Import</h3>
+        <ul>
+          <li><strong>Auto-Import Intervall</strong> — Konfiguriere das automatische Import-Intervall (6/12/24 Std. oder Aus).</li>
+        </ul>
+        <h3>Ländercodes</h3>
+        <p>Verwalte das Mapping zwischen ISO-Codes, AAS-Ländernamen und GDACS-Ländernamen.</p>
       `,
     },
   },
@@ -4531,12 +5377,15 @@ const DOCS = {
         <p>The Resilience App provides tools for monitoring and analyzing supply chain resilience. It combines external data sources with AI-powered analysis.</p>
         <h3>Features</h3>
         <ul>
-          <li><strong>Dashboard</strong> — Quick overview with the most important information at a glance.</li>
+          <li><strong>Dashboard</strong> — Quick overview with news, GDACS alerts and an AAS risk table with colored match quality indicators.</li>
           <li><strong>News Feeds</strong> — Automatic retrieval of news from configured RSS/Atom sources.</li>
           <li><strong>GDACS Search</strong> — Search for natural disasters worldwide via the Global Disaster Alert and Coordination System.</li>
           <li><strong>GDACS Alerts</strong> — Automatic monitoring of selected countries for natural disasters.</li>
+          <li><strong>AAS Data</strong> — Import asset administration shells, organize in groups and enrich with geocoding coordinates.</li>
+          <li><strong>Geo-Matching</strong> — Smart 3-tier matching (polygon → distance → country) between GDACS alerts and AAS locations.</li>
           <li><strong>Indicators</strong> — Define resilience indicators with flexible AND/OR rule groups.</li>
-          <li><strong>AI Mapping</strong> — AI-powered mapping and analysis (in development).</li>
+          <li><strong>Country Codes</strong> — Mapping table between ISO codes, GDACS names and AAS country names.</li>
+          <li><strong>AI Chat</strong> — AI assistant for questions about the app and data.</li>
         </ul>
       `,
     },
@@ -4610,8 +5459,109 @@ const DOCS = {
         <ul>
           <li><strong>Latest News</strong> — Shows the 8 most recent news items from your configured feeds.</li>
           <li><strong>GDACS Alerts</strong> — Shows the 8 most recent GDACS alerts for your monitored countries.</li>
+          <li><strong>Natural Disasters &amp; Supply Chain Risks</strong> — Shows AAS locations with matched alerts. Configurable columns, sorting and pagination.</li>
         </ul>
-        <p>Click "View all" to switch to the full view.</p>
+        <h3>Alert Chips with Match Quality</h3>
+        <p>Each alert chip in the AAS table shows the matching accuracy:</p>
+        <ul>
+          <li><span style="color:#059669">&#9679;</span> <strong>Green (Polygon)</strong> — AAS location is within the alert polygon. Highest accuracy.</li>
+          <li><span style="color:#d97706">&#9679;</span> <strong>Amber (Distance)</strong> — AAS location is within the configured radius of the alert centroid.</li>
+          <li><span style="color:#9ca3af">&#9679;</span> <strong>Gray (Country)</strong> — Matching only by country name. Lowest accuracy.</li>
+        </ul>
+        <p>All three tiles are always visible, even when no data is available.</p>
+      `,
+    },
+    "aas-data": {
+      title: "AAS Data",
+      html: `
+        <h2>AAS Data</h2>
+        <p>Asset Administration Shell data for suppliers, products and materials.</p>
+        <h3>Overview</h3>
+        <p>The overview shows all imported AAS IDs with source, group, import status and geocoding status.</p>
+        <h3>Sources</h3>
+        <p>AAS sources are server endpoints (e.g. BaSyx servers). Each source has a base URL and a list of AAS IDs and Item IDs.</p>
+        <h3>Groups</h3>
+        <p>AAS IDs can be organized into groups. Groups are used for GDACS mapping and geo-matching.</p>
+        <h3>Assignment</h3>
+        <p>Assign AAS IDs to a group via a dual-panel interface with available and assigned IDs.</p>
+        <h3>Import</h3>
+        <p>AAS data is imported in the background. Import progress is shown in the header bar. An auto-import interval can be configured in settings.</p>
+        <h3>Geocoding</h3>
+        <p>The geocoding feature enriches AAS locations with coordinates:</p>
+        <ol>
+          <li>Select a group and an AAS.</li>
+          <li>Navigate the submodel tree and select the property for the <strong>country</strong>.</li>
+          <li>Then select the property for the <strong>city</strong>.</li>
+          <li>Click "Start" — the geocoding job runs in the background via Nominatim.</li>
+        </ol>
+        <p>The coordinates (latitude/longitude) are stored as a Geocoding submodel in the AAS and used for geo-matching.</p>
+      `,
+    },
+    "geo-matching": {
+      title: "Geo-Matching",
+      html: `
+        <h2>GDACS-AAS Geo-Matching</h2>
+        <p>Geo-matching assigns GDACS natural disasters to AAS locations — intelligently in three tiers.</p>
+        <h3>3-Tier Matching</h3>
+        <ol>
+          <li><strong>Polygon Match</strong> (highest accuracy) — Checks if the AAS coordinates are within the alert polygon. GDACS provides detailed polygons for most alerts (earthquake intensity zones, storm radii, flood areas, etc.).</li>
+          <li><strong>Distance Match</strong> (medium accuracy) — Calculates the distance (Haversine formula) between AAS location and alert centroid. Matches if the distance is below the configured threshold.</li>
+          <li><strong>Country Match</strong> (fallback) — Classic matching via ISO country codes. Used when no coordinates are available.</li>
+        </ol>
+        <h3>Configure Thresholds</h3>
+        <p>In <strong>Settings → GDACS → Matching Radius</strong> you can set the distance threshold per event type in km:</p>
+        <ul>
+          <li>🌍 <strong>EQ</strong> (Earthquake) — Default: 300 km</li>
+          <li>🌀 <strong>TC</strong> (Cyclone) — Default: 500 km</li>
+          <li>🌊 <strong>FL</strong> (Flood) — Default: 200 km</li>
+          <li>🌋 <strong>VO</strong> (Volcano) — Default: 100 km</li>
+          <li>🔥 <strong>WF</strong> (Wildfire) — Default: 150 km</li>
+          <li>☀️ <strong>DR</strong> (Drought) — Default: 1000 km</li>
+        </ul>
+        <h3>Matching Parameter Wizard</h3>
+        <p>Under <strong>Settings → GDACS → Matching Parameters</strong> you configure 4 paths in a wizard:</p>
+        <ol>
+          <li><strong>Country</strong> — Path to country name (optional, can be skipped)</li>
+          <li><strong>City</strong> — Path to city name (optional)</li>
+          <li><strong>Latitude</strong> — Path to latitude value (optional)</li>
+          <li><strong>Longitude</strong> — Path to longitude value (optional)</li>
+        </ol>
+        <p>The matching uses the best available accuracy per AAS:</p>
+        <ul>
+          <li><strong>Priority 1:</strong> Lat + Lon directly available → coordinate matching</li>
+          <li><strong>Priority 2:</strong> City + Country → manual geocoding → then coordinate matching</li>
+          <li><strong>Priority 3:</strong> Only country → ISO code comparison</li>
+        </ul>
+        <h3>Automatic Computation</h3>
+        <p>Matches are automatically recomputed after:</p>
+        <ul>
+          <li>New GDACS alert fetches (including polygon fetch)</li>
+          <li>Changes to matching parameters</li>
+          <li>Completion of a geocoding job</li>
+          <li>Changes to distance thresholds</li>
+        </ul>
+      `,
+    },
+    "country-codes": {
+      title: "Country Codes",
+      html: `
+        <h2>Country Codes</h2>
+        <p>The country codes table manages the mapping between different naming conventions.</p>
+        <h3>Columns</h3>
+        <ul>
+          <li><strong>Alpha-2</strong> — ISO 3166-1 Alpha-2 code (e.g. DE, US, TR)</li>
+          <li><strong>Alpha-3</strong> — ISO 3166-1 Alpha-3 code (e.g. DEU, USA, TUR)</li>
+          <li><strong>Numeric</strong> — ISO 3166-1 numeric code</li>
+          <li><strong>AAS</strong> — Country name as used in the AAS</li>
+          <li><strong>GDACS</strong> — Country name as used by GDACS</li>
+        </ul>
+        <h3>Functions</h3>
+        <ul>
+          <li><strong>Search</strong> — Filter the table by any text.</li>
+          <li><strong>Import/Export</strong> — Backup or load mappings as JSON file.</li>
+          <li><strong>AAS Import</strong> — Automatically import country names from imported AAS data.</li>
+          <li><strong>Reset</strong> — Reset all mappings to default values.</li>
+        </ul>
       `,
     },
     settings: {
@@ -4627,10 +5577,22 @@ const DOCS = {
         </ul>
         <h3>GDACS Country Monitoring</h3>
         <ul>
-          <li><strong>Add Country</strong> — Enter an English country name (e.g. "Germany").</li>
-          <li><strong>Refresh Interval</strong> — How often GDACS data is fetched for your countries.</li>
-          <li><strong>Delete Alerts</strong> — Removes all stored GDACS alerts.</li>
+          <li><strong>Add Country</strong> — Enter an English country name (e.g. "Germany"). The list is paginated (10 per page).</li>
+          <li><strong>Matching Parameters</strong> — Configure 4 paths (Country, City, Lat, Lon) via the wizard. Paths are used for 3-tier geo-matching.</li>
+          <li><strong>Matching Radius</strong> — Configure per-event-type distance thresholds for geo-matching.</li>
+          <li><strong>Retention / Interval</strong> — How long and how often GDACS data is fetched.</li>
         </ul>
+        <h3>Dashboard Tile Settings</h3>
+        <ul>
+          <li><strong>Match Quality Filter</strong> — Choose which match types (Polygon, Distance, Country) are shown on the dashboard.</li>
+          <li><strong>Column Selection</strong> — Choose AAS properties as columns. Without columns, only AAS ID is shown.</li>
+        </ul>
+        <h3>AAS Import</h3>
+        <ul>
+          <li><strong>Auto-Import Interval</strong> — Configure the automatic import interval (6/12/24 hours or Off).</li>
+        </ul>
+        <h3>Country Codes</h3>
+        <p>Manage the mapping between ISO codes, AAS country names and GDACS country names.</p>
       `,
     },
   },
@@ -4664,6 +5626,21 @@ async function init() {
   }
 
   setLocale(locale);
+
+  // Preload settings so match filter, columns + matching display are ready before first dashboard load
+  const preSettings = await apiRequest("/apps/resilience/api/settings");
+  if (preSettings.ok && preSettings.payload) {
+    const ps = preSettings.payload;
+    cachedDashMatchFilter = ps.dash_aas_match_filter || ["polygon", "distance"];
+    updateGdacsColsDisplay(ps.gdacs_aas_columns || []);
+    if (ps.matching_group_id) {
+      updateMatchingDisplay(ps.matching_group_name || ps.matching_group_id, {
+        country: ps.matching_country_path || "", city: ps.matching_city_path || "",
+        lat: ps.matching_lat_path || "", lon: ps.matching_lon_path || "",
+      });
+    }
+  }
+
   navigateTo("dashboard");
 }
 

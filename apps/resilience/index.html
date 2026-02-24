@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resilience – Workspace</title>
   <link rel="stylesheet" href="/apps/resilience/styles.css?v=14" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
   <header class="app-header">
@@ -161,10 +163,17 @@
               </div>
             </div>
             <!-- AAS Country Overview tile (full width) -->
-            <div class="dash-card dash-card-full" id="dash-aas-overview" hidden>
+            <div class="dash-card dash-card-full" id="dash-aas-overview">
               <div class="dash-card-header">
                 <span class="dash-card-title" id="dash-aas-title">Naturkatastrophen &amp; Lieferkettenrisiken</span>
-                <span class="dash-card-subtitle" id="dash-aas-updated"></span>
+                <div class="dash-card-actions">
+                  <button id="dash-aas-map-btn" class="dash-aas-map-btn" type="button" title="Karte">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                  </button>
+                  <button id="dash-aas-settings-btn" class="dash-aas-settings-btn" type="button" title="Einstellungen">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                </div>
               </div>
               <div class="dash-card-body" id="dash-aas-body">
                 <div class="dash-card-empty" id="dash-aas-empty">Keine betroffenen Standorte erkannt.</div>
@@ -451,6 +460,10 @@
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       <span id="aas-ov-import-label">Import</span>
                     </button>
+                    <button id="aas-ov-geocoding-btn" class="aas-import-btn aas-geocoding-btn" type="button">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      <span id="aas-ov-geocoding-label">Geocoding</span>
+                    </button>
                     <span id="aas-ov-count" class="model-count"></span>
                   </div>
                   <div class="model-table-wrap">
@@ -462,7 +475,8 @@
                           <th id="aas-ov-th-source">Quelle</th>
                           <th id="aas-ov-th-group">Gruppe</th>
                           <th id="aas-ov-th-imported">Letzter Import</th>
-                          <th></th>
+                          <th class="aas-ov-geo-th" title="Import"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></th>
+                          <th class="aas-ov-geo-th" title="Geocoding"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></th>
                           <th></th>
                         </tr>
                       </thead>
@@ -919,29 +933,58 @@
                     <span id="gdacs-country-empty-label">Noch keine Länder konfiguriert.</span>
                   </div>
 
-                  <div class="gdacs-aas-source">
-                    <label id="gdacs-aas-source-label">AAS Länderzuordnung</label>
-                    <div class="gdacs-aas-source-row">
-                      <div class="gdacs-aas-source-display" id="gdacs-aas-source-display">
-                        <span id="gdacs-aas-source-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+                  <div class="gdacs-matching-params">
+                    <label id="gdacs-matching-label">Matching-Parameter</label>
+                    <div class="gdacs-matching-display">
+                      <div class="gdacs-matching-paths" id="gdacs-matching-paths">
+                        <span class="gdacs-aas-source-empty" id="gdacs-matching-text">Nicht konfiguriert</span>
                       </div>
-                      <button id="gdacs-aas-source-btn" class="btn btn-sm cm-io-btn" type="button">
+                      <button id="gdacs-matching-btn" class="btn btn-sm cm-io-btn" type="button">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        <span id="gdacs-aas-source-btn-label">Wählen</span>
+                        <span id="gdacs-matching-btn-label">Konfigurieren</span>
                       </button>
                     </div>
                   </div>
 
-                  <div class="gdacs-aas-source">
-                    <label id="gdacs-cols-label">Spaltenauswahl</label>
-                    <div class="gdacs-aas-source-row">
-                      <div class="gdacs-aas-source-display" id="gdacs-cols-display">
-                        <span id="gdacs-cols-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+                  <div class="gdacs-threshold-section">
+                    <label id="gdacs-threshold-label" class="gdacs-threshold-title">Matching-Radius (km)</label>
+                    <div class="gdacs-threshold-grid">
+                      <div class="gdacs-threshold-item">
+                        <span class="gdacs-threshold-icon" title="Earthquake">🌍</span>
+                        <span class="gdacs-threshold-type">EQ</span>
+                        <input id="threshold-EQ" class="gdacs-threshold-input" type="number" min="10" max="5000" value="300" />
+                        <span class="gdacs-threshold-unit">km</span>
                       </div>
-                      <button id="gdacs-cols-btn" class="btn btn-sm cm-io-btn" type="button">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        <span id="gdacs-cols-btn-label">Wählen</span>
-                      </button>
+                      <div class="gdacs-threshold-item">
+                        <span class="gdacs-threshold-icon" title="Cyclone">🌀</span>
+                        <span class="gdacs-threshold-type">TC</span>
+                        <input id="threshold-TC" class="gdacs-threshold-input" type="number" min="10" max="5000" value="500" />
+                        <span class="gdacs-threshold-unit">km</span>
+                      </div>
+                      <div class="gdacs-threshold-item">
+                        <span class="gdacs-threshold-icon" title="Flood">🌊</span>
+                        <span class="gdacs-threshold-type">FL</span>
+                        <input id="threshold-FL" class="gdacs-threshold-input" type="number" min="10" max="5000" value="200" />
+                        <span class="gdacs-threshold-unit">km</span>
+                      </div>
+                      <div class="gdacs-threshold-item">
+                        <span class="gdacs-threshold-icon" title="Volcano">🌋</span>
+                        <span class="gdacs-threshold-type">VO</span>
+                        <input id="threshold-VO" class="gdacs-threshold-input" type="number" min="10" max="5000" value="100" />
+                        <span class="gdacs-threshold-unit">km</span>
+                      </div>
+                      <div class="gdacs-threshold-item">
+                        <span class="gdacs-threshold-icon" title="Wildfire">🔥</span>
+                        <span class="gdacs-threshold-type">WF</span>
+                        <input id="threshold-WF" class="gdacs-threshold-input" type="number" min="10" max="5000" value="150" />
+                        <span class="gdacs-threshold-unit">km</span>
+                      </div>
+                      <div class="gdacs-threshold-item">
+                        <span class="gdacs-threshold-icon" title="Drought">☀️</span>
+                        <span class="gdacs-threshold-type">DR</span>
+                        <input id="threshold-DR" class="gdacs-threshold-input" type="number" min="10" max="5000" value="1000" />
+                        <span class="gdacs-threshold-unit">km</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1064,11 +1107,14 @@
           <div class="docs-layout">
             <nav class="docs-nav" id="docs-nav">
               <button class="docs-nav-item active" data-doc="overview" type="button">Übersicht</button>
+              <button class="docs-nav-item" data-doc="dashboard" type="button">Dashboard</button>
               <button class="docs-nav-item" data-doc="indicators" type="button">Indikatoren</button>
               <button class="docs-nav-item" data-doc="news-feeds" type="button">News Feeds</button>
               <button class="docs-nav-item" data-doc="gdacs-search" type="button">GDACS Suche</button>
               <button class="docs-nav-item" data-doc="gdacs-alerts" type="button">GDACS Alerts</button>
-              <button class="docs-nav-item" data-doc="dashboard" type="button">Dashboard</button>
+              <button class="docs-nav-item" data-doc="aas-data" type="button">AAS Daten</button>
+              <button class="docs-nav-item" data-doc="geo-matching" type="button">Geo-Matching</button>
+              <button class="docs-nav-item" data-doc="country-codes" type="button">Ländercodes</button>
               <button class="docs-nav-item" data-doc="settings" type="button">Einstellungen</button>
             </nav>
             <div class="docs-content" id="docs-content"></div>
@@ -1088,6 +1134,58 @@
         <button id="cm-confirm-ok" class="btn btn-danger" type="submit" value="confirm">Zurücksetzen</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Single-AAS Geocoding Confirm -->
+  <dialog id="geo-single-modal" class="geo-single-modal">
+    <div class="geo-single-inner">
+      <div class="geo-single-icon">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      </div>
+      <h3 id="geo-single-title">Import &amp; Geocoding</h3>
+      <p id="geo-single-desc">AAS-Daten werden neu importiert und geocodiert.</p>
+      <div class="geo-single-aas-id" id="geo-single-aas-id"></div>
+      <div class="geo-single-actions">
+        <button id="geo-single-cancel" class="btn btn-secondary btn-sm" type="button">Abbrechen</button>
+        <button id="geo-single-ok" class="btn btn-primary btn-sm" type="button">
+          <span id="geo-single-ok-label">Starten</span>
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- World Map Modal -->
+  <dialog id="map-modal" class="map-modal">
+    <div class="map-modal-inner">
+      <div class="map-modal-header">
+        <h3 id="map-modal-title">Weltkarte</h3>
+        <div class="map-header-stats">
+          <span class="map-stat" id="map-stat-alerts">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="map-stat-alerts-count">0</span>
+          </span>
+          <span class="map-stat" id="map-stat-aas">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span id="map-stat-aas-count">0</span>
+          </span>
+        </div>
+        <div class="map-header-spacer"></div>
+        <button id="map-filter-btn" class="map-filter-btn" type="button" title="Nur Matches">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          <span id="map-filter-label">Nur Matches</span>
+        </button>
+        <button id="map-dist-btn" class="map-filter-btn active" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+          <span id="map-dist-label">km</span>
+        </button>
+        <button id="map-modal-close" class="map-modal-close-btn" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="map-modal-body">
+        <div id="map-container" class="map-container"></div>
+      </div>
+    </div>
   </dialog>
 
   <!-- AAS Country Import Modal -->
@@ -1171,9 +1269,45 @@
 
       <div class="aas-cm-footer">
         <button id="aas-cm-back-btn" class="btn btn-secondary btn-sm" type="button" hidden>Zurück</button>
+        <button id="aas-cm-skip-btn" class="btn btn-secondary btn-sm" type="button" hidden>Überspringen</button>
         <div class="aas-cm-footer-spacer"></div>
         <button id="aas-cm-cancel-btn" class="btn btn-secondary btn-sm" type="button">Abbrechen</button>
         <button id="aas-cm-apply-btn" class="btn btn-primary btn-sm" type="button" hidden>Übernehmen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dashboard AAS Tile Settings Modal -->
+  <dialog id="dash-aas-settings-modal" class="dash-aas-settings-modal">
+    <div class="dash-aas-settings-inner">
+      <div class="dash-aas-settings-header">
+        <h3 id="dash-aas-settings-title">Kachel-Einstellungen</h3>
+        <button id="dash-aas-settings-close" class="aas-cm-close-btn" type="button">&times;</button>
+      </div>
+      <div class="dash-aas-settings-body">
+        <div class="dash-settings-section">
+          <label id="dash-aas-filter-label">Match-Qualität anzeigen</label>
+          <div class="dash-aas-filter-checks">
+            <label><input type="checkbox" id="dash-filter-polygon" checked> <span style="color:#059669">&#9679;</span> <span id="dash-aas-filter-polygon-label">Polygon</span></label>
+            <label><input type="checkbox" id="dash-filter-distance" checked> <span style="color:#d97706">&#9679;</span> <span id="dash-aas-filter-distance-label">Distanz</span></label>
+            <label><input type="checkbox" id="dash-filter-country"> <span style="color:#9ca3af">&#9679;</span> <span id="dash-aas-filter-country-label">Land</span></label>
+          </div>
+        </div>
+        <div class="dash-settings-section">
+          <label id="dash-aas-cols-label">Spaltenauswahl</label>
+          <div class="gdacs-aas-source-row">
+            <div class="gdacs-aas-source-display" id="dash-aas-cols-display">
+              <span id="dash-aas-cols-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+            </div>
+            <button id="dash-aas-cols-btn" class="btn btn-sm cm-io-btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <span id="dash-aas-cols-btn-label">Spalten wählen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="dash-aas-settings-footer">
+        <button id="dash-aas-settings-save" class="btn btn-primary btn-sm" type="button">Speichern</button>
       </div>
     </div>
   </dialog>
