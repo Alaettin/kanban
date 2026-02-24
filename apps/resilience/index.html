@@ -160,6 +160,21 @@
                 <div class="dash-card-empty" id="dash-alerts-empty">Keine Alerts vorhanden.</div>
               </div>
             </div>
+            <!-- AAS Country Overview tile (full width) -->
+            <div class="dash-card dash-card-full" id="dash-aas-overview" hidden>
+              <div class="dash-card-header">
+                <span class="dash-card-title" id="dash-aas-title">Naturkatastrophen &amp; Lieferkettenrisiken</span>
+                <span class="dash-card-subtitle" id="dash-aas-updated"></span>
+              </div>
+              <div class="dash-card-body" id="dash-aas-body">
+                <div class="dash-card-empty" id="dash-aas-empty">Keine betroffenen Standorte erkannt.</div>
+              </div>
+              <div class="dash-aas-footer" id="dash-aas-footer" hidden>
+                <button class="dash-aas-page-btn" id="dash-aas-prev" type="button" disabled>&laquo;</button>
+                <span class="dash-aas-page-info" id="dash-aas-page-info"></span>
+                <button class="dash-aas-page-btn" id="dash-aas-next" type="button" disabled>&raquo;</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -823,15 +838,15 @@
 
           <div class="docs-layout">
             <nav class="docs-nav" id="settings-nav">
-              <button class="docs-nav-item active" data-settings-nav="general" type="button" id="settings-nav-general-btn">Allgemein</button>
+              <button class="docs-nav-item active" data-settings-nav="feeds" type="button" id="settings-nav-feeds-btn">News Feeds</button>
+              <button class="docs-nav-item" data-settings-nav="gdacs" type="button" id="settings-nav-gdacs-btn">GDACS</button>
+              <button class="docs-nav-item" data-settings-nav="aas-import" type="button" id="settings-nav-aas-btn">AAS Import</button>
               <button class="docs-nav-item" data-settings-nav="country-codes" type="button" id="settings-nav-cc-btn">Ländercodes</button>
             </nav>
 
             <div class="settings-nav-content">
-              <!-- ── General Tab ── -->
-              <div id="settings-nav-general">
-
-                <!-- News Feeds Settings Card -->
+              <!-- ── Feeds Tab ── -->
+              <div id="settings-nav-feeds">
                 <div class="settings-card">
                   <h3 id="feed-section-title">News Feeds</h3>
 
@@ -880,8 +895,10 @@
                     </button>
                   </div>
                 </div>
+              </div>
 
-                <!-- GDACS Country Watchlist Card -->
+              <!-- ── GDACS Tab ── -->
+              <div id="settings-nav-gdacs" hidden>
                 <div class="settings-card">
                   <h3 id="gdacs-settings-title">GDACS Länderüberwachung</h3>
 
@@ -890,12 +907,42 @@
                     <button id="gdacs-country-add-btn" class="btn btn-primary btn-sm" type="button">
                       <span id="gdacs-country-add-label">Hinzufügen</span>
                     </button>
+                    <button id="gdacs-aas-fill-btn" class="btn btn-sm cm-io-btn cm-aas-import" type="button" title="Länder aus AAS-Zuordnungen übernehmen">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+                      <span id="gdacs-aas-fill-label">AAS</span>
+                    </button>
                   </div>
                   <div id="gdacs-country-hint" class="settings-hint" hidden></div>
 
                   <div id="gdacs-country-list" class="feed-list"></div>
                   <div id="gdacs-country-list-empty" class="feed-list-empty" hidden>
                     <span id="gdacs-country-empty-label">Noch keine Länder konfiguriert.</span>
+                  </div>
+
+                  <div class="gdacs-aas-source">
+                    <label id="gdacs-aas-source-label">AAS Länderzuordnung</label>
+                    <div class="gdacs-aas-source-row">
+                      <div class="gdacs-aas-source-display" id="gdacs-aas-source-display">
+                        <span id="gdacs-aas-source-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+                      </div>
+                      <button id="gdacs-aas-source-btn" class="btn btn-sm cm-io-btn" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        <span id="gdacs-aas-source-btn-label">Wählen</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="gdacs-aas-source">
+                    <label id="gdacs-cols-label">Spaltenauswahl</label>
+                    <div class="gdacs-aas-source-row">
+                      <div class="gdacs-aas-source-display" id="gdacs-cols-display">
+                        <span id="gdacs-cols-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+                      </div>
+                      <button id="gdacs-cols-btn" class="btn btn-sm cm-io-btn" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        <span id="gdacs-cols-btn-label">Wählen</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div class="settings-row">
@@ -931,7 +978,10 @@
                   </div>
                 </div>
 
-                <!-- AAS Import Settings Card -->
+              </div>
+
+              <!-- ── AAS Import Tab ── -->
+              <div id="settings-nav-aas-import" hidden>
                 <div class="settings-card">
                   <h3 id="import-settings-title">AAS Import</h3>
                   <div class="settings-row">
@@ -950,13 +1000,28 @@
                     </button>
                   </div>
                 </div>
-
               </div>
 
               <!-- ── Country Codes Tab ── -->
               <div id="settings-nav-country-codes" hidden>
                 <div class="model-toolbar">
                   <input id="cm-search-input" class="model-search" type="text" placeholder="Suchen…" />
+                  <button id="cm-reset-btn" class="btn btn-danger btn-sm" type="button">
+                    <span id="cm-reset-label">Zurücksetzen</span>
+                  </button>
+                  <button id="cm-import-btn" class="btn btn-sm cm-io-btn cm-import" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span id="cm-import-label">Import</span>
+                  </button>
+                  <button id="cm-export-btn" class="btn btn-sm cm-io-btn cm-export" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span id="cm-export-label">Export</span>
+                  </button>
+                  <button id="cm-aas-import-btn" class="btn btn-sm cm-io-btn cm-aas-import" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+                    <span id="cm-aas-import-label">AAS</span>
+                  </button>
+                  <input type="file" id="cm-import-file" accept=".json" hidden />
                 </div>
 
                 <table class="model-table" id="cm-table">
@@ -1011,6 +1076,139 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Confirm dialog (country mappings reset) -->
+  <dialog id="cm-confirm-modal" class="cm-confirm-modal">
+    <form id="cm-confirm-form" method="dialog" class="cm-confirm-form">
+      <h2 id="cm-confirm-title">Ländercodes zurücksetzen</h2>
+      <p id="cm-confirm-message">Alle AAS- und GDACS-Zuordnungen werden auf die Standardwerte zurückgesetzt. Dieser Vorgang kann nicht rückgängig gemacht werden.</p>
+      <div class="cm-confirm-actions">
+        <button id="cm-confirm-cancel" class="btn btn-secondary" type="button">Abbrechen</button>
+        <button id="cm-confirm-ok" class="btn btn-danger" type="submit" value="confirm">Zurücksetzen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- AAS Country Import Modal -->
+  <dialog id="aas-cm-modal" class="aas-cm-modal">
+    <div class="aas-cm-inner">
+      <div class="aas-cm-header">
+        <h2 id="aas-cm-title">AAS Länder-Import</h2>
+        <div class="aas-cm-steps" id="aas-cm-steps">
+          <span class="aas-cm-step active" data-step="1">1</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="2">2</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="3">3</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="4">4</span>
+        </div>
+        <button id="aas-cm-close" class="aas-cm-close-btn" type="button">&times;</button>
+      </div>
+
+      <!-- Step 1: Group -->
+      <div class="aas-cm-body" id="aas-cm-step-1">
+        <p id="aas-cm-step1-desc" class="aas-cm-desc">Wähle eine AAS-Gruppe aus.</p>
+        <div id="aas-cm-group-list" class="aas-cm-select-list"></div>
+        <div id="aas-cm-group-empty" class="aas-cm-empty" hidden>Keine Gruppen vorhanden.</div>
+      </div>
+
+      <!-- Step 2: AAS -->
+      <div class="aas-cm-body" id="aas-cm-step-2" hidden>
+        <p id="aas-cm-step2-desc" class="aas-cm-desc">Wähle eine AAS aus der Gruppe.</p>
+        <div id="aas-cm-aas-list" class="aas-cm-select-list"></div>
+        <div id="aas-cm-aas-empty" class="aas-cm-empty" hidden>Keine AAS in dieser Gruppe.</div>
+      </div>
+
+      <!-- Step 3: Tree -->
+      <div class="aas-cm-body" id="aas-cm-step-3" hidden>
+        <p id="aas-cm-step3-desc" class="aas-cm-desc">Navigiere im Baum und klicke auf eine Property.</p>
+        <div id="aas-cm-selected-path" class="aas-cm-selected-path" hidden></div>
+        <div id="aas-cm-tree-loading" class="aas-cm-loading" hidden>Laden…</div>
+        <div id="aas-cm-tree" class="aas-cm-tree"></div>
+      </div>
+
+      <!-- Step 4: Processing + Results -->
+      <div class="aas-cm-body" id="aas-cm-step-4" hidden>
+        <div id="aas-cm-processing" class="aas-cm-processing">
+          <div class="aas-cm-proc-step">
+            <span class="aas-cm-proc-icon" id="aas-cm-proc-1-icon">&#9675;</span>
+            <span id="aas-cm-proc-1-label">Schritt 1: Direkte Zuordnung</span>
+            <span class="aas-cm-proc-count" id="aas-cm-proc-1-count"></span>
+          </div>
+          <div class="aas-cm-proc-step">
+            <span class="aas-cm-proc-icon" id="aas-cm-proc-2-icon">&#9675;</span>
+            <span id="aas-cm-proc-2-label">Schritt 2: KI-Zuordnung</span>
+            <span class="aas-cm-proc-count" id="aas-cm-proc-2-count"></span>
+          </div>
+        </div>
+        <div id="aas-cm-results" hidden>
+          <div class="aas-cm-result-summary" id="aas-cm-summary"></div>
+          <div class="aas-cm-result-table-wrap">
+            <table class="aas-cm-result-table">
+              <thead>
+                <tr>
+                  <th id="aas-cm-th-value">Wert</th>
+                  <th id="aas-cm-th-match">Zuordnung</th>
+                  <th id="aas-cm-th-method">Methode</th>
+                </tr>
+              </thead>
+              <tbody id="aas-cm-result-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success screen -->
+      <div class="aas-cm-body aas-cm-success" id="aas-cm-success" hidden>
+        <div class="aas-cm-success-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11.5 14.5 16 9"/></svg>
+        </div>
+        <h3 id="aas-cm-success-title" class="aas-cm-success-title">Zuordnungen erfolgreich übernommen.</h3>
+        <p id="aas-cm-success-detail" class="aas-cm-success-detail"></p>
+      </div>
+
+      <div class="aas-cm-footer">
+        <button id="aas-cm-back-btn" class="btn btn-secondary btn-sm" type="button" hidden>Zurück</button>
+        <div class="aas-cm-footer-spacer"></div>
+        <button id="aas-cm-cancel-btn" class="btn btn-secondary btn-sm" type="button">Abbrechen</button>
+        <button id="aas-cm-apply-btn" class="btn btn-primary btn-sm" type="button" hidden>Übernehmen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Chat Widget -->
+  <div id="chat-widget-area" class="chat-widget-area" hidden>
+    <button id="chat-widget-toggle" class="chat-widget-toggle" type="button" title="AI Assistant">
+      <svg viewBox="0 0 24 24" class="chat-widget-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <svg viewBox="0 0 24 24" class="chat-widget-icon-close"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <div id="chat-widget" class="chat-widget" hidden>
+      <div class="chat-widget-header">
+        <span class="chat-widget-title">AI Assistant</span>
+        <div class="chat-widget-header-actions">
+          <span id="chat-widget-connector-tag" class="chat-widget-connector-tag" hidden></span>
+          <button id="chat-widget-clear" class="chat-widget-clear" type="button" title="Chat leeren">
+            <svg viewBox="0 0 24 24" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="chat-widget-messages" class="chat-widget-messages"></div>
+      <div id="cw-slash-menu" class="cw-slash-menu" hidden></div>
+      <form id="chat-widget-form" class="chat-widget-form">
+        <button id="cw-mode-toggle" class="cw-mode-toggle" type="button" title="MCP / WEB">
+          <svg viewBox="0 0 24 24" class="cw-mode-icon-tools"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <svg viewBox="0 0 24 24" class="cw-mode-icon-web"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="cw-mode-label" class="cw-mode-label">MCP</span>
+        </button>
+        <textarea id="chat-widget-input" class="chat-widget-input" rows="1" placeholder="Nachricht..." maxlength="10000"></textarea>
+        <button type="submit" id="chat-widget-send" class="chat-widget-send" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </form>
+    </div>
   </div>
 
   <script src="/apps/resilience/app.js?v=13"></script>

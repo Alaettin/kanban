@@ -162,6 +162,44 @@ async function initResilienceTables() {
     // column already exists
   }
 
+  // Migration: add gdacs_aas_group_id + gdacs_aas_path to settings
+  try {
+    await db.run(`ALTER TABLE resilience_settings ADD COLUMN gdacs_aas_group_id TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+  try {
+    await db.run(`ALTER TABLE resilience_settings ADD COLUMN gdacs_aas_path TEXT NOT NULL DEFAULT ''`);
+  } catch {
+    // column already exists
+  }
+
+  // Migration: add gdacs_aas_columns to settings
+  try {
+    await db.run(`ALTER TABLE resilience_settings ADD COLUMN gdacs_aas_columns TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // column already exists
+  }
+
+  // GDACS AAS mapping cache
+  await db.run(`CREATE TABLE IF NOT EXISTS resilience_gdacs_aas_map (
+    user_id       TEXT NOT NULL,
+    aas_id        TEXT NOT NULL,
+    country_value TEXT NOT NULL DEFAULT '',
+    iso_code      TEXT NOT NULL DEFAULT '',
+    columns_data  TEXT NOT NULL DEFAULT '{}',
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, aas_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
+  // Migration: add columns_data to gdacs_aas_map
+  try {
+    await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN columns_data TEXT NOT NULL DEFAULT '{}'`);
+  } catch {
+    // column already exists
+  }
+
   // Indicator classes (user-defined categories)
   await db.run(`CREATE TABLE IF NOT EXISTS resilience_indicator_classes (
     class_id    TEXT PRIMARY KEY,
@@ -306,32 +344,37 @@ async function seedCountryMappings(userId) {
 // GDACS fetch helper (used by search endpoint + background refresh)
 // ---------------------------------------------------------------------------
 const GDACS_CAP = 100;
-const MAX_GDACS_DEPTH = 5;
+const MAX_GDACS_DEPTH = 3;
 
 async function fetchGdacsRange(type, from, to, alertlevel, depth = 0) {
   const fmt = (d) => d.toISOString().slice(0, 10);
   const url = `https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=${type}&fromDate=${fmt(from)}&toDate=${fmt(to)}&alertlevel=${alertlevel}`;
-  const resp = await fetch(url, {
-    signal: AbortSignal.timeout(20000),
-    headers: { Accept: "application/json" },
-  });
-  if (!resp.ok) return [];
-  const data = await resp.json();
-  const features = data.features || [];
+  try {
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(20000),
+      headers: { Accept: "application/json" },
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const features = data.features || [];
 
-  if (features.length >= GDACS_CAP && depth < MAX_GDACS_DEPTH) {
-    const midMs = Math.floor((from.getTime() + to.getTime()) / 2);
-    const mid = new Date(midMs);
-    if (fmt(from) !== fmt(mid) && fmt(mid) !== fmt(to)) {
-      const [left, right] = await Promise.all([
-        fetchGdacsRange(type, from, mid, alertlevel, depth + 1),
-        fetchGdacsRange(type, mid, to, alertlevel, depth + 1),
-      ]);
-      return [...left, ...right];
+    if (features.length >= GDACS_CAP && depth < MAX_GDACS_DEPTH) {
+      const midMs = Math.floor((from.getTime() + to.getTime()) / 2);
+      const mid = new Date(midMs);
+      if (fmt(from) !== fmt(mid) && fmt(mid) !== fmt(to)) {
+        const [left, right] = await Promise.all([
+          fetchGdacsRange(type, from, mid, alertlevel, depth + 1),
+          fetchGdacsRange(type, mid, to, alertlevel, depth + 1),
+        ]);
+        return [...left, ...right];
+      }
     }
-  }
 
-  return features;
+    return features;
+  } catch (err) {
+    console.error(`[GDACS] fetchGdacsRange ${type} ${fmt(from)}..${fmt(to)} depth=${depth}:`, err.message);
+    return [];
+  }
 }
 
 /** Parse GDACS features into flat event objects */
@@ -457,6 +500,24 @@ async function scheduleImports() {
 }
 
 // ---------------------------------------------------------------------------
+// Shared helper: walk AAS submodel element tree
+// ---------------------------------------------------------------------------
+function walkElements(elements, segments, depth, values) {
+  for (const el of elements) {
+    if (el.idShort !== segments[depth]) continue;
+    if (depth === segments.length - 1) {
+      if (el.modelType === "Property" && el.value != null) values.add(String(el.value));
+      if (el.modelType === "MultiLanguageProperty") {
+        for (const l of (el.value || [])) { if (l.text) values.add(l.text); }
+      }
+    } else {
+      const children = el.value || el.statements || [];
+      if (Array.isArray(children)) walkElements(children, segments, depth + 1, values);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 function mountRoutes(router) {
@@ -464,7 +525,7 @@ function mountRoutes(router) {
   router.get("/api/settings", auth.requireAuth, async (req, res) => {
     try {
       const settings = await db.get(
-        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours FROM resilience_settings WHERE user_id = ?",
+        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns FROM resilience_settings WHERE user_id = ?",
         [req.user.id]
       );
       const feeds = await db.all(
@@ -481,6 +542,9 @@ function mountRoutes(router) {
         gdacs_refresh_minutes: settings?.gdacs_refresh_minutes ?? 60,
         gdacs_retention_days: settings?.gdacs_retention_days ?? 30,
         import_interval_hours: settings?.import_interval_hours ?? 0,
+        gdacs_aas_group_id: settings?.gdacs_aas_group_id ?? "",
+        gdacs_aas_path: settings?.gdacs_aas_path ?? "",
+        gdacs_aas_columns: JSON.parse(settings?.gdacs_aas_columns || "[]"),
         feeds,
         gdacs_countries: gdacsCountries,
       });
@@ -516,6 +580,20 @@ function mountRoutes(router) {
         await db.run("UPDATE resilience_settings SET import_interval_hours = ? WHERE user_id = ?",
           [hours, req.user.id]);
         scheduleUserImport(req.user.id, hours);
+      }
+      if (body.gdacs_aas_group_id !== undefined) {
+        await db.run("UPDATE resilience_settings SET gdacs_aas_group_id = ? WHERE user_id = ?",
+          [String(body.gdacs_aas_group_id), req.user.id]);
+      }
+      if (body.gdacs_aas_path !== undefined) {
+        await db.run("UPDATE resilience_settings SET gdacs_aas_path = ? WHERE user_id = ?",
+          [String(body.gdacs_aas_path), req.user.id]);
+      }
+      if (body.gdacs_aas_columns !== undefined) {
+        await db.run("UPDATE resilience_settings SET gdacs_aas_columns = ? WHERE user_id = ?",
+          [JSON.stringify(body.gdacs_aas_columns), req.user.id]);
+        // Re-compute mapping so columns_data reflects the new column paths
+        try { await refreshGdacsAasMapping(req.user.id); } catch { /* ignore */ }
       }
       res.json({ ok: true });
     } catch {
@@ -566,6 +644,252 @@ function mountRoutes(router) {
     } catch (err) {
       console.error("PUT /api/country-mappings error:", err);
       res.status(500).json({ error: "SAVE_FAILED" });
+    }
+  });
+
+  router.post("/api/country-mappings/reset", auth.requireAuth, async (req, res) => {
+    try {
+      await db.run("DELETE FROM resilience_country_mappings WHERE user_id = ?", [req.user.id]);
+      const stmt = "INSERT OR IGNORE INTO resilience_country_mappings (iso_code, user_id, alpha3, numeric, gdacs_names) VALUES (?, ?, ?, ?, ?)";
+      for (const [code, name, alpha3, num] of ISO_COUNTRIES) {
+        await db.run(stmt, [code, req.user.id, alpha3, num, name]);
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("POST /api/country-mappings/reset error:", err);
+      res.status(500).json({ error: "RESET_FAILED" });
+    }
+  });
+
+  router.get("/api/country-mappings/export", auth.requireAuth, async (req, res) => {
+    try {
+      await seedCountryMappings(req.user.id);
+      const rows = await db.all(
+        "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ? ORDER BY iso_code ASC",
+        [req.user.id]
+      );
+      res.setHeader("Content-Disposition", 'attachment; filename="country-mappings.json"');
+      res.json(rows);
+    } catch (err) {
+      console.error("GET /api/country-mappings/export error:", err);
+      res.status(500).json({ error: "EXPORT_FAILED" });
+    }
+  });
+
+  router.get("/api/country-mappings/aas-countries", auth.requireAuth, async (req, res) => {
+    try {
+      await seedCountryMappings(req.user.id);
+      const rows = await db.all(
+        "SELECT gdacs_names FROM resilience_country_mappings WHERE user_id = ? AND TRIM(aas_names) != ''",
+        [req.user.id]
+      );
+      const names = rows.map(r => r.gdacs_names).filter(Boolean);
+      res.json({ names });
+    } catch (err) {
+      console.error("GET /api/country-mappings/aas-countries error:", err);
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  router.post("/api/country-mappings/import", auth.requireAuth, async (req, res) => {
+    try {
+      const items = req.body;
+      if (!Array.isArray(items)) return res.status(400).json({ error: "INVALID_FORMAT" });
+      await seedCountryMappings(req.user.id);
+      let updated = 0;
+      for (const item of items) {
+        const code = (item.iso_code || "").trim().toUpperCase();
+        if (!code) continue;
+        const row = await db.get(
+          "SELECT 1 FROM resilience_country_mappings WHERE user_id = ? AND iso_code = ?",
+          [req.user.id, code]
+        );
+        if (!row) continue;
+        await db.run(
+          "UPDATE resilience_country_mappings SET aas_names = ?, gdacs_names = ? WHERE user_id = ? AND iso_code = ?",
+          [String(item.aas_names ?? ""), String(item.gdacs_names ?? ""), req.user.id, code]
+        );
+        updated++;
+      }
+      res.json({ ok: true, updated });
+    } catch (err) {
+      console.error("POST /api/country-mappings/import error:", err);
+      res.status(500).json({ error: "IMPORT_FAILED" });
+    }
+  });
+
+  // ── AAS Country-Mapping Resolve ────────────────────────────────
+
+  // walkElements is defined at module level (shared with refreshGdacsAasMapping)
+
+  router.post("/api/country-mappings/aas-extract", auth.requireAuth, async (req, res) => {
+    try {
+      const { group_id, id_short_path } = req.body || {};
+      if (!group_id || !id_short_path) return res.status(400).json({ error: "MISSING_PARAMS" });
+      const members = await db.all(
+        "SELECT aas_id FROM resilience_asset_group_members WHERE group_id = ?",
+        [group_id]
+      );
+      const segments = id_short_path.split(".");
+      const values = new Set();
+      for (const m of members) {
+        const imp = await db.get(
+          "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+          [m.aas_id, req.user.id]
+        );
+        if (!imp || !imp.submodels_data) continue;
+        try {
+          const submodels = JSON.parse(imp.submodels_data);
+          for (const sm of submodels) {
+            if (sm.idShort !== segments[0] && segments.length > 1) continue;
+            const els = sm.submodelElements || [];
+            if (segments.length === 1 && sm.idShort === segments[0]) {
+              // Edge: property is a direct submodel element
+              continue;
+            }
+            walkElements(els, segments, sm.idShort === segments[0] ? 1 : 0, values);
+          }
+        } catch { /* skip bad JSON */ }
+      }
+      res.json({ values: [...values].filter(Boolean) });
+    } catch (err) {
+      console.error("POST /api/country-mappings/aas-extract error:", err);
+      res.status(500).json({ error: "EXTRACT_FAILED" });
+    }
+  });
+
+  router.post("/api/country-mappings/aas-match", auth.requireAuth, async (req, res) => {
+    try {
+      const { values } = req.body || {};
+      if (!Array.isArray(values)) return res.status(400).json({ error: "INVALID_FORMAT" });
+      const rows = await db.all(
+        "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const matched = [];
+      const unmatched = [];
+      for (const v of values) {
+        const vl = v.trim().toLowerCase();
+        let found = null;
+        for (const r of rows) {
+          if (r.iso_code.toLowerCase() === vl) { found = r.iso_code; break; }
+          if (r.alpha3 && r.alpha3.toLowerCase() === vl) { found = r.iso_code; break; }
+          if (r.numeric === vl) { found = r.iso_code; break; }
+          const gdTokens = (r.gdacs_names || "").split(",").map(s => s.trim().toLowerCase());
+          if (gdTokens.includes(vl)) { found = r.iso_code; break; }
+          const aasTokens = (r.aas_names || "").split(",").map(s => s.trim().toLowerCase());
+          if (aasTokens.includes(vl)) { found = r.iso_code; break; }
+        }
+        if (found) matched.push({ value: v, iso_code: found });
+        else unmatched.push(v);
+      }
+      res.json({ matched, unmatched });
+    } catch (err) {
+      console.error("POST /api/country-mappings/aas-match error:", err);
+      res.status(500).json({ error: "MATCH_FAILED" });
+    }
+  });
+
+  router.post("/api/country-mappings/aas-ai-match", auth.requireAuth, async (req, res) => {
+    try {
+      const { values } = req.body || {};
+      if (!Array.isArray(values) || values.length === 0) return res.status(400).json({ error: "INVALID_FORMAT" });
+      const settings = await db.get(
+        "SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      if (!settings || !settings.api_key) {
+        return res.json({ ai_unavailable: true, matched: [], unmatched: values });
+      }
+      const prompt = `Map the following values to ISO 3166-1 alpha-2 country codes.\nReturn ONLY a JSON array: [{"value":"...","iso_code":"XX"}]\nIf a value cannot be mapped, use "iso_code": null.\nValues: ${JSON.stringify(values)}`;
+
+      let replyText = "";
+      if (settings.provider === "gemini") {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${settings.api_key}`;
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0, maxOutputTokens: 4096 }
+          }),
+          signal: AbortSignal.timeout(30000)
+        });
+        const data = await r.json();
+        replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      } else {
+        const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${settings.api_key}` },
+          body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0
+          }),
+          signal: AbortSignal.timeout(30000)
+        });
+        const data = await r.json();
+        replyText = data?.choices?.[0]?.message?.content || "";
+      }
+
+      // Extract JSON array from response
+      const jsonMatch = replyText.match(/\[[\s\S]*?\]/);
+      let suggestions = [];
+      if (jsonMatch) {
+        try { suggestions = JSON.parse(jsonMatch[0]); } catch { /* ignore */ }
+      }
+
+      // Validate iso_codes against DB
+      const validCodes = new Set(
+        (await db.all("SELECT iso_code FROM resilience_country_mappings WHERE user_id = ?", [req.user.id]))
+          .map(r => r.iso_code)
+      );
+      const matched = [];
+      const unmatched = [];
+      for (const s of suggestions) {
+        if (s.iso_code && validCodes.has(s.iso_code.toUpperCase())) {
+          matched.push({ value: s.value, iso_code: s.iso_code.toUpperCase() });
+        } else {
+          unmatched.push(s.value);
+        }
+      }
+      // Any original values not in suggestions at all → unmatched
+      const handled = new Set(suggestions.map(s => s.value));
+      for (const v of values) {
+        if (!handled.has(v)) unmatched.push(v);
+      }
+      res.json({ ai_unavailable: false, matched, unmatched });
+    } catch (err) {
+      console.error("POST /api/country-mappings/aas-ai-match error:", err);
+      res.status(500).json({ error: "AI_MATCH_FAILED" });
+    }
+  });
+
+  router.post("/api/country-mappings/aas-apply", auth.requireAuth, async (req, res) => {
+    try {
+      const { mappings } = req.body || {};
+      if (!Array.isArray(mappings)) return res.status(400).json({ error: "INVALID_FORMAT" });
+      let updated = 0;
+      for (const m of mappings) {
+        if (!m.value || !m.iso_code) continue;
+        const row = await db.get(
+          "SELECT aas_names FROM resilience_country_mappings WHERE user_id = ? AND iso_code = ?",
+          [req.user.id, m.iso_code]
+        );
+        if (!row) continue;
+        const existing = (row.aas_names || "").split(",").map(s => s.trim()).filter(Boolean);
+        if (existing.some(e => e.toLowerCase() === m.value.trim().toLowerCase())) continue;
+        existing.push(m.value.trim());
+        await db.run(
+          "UPDATE resilience_country_mappings SET aas_names = ? WHERE user_id = ? AND iso_code = ?",
+          [existing.join(", "), req.user.id, m.iso_code]
+        );
+        updated++;
+      }
+      res.json({ ok: true, updated });
+    } catch (err) {
+      console.error("POST /api/country-mappings/aas-apply error:", err);
+      res.status(500).json({ error: "APPLY_FAILED" });
     }
   });
 
@@ -731,6 +1055,7 @@ function mountRoutes(router) {
     }
   });
 
+
   // ── GDACS watched countries ───────────────────────────────────
   router.get("/api/gdacs/countries", auth.requireAuth, async (req, res) => {
     try {
@@ -840,6 +1165,114 @@ function mountRoutes(router) {
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "DELETE_FAILED" });
+    }
+  });
+
+  // ── GDACS AAS Overview (dashboard tile) ──────────────────────
+  router.get("/api/gdacs/aas-overview", auth.requireAuth, async (req, res) => {
+    try {
+      let mapRows = await db.all(
+        "SELECT aas_id, country_value, iso_code, columns_data, updated_at FROM resilience_gdacs_aas_map WHERE user_id = ? ORDER BY aas_id ASC",
+        [req.user.id]
+      );
+
+      // If empty but mapping is configured, compute on first access
+      if (!mapRows.length) {
+        try { await refreshGdacsAasMapping(req.user.id); } catch { /* ignore */ }
+        mapRows = await db.all(
+          "SELECT aas_id, country_value, iso_code, columns_data, updated_at FROM resilience_gdacs_aas_map WHERE user_id = ? ORDER BY aas_id ASC",
+          [req.user.id]
+        );
+      }
+      if (!mapRows.length) return res.json({ items: [], updated_at: null });
+
+      // Get country mappings for gdacs_names lookup
+      const cmRows = await db.all(
+        "SELECT iso_code, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const isoToGdacs = {};
+      for (const r of cmRows) isoToGdacs[r.iso_code] = r.gdacs_names || "";
+
+      // Get all GDACS countries for this user
+      const gdacsCountries = await db.all(
+        "SELECT country_id, name FROM resilience_gdacs_countries WHERE user_id = ?",
+        [req.user.id]
+      );
+
+      // Build iso → country_ids mapping
+      const isoToCountryIds = {};
+      for (const row of mapRows) {
+        if (!row.iso_code) continue;
+        const gdacsNames = isoToGdacs[row.iso_code] || "";
+        const tokens = gdacsNames.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+        const ids = [];
+        for (const gc of gdacsCountries) {
+          if (tokens.includes(gc.name.toLowerCase())) ids.push(gc.country_id);
+        }
+        isoToCountryIds[row.iso_code] = ids;
+      }
+
+      // Fetch alerts for all relevant country_ids
+      const allCountryIds = [...new Set(Object.values(isoToCountryIds).flat())];
+      let alertsByCountryId = {};
+      if (allCountryIds.length) {
+        const ph = allCountryIds.map(() => "?").join(",");
+        const alerts = await db.all(
+          `SELECT alert_id, country_id, eventtype, alertlevel, name, fromdate, url
+           FROM resilience_gdacs_alerts WHERE user_id = ? AND country_id IN (${ph})
+           ORDER BY fromdate DESC`,
+          [req.user.id, ...allCountryIds]
+        );
+        for (const a of alerts) {
+          if (!alertsByCountryId[a.country_id]) alertsByCountryId[a.country_id] = [];
+          alertsByCountryId[a.country_id].push(a);
+        }
+      }
+
+      // Get column definitions from settings
+      const colSettings = await db.get(
+        "SELECT gdacs_aas_columns FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const columns = JSON.parse(colSettings?.gdacs_aas_columns || "[]");
+
+      // Build response items — only include rows that have alerts
+      const allItems = [];
+      for (const row of mapRows) {
+        const countryIds = isoToCountryIds[row.iso_code] || [];
+        const alerts = countryIds.flatMap(cid => alertsByCountryId[cid] || []);
+        if (!alerts.length) continue;
+        allItems.push({
+          aas_id: row.aas_id,
+          country_value: row.country_value,
+          iso_code: row.iso_code,
+          columns_data: JSON.parse(row.columns_data || "{}"),
+          alerts,
+        });
+      }
+
+      // Sorting by column path
+      const sortBy = req.query.sort || "";
+      const sortDir = req.query.sort_dir === "desc" ? -1 : 1;
+      if (sortBy && columns.includes(sortBy)) {
+        allItems.sort((a, b) => {
+          const va = (a.columns_data[sortBy] || "").toLowerCase();
+          const vb = (b.columns_data[sortBy] || "").toLowerCase();
+          return va < vb ? -sortDir : va > vb ? sortDir : 0;
+        });
+      }
+
+      // Pagination
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+      const offset = parseInt(req.query.offset) || 0;
+      const items = allItems.slice(offset, offset + limit);
+
+      const updatedAt = mapRows[0]?.updated_at || null;
+      res.json({ items, total: allItems.length, columns, updated_at: updatedAt });
+    } catch (err) {
+      console.error("GET /api/gdacs/aas-overview error:", err);
+      res.status(500).json({ error: "LOAD_FAILED" });
     }
   });
 
@@ -1612,6 +2045,9 @@ async function refreshUserGdacsAlerts(userId) {
       }
     } catch { /* skip country on error */ }
   }
+
+  // Also refresh AAS country mapping cache
+  try { await refreshGdacsAasMapping(userId); } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -1624,6 +2060,7 @@ async function refreshAllGdacsAlerts() {
      LEFT JOIN resilience_settings s ON s.user_id = c.user_id`
   );
 
+  const refreshedUsers = new Set();
   for (const u of users) {
     // Check last alert fetch time for this user (use most recent fetched_at)
     const lastRow = await db.get(
@@ -1636,8 +2073,20 @@ async function refreshAllGdacsAlerts() {
     }
     try {
       await refreshUserGdacsAlerts(u.user_id);
+      refreshedUsers.add(u.user_id);
     } catch { /* ignore */ }
   }
+
+  // Also refresh AAS mapping for users who have it configured but no GDACS countries
+  try {
+    const mapUsers = await db.all(
+      `SELECT user_id FROM resilience_settings WHERE gdacs_aas_group_id != '' AND gdacs_aas_path != ''`
+    );
+    for (const mu of mapUsers) {
+      if (refreshedUsers.has(mu.user_id)) continue;
+      try { await refreshGdacsAasMapping(mu.user_id); } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -1657,4 +2106,90 @@ async function cleanupGdacsAlerts() {
   }
 }
 
-module.exports = { initResilienceTables, mountRoutes, refreshAllFeeds, cleanupExpiredItems, refreshAllGdacsAlerts, cleanupGdacsAlerts, scheduleImports };
+// ---------------------------------------------------------------------------
+// Background: refresh GDACS AAS country mapping cache
+// ---------------------------------------------------------------------------
+function matchCountryValue(value, mappingRows) {
+  const vl = value.trim().toLowerCase();
+  for (const r of mappingRows) {
+    if (r.iso_code.toLowerCase() === vl) return r.iso_code;
+    if (r.alpha3 && r.alpha3.toLowerCase() === vl) return r.iso_code;
+    if (r.numeric === vl) return r.iso_code;
+    const gdTokens = (r.gdacs_names || "").split(",").map(s => s.trim().toLowerCase());
+    if (gdTokens.includes(vl)) return r.iso_code;
+    const aasTokens = (r.aas_names || "").split(",").map(s => s.trim().toLowerCase());
+    if (aasTokens.includes(vl)) return r.iso_code;
+  }
+  return "";
+}
+
+function extractFirstValue(submodels, pathStr) {
+  const segments = pathStr.split(".");
+  const values = new Set();
+  for (const sm of submodels) {
+    if (sm.idShort !== segments[0] && segments.length > 1) continue;
+    const els = sm.submodelElements || [];
+    if (segments.length === 1 && sm.idShort === segments[0]) continue;
+    walkElements(els, segments, sm.idShort === segments[0] ? 1 : 0, values);
+  }
+  return [...values].find(Boolean) || "";
+}
+
+async function refreshGdacsAasMapping(userId) {
+  const settings = await db.get(
+    "SELECT gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns FROM resilience_settings WHERE user_id = ?",
+    [userId]
+  );
+  const groupId = settings?.gdacs_aas_group_id;
+  const aasPath = settings?.gdacs_aas_path;
+  if (!groupId || !aasPath) return;
+
+  const columnPaths = JSON.parse(settings?.gdacs_aas_columns || "[]");
+
+  const members = await db.all(
+    "SELECT aas_id FROM resilience_asset_group_members WHERE group_id = ?",
+    [groupId]
+  );
+  if (!members.length) return;
+
+  const mappingRows = await db.all(
+    "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+    [userId]
+  );
+
+  const validIds = new Set();
+  for (const m of members) {
+    validIds.add(m.aas_id);
+    const imp = await db.get(
+      "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+      [m.aas_id, userId]
+    );
+    let countryValue = "";
+    let isoCode = "";
+    const colData = {};
+    if (imp?.submodels_data) {
+      try {
+        const submodels = JSON.parse(imp.submodels_data);
+        countryValue = extractFirstValue(submodels, aasPath);
+        if (countryValue) isoCode = matchCountryValue(countryValue, mappingRows);
+        for (const cp of columnPaths) {
+          colData[cp] = extractFirstValue(submodels, cp);
+        }
+      } catch { /* skip bad JSON */ }
+    }
+    await db.run(
+      `INSERT OR REPLACE INTO resilience_gdacs_aas_map (user_id, aas_id, country_value, iso_code, columns_data, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      [userId, m.aas_id, countryValue, isoCode, JSON.stringify(colData)]
+    );
+  }
+
+  // Remove stale entries
+  const placeholders = [...validIds].map(() => "?").join(",");
+  await db.run(
+    `DELETE FROM resilience_gdacs_aas_map WHERE user_id = ? AND aas_id NOT IN (${placeholders})`,
+    [userId, ...validIds]
+  );
+}
+
+module.exports = { initResilienceTables, mountRoutes, refreshAllFeeds, cleanupExpiredItems, refreshAllGdacsAlerts, cleanupGdacsAlerts, refreshGdacsAasMapping, scheduleImports };

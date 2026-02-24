@@ -35,7 +35,9 @@ const importSettingsSaveBtn = document.getElementById("import-settings-save-btn"
 
 // Country Mappings DOM refs
 const settingsNav = document.getElementById("settings-nav");
-const settingsNavGeneral = document.getElementById("settings-nav-general");
+const settingsNavFeeds = document.getElementById("settings-nav-feeds");
+const settingsNavGdacs = document.getElementById("settings-nav-gdacs");
+const settingsNavAasImport = document.getElementById("settings-nav-aas-import");
 const settingsNavCC = document.getElementById("settings-nav-country-codes");
 const cmSearchInput = document.getElementById("cm-search-input");
 const cmTbody = document.getElementById("cm-tbody");
@@ -43,6 +45,10 @@ const cmEmpty = document.getElementById("cm-empty");
 const cmPrevBtn = document.getElementById("cm-prev-btn");
 const cmNextBtn = document.getElementById("cm-next-btn");
 const cmPageInfo = document.getElementById("cm-page-info");
+const cmResetBtn = document.getElementById("cm-reset-btn");
+const cmConfirmModal = document.getElementById("cm-confirm-modal");
+const cmConfirmCancel = document.getElementById("cm-confirm-cancel");
+const cmConfirmForm = document.getElementById("cm-confirm-form");
 
 // News DOM refs
 const newsListView = document.getElementById("news-list-view");
@@ -168,6 +174,17 @@ const I18N = {
     gdacsCountryAdded: "Land hinzugefügt.",
     gdacsCountryRemoved: "Land entfernt.",
     gdacsCountryExists: "Dieses Land ist bereits vorhanden.",
+    gdacsAasFillEmpty: "Keine Länder mit AAS-Zuordnung gefunden.",
+    gdacsAasFillDone: "{n} Länder aus AAS-Zuordnungen hinzugefügt.",
+    gdacsAasSourceLabel: "AAS Länderzuordnung",
+    gdacsAasSourceEmpty: "Nicht konfiguriert",
+    gdacsAasSourceBtn: "Wählen",
+    gdacsAasSourceSaved: "AAS Länderzuordnung gespeichert.",
+    gdacsColsLabel: "Spaltenauswahl",
+    gdacsColsEmpty: "Nicht konfiguriert",
+    gdacsColsBtn: "Wählen",
+    gdacsColsSaved: "Spaltenauswahl gespeichert.",
+    gdacsColsCount: "{n} Spalten ausgewählt",
     gdacsSettingsRetentionLabel: "Alerts aufbewahren für",
     gdacsSettingsRefreshLabel: "Abruf-Intervall",
     gdacsSettingsSave: "Speichern",
@@ -240,6 +257,11 @@ const I18N = {
     dashAlertsTitle: "GDACS Alerts",
     dashAlertsLink: "Alle anzeigen \u2192",
     dashAlertsEmpty: "Keine Alerts vorhanden.",
+    dashAasTitle: "Naturkatastrophen & Lieferkettenrisiken",
+    dashAasEmpty: "Keine betroffenen Standorte erkannt.",
+    dashAasUpdated: "Aktualisiert: {time}",
+    dashAasPage: "Seite {page} von {pages}",
+    dashAasCountryHeader: "Land",
     // Indicators
     indicatorsDescNew: "Definiere Resilienz-Indikatoren für deine Lieferkette.",
     indNavClasses: "Klassen",
@@ -346,7 +368,9 @@ const I18N = {
     importInterval12: "12 Std.",
     importInterval24: "24 Std.",
     importSettingsSave: "Speichern",
-    settingsNavGeneral: "Allgemein",
+    settingsNavFeeds: "News Feeds",
+    settingsNavGdacs: "GDACS",
+    settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Ländercodes",
     cmSearch: "Suchen…",
     cmThIso: "Alpha-2",
@@ -355,8 +379,45 @@ const I18N = {
     cmThAas: "AAS",
     cmThGdacs: "GDACS",
     cmEmpty: "Keine Einträge gefunden.",
+    cmReset: "Zurücksetzen",
+    cmImport: "Import",
+    cmExport: "Export",
+    cmImportSuccess: "Import erfolgreich: {n} Einträge aktualisiert.",
+    cmImportError: "Import fehlgeschlagen. Bitte gültige JSON-Datei verwenden.",
+    cmResetTitle: "Ländercodes zurücksetzen",
+    cmResetMessage: "Alle AAS- und GDACS-Zuordnungen werden auf die Standardwerte zurückgesetzt. Dieser Vorgang kann nicht rückgängig gemacht werden.",
+    cmResetCancel: "Abbrechen",
+    cmResetConfirm: "Zurücksetzen",
     cmPrev: "Zurück",
     cmNext: "Weiter",
+    aasCmTitle: "AAS Länder-Import",
+    aasCmStep1Desc: "Wähle eine AAS-Gruppe aus.",
+    aasCmStep2Desc: "Wähle eine AAS aus der Gruppe, um den Submodel-Baum zu laden.",
+    aasCmStep3Desc: "Navigiere im Baum und klicke auf eine Property, deren Werte zugeordnet werden sollen.",
+    aasCmGroupEmpty: "Keine Gruppen vorhanden. Erstelle zuerst Gruppen unter AAS Daten.",
+    aasCmAasEmpty: "Keine AAS in dieser Gruppe.",
+    aasCmTreeError: "Keine importierten Daten vorhanden. Bitte zuerst einen AAS-Import durchführen.",
+    aasCmTreeLoading: "Lade Submodel-Daten…",
+    aasCmSelectedPath: "Ausgewählt: {path}",
+    aasCmProc1: "Schritt 1: Direkte Zuordnung",
+    aasCmProc2: "Schritt 2: KI-Zuordnung",
+    aasCmSummary: "{total} Werte gefunden — {step1} direkt, {step2} per KI, {unmatched} nicht zuordenbar.",
+    aasCmDirect: "Direkt",
+    aasCmNoMatch: "Kein Match",
+    aasCmApply: "Übernehmen",
+    aasCmApplyResults: "Anwenden",
+    aasCmApplying: "Wird angewendet…",
+    aasCmCancel: "Abbrechen",
+    aasCmClose: "Schließen",
+    aasCmBack: "Zurück",
+    aasCmAasBtn: "AAS",
+    aasCmThValue: "Wert",
+    aasCmThMatch: "Zuordnung",
+    aasCmThMethod: "Methode",
+    aasCmApplied: "Zuordnungen erfolgreich übernommen.",
+    aasCmSuccessDetail: "{n} Werte wurden in die Ländercodes-Tabelle übernommen.",
+    aasCmAiUnavailable: "KI nicht konfiguriert — nur direkte Zuordnung.",
+    aasCmNoProperty: "Bitte wähle zuerst eine Property aus.",
     aasOvEmpty: "Keine AAS IDs vorhanden. Füge Quellen und IDs hinzu.",
     aasOvCount: "AAS",
     aasOvBack: "Zurück",
@@ -483,6 +544,17 @@ const I18N = {
     gdacsCountryAdded: "Country added.",
     gdacsCountryRemoved: "Country removed.",
     gdacsCountryExists: "This country already exists.",
+    gdacsAasFillEmpty: "No countries with AAS mapping found.",
+    gdacsAasFillDone: "{n} countries added from AAS mappings.",
+    gdacsAasSourceLabel: "AAS Country Mapping",
+    gdacsAasSourceEmpty: "Not configured",
+    gdacsAasSourceBtn: "Select",
+    gdacsAasSourceSaved: "AAS country mapping saved.",
+    gdacsColsLabel: "Column Selection",
+    gdacsColsEmpty: "Not configured",
+    gdacsColsBtn: "Select",
+    gdacsColsSaved: "Column selection saved.",
+    gdacsColsCount: "{n} columns selected",
     gdacsSettingsRetentionLabel: "Keep alerts for",
     gdacsSettingsRefreshLabel: "Refresh interval",
     gdacsSettingsSave: "Save",
@@ -555,6 +627,11 @@ const I18N = {
     dashAlertsTitle: "GDACS Alerts",
     dashAlertsLink: "View all \u2192",
     dashAlertsEmpty: "No alerts available.",
+    dashAasTitle: "Natural Disasters & Supply Chain Risks",
+    dashAasEmpty: "No affected locations detected.",
+    dashAasUpdated: "Updated: {time}",
+    dashAasPage: "Page {page} of {pages}",
+    dashAasCountryHeader: "Country",
     // Indicators
     indicatorsDescNew: "Define resilience indicators for your supply chain.",
     indNavClasses: "Classes",
@@ -661,7 +738,9 @@ const I18N = {
     importInterval12: "12 hrs",
     importInterval24: "24 hrs",
     importSettingsSave: "Save",
-    settingsNavGeneral: "General",
+    settingsNavFeeds: "News Feeds",
+    settingsNavGdacs: "GDACS",
+    settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Country Codes",
     cmSearch: "Search…",
     cmThIso: "Alpha-2",
@@ -670,8 +749,45 @@ const I18N = {
     cmThAas: "AAS",
     cmThGdacs: "GDACS",
     cmEmpty: "No entries found.",
+    cmReset: "Reset",
+    cmImport: "Import",
+    cmExport: "Export",
+    cmImportSuccess: "Import successful: {n} entries updated.",
+    cmImportError: "Import failed. Please use a valid JSON file.",
+    cmResetTitle: "Reset country codes",
+    cmResetMessage: "All AAS and GDACS mappings will be reset to default values. This action cannot be undone.",
+    cmResetCancel: "Cancel",
+    cmResetConfirm: "Reset",
     cmPrev: "Previous",
     cmNext: "Next",
+    aasCmTitle: "AAS Country Import",
+    aasCmStep1Desc: "Select an AAS group.",
+    aasCmStep2Desc: "Select an AAS from the group to load the submodel tree.",
+    aasCmStep3Desc: "Navigate the tree and click on a property whose values should be mapped.",
+    aasCmGroupEmpty: "No groups available. Create groups first under AAS Data.",
+    aasCmAasEmpty: "No AAS in this group.",
+    aasCmTreeError: "No imported data available. Please run an AAS import first.",
+    aasCmTreeLoading: "Loading submodel data…",
+    aasCmSelectedPath: "Selected: {path}",
+    aasCmProc1: "Step 1: Direct matching",
+    aasCmProc2: "Step 2: AI matching",
+    aasCmSummary: "{total} values found — {step1} direct, {step2} via AI, {unmatched} unmatched.",
+    aasCmDirect: "Direct",
+    aasCmNoMatch: "No match",
+    aasCmApply: "Apply",
+    aasCmApplyResults: "Apply results",
+    aasCmApplying: "Applying…",
+    aasCmCancel: "Cancel",
+    aasCmClose: "Close",
+    aasCmBack: "Back",
+    aasCmAasBtn: "AAS",
+    aasCmThValue: "Value",
+    aasCmThMatch: "Mapping",
+    aasCmThMethod: "Method",
+    aasCmApplied: "Mappings applied successfully.",
+    aasCmSuccessDetail: "{n} values were added to the country codes table.",
+    aasCmAiUnavailable: "AI not configured — only direct matching performed.",
+    aasCmNoProperty: "Please select a property first.",
     aasOvEmpty: "No AAS IDs available. Add sources and IDs first.",
     aasOvCount: "AAS",
     aasOvBack: "Back",
@@ -736,7 +852,7 @@ let aasOvPage = 0;
 const AAS_OV_PER_PAGE = 20;
 
 // Settings nav state
-let activeSettingsNav = "general";
+let activeSettingsNav = "feeds";
 let cmPage = 0, cmQuery = "";
 const CM_PER_PAGE = 30;
 let cmDebounceTimer = null;
@@ -925,6 +1041,10 @@ function applyLocaleToUI() {
   gdacsCountryInput.placeholder = t("gdacsCountryInputPlaceholder");
   document.getElementById("gdacs-country-add-label").textContent = t("gdacsCountryAdd");
   document.getElementById("gdacs-country-empty-label").textContent = t("gdacsCountryEmpty");
+  document.getElementById("gdacs-aas-source-label").textContent = t("gdacsAasSourceLabel");
+  document.getElementById("gdacs-aas-source-btn-label").textContent = t("gdacsAasSourceBtn");
+  document.getElementById("gdacs-cols-label").textContent = t("gdacsColsLabel");
+  document.getElementById("gdacs-cols-btn-label").textContent = t("gdacsColsBtn");
   document.getElementById("gdacs-retention-label").textContent = t("gdacsSettingsRetentionLabel");
   document.getElementById("gdacs-refresh-label").textContent = t("gdacsSettingsRefreshLabel");
   document.getElementById("gdacs-settings-save-label").textContent = t("gdacsSettingsSave");
@@ -948,7 +1068,9 @@ function applyLocaleToUI() {
   impOpts[3].textContent = t("importInterval24");
 
   // Settings nav labels
-  document.getElementById("settings-nav-general-btn").textContent = t("settingsNavGeneral");
+  document.getElementById("settings-nav-feeds-btn").textContent = t("settingsNavFeeds");
+  document.getElementById("settings-nav-gdacs-btn").textContent = t("settingsNavGdacs");
+  document.getElementById("settings-nav-aas-btn").textContent = t("settingsNavAasImport");
   document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
   cmSearchInput.placeholder = t("cmSearch");
   document.getElementById("cm-th-iso").textContent = t("cmThIso");
@@ -957,6 +1079,9 @@ function applyLocaleToUI() {
   document.getElementById("cm-th-aas").textContent = t("cmThAas");
   document.getElementById("cm-th-gdacs").textContent = t("cmThGdacs");
   document.getElementById("cm-empty-label").textContent = t("cmEmpty");
+  document.getElementById("cm-reset-label").textContent = t("cmReset");
+  document.getElementById("cm-import-label").textContent = t("cmImport");
+  document.getElementById("cm-export-label").textContent = t("cmExport");
   cmPrevBtn.textContent = t("cmPrev");
   cmNextBtn.textContent = t("cmNext");
 
@@ -983,6 +1108,8 @@ function applyLocaleToUI() {
   document.getElementById("dash-alerts-title").textContent = t("dashAlertsTitle");
   document.getElementById("dash-alerts-link").textContent = t("dashAlertsLink");
   document.getElementById("dash-alerts-empty").textContent = t("dashAlertsEmpty");
+  document.getElementById("dash-aas-title").textContent = t("dashAasTitle");
+  document.getElementById("dash-aas-empty").textContent = t("dashAasEmpty");
 
   // Indicators page labels
   document.getElementById("ind-search").placeholder = t("indSearch");
@@ -1203,7 +1330,7 @@ async function loadSettings() {
   const result = await apiRequest("/apps/resilience/api/settings");
   if (!result.ok || !result.payload) return;
 
-  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours } = result.payload;
+  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns } = result.payload;
   cachedFeeds = feeds || [];
   cachedGdacsCountries = gdacs_countries || [];
 
@@ -1212,6 +1339,20 @@ async function loadSettings() {
   gdacsRefreshSelect.value = String(gdacs_refresh_minutes || 60);
   gdacsRetentionSelect.value = String(gdacs_retention_days || 30);
   importIntervalSelect.value = String(import_interval_hours || 0);
+
+  // GDACS AAS source display
+  if (gdacs_aas_group_id && gdacs_aas_path) {
+    // Resolve group name
+    const gRes = await apiRequest("/apps/resilience/api/asset-groups");
+    const groups = gRes.ok ? (gRes.payload.groups || []) : [];
+    const group = groups.find(g => g.group_id === gdacs_aas_group_id);
+    updateGdacsAasSourceDisplay(group ? group.name : gdacs_aas_group_id, gdacs_aas_path);
+  } else {
+    updateGdacsAasSourceDisplay("", "");
+  }
+
+  // GDACS columns display
+  updateGdacsColsDisplay(gdacs_aas_columns || []);
 
   renderFeedList();
   renderGdacsCountryList();
@@ -1409,6 +1550,34 @@ gdacsSettingsSaveBtn.addEventListener("click", async () => {
   }
 });
 
+// Fill GDACS watchlist from AAS country mappings
+document.getElementById("gdacs-aas-fill-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("gdacs-aas-fill-btn");
+  btn.disabled = true;
+  hideGdacsCountryHint();
+  const res = await apiRequest("/apps/resilience/api/country-mappings/aas-countries");
+  if (!res.ok || !res.payload.names?.length) {
+    btn.disabled = false;
+    showGdacsCountryHint(t("gdacsAasFillEmpty"), "error");
+    setTimeout(hideGdacsCountryHint, 3000);
+    return;
+  }
+  let added = 0;
+  for (const name of res.payload.names) {
+    const r = await apiRequest("/apps/resilience/api/gdacs/countries", {
+      method: "POST", body: { name }
+    });
+    if (r.ok && r.payload) {
+      cachedGdacsCountries.push(r.payload);
+      added++;
+    }
+  }
+  renderGdacsCountryList();
+  btn.disabled = false;
+  showGdacsCountryHint(t("gdacsAasFillDone").replace("{n}", added), "success");
+  setTimeout(hideGdacsCountryHint, 4000);
+});
+
 // Save import interval settings
 importSettingsSaveBtn.addEventListener("click", async () => {
   importSettingsSaveBtn.disabled = true;
@@ -1433,6 +1602,32 @@ document.getElementById("gdacs-purge-btn").addEventListener("click", async () =>
     setTimeout(hideGdacsCountryHint, 3000);
   }
 });
+
+// GDACS AAS source display helper
+function updateGdacsAasSourceDisplay(groupName, path) {
+  const textEl = document.getElementById("gdacs-aas-source-text");
+  if (!groupName && !path) {
+    textEl.className = "gdacs-aas-source-empty";
+    textEl.textContent = t("gdacsAasSourceEmpty");
+  } else {
+    textEl.className = "gdacs-aas-source-filled";
+    textEl.innerHTML = `<span class="gdacs-src-group">${escapeHtml(groupName || "—")}</span><span class="gdacs-src-path">${escapeHtml(path || "—")}</span>`;
+  }
+}
+
+// GDACS columns display helper
+let cachedGdacsColumns = [];
+function updateGdacsColsDisplay(columns) {
+  cachedGdacsColumns = columns || [];
+  const textEl = document.getElementById("gdacs-cols-text");
+  if (!columns || !columns.length) {
+    textEl.className = "gdacs-aas-source-empty";
+    textEl.textContent = t("gdacsColsEmpty");
+  } else {
+    textEl.className = "gdacs-aas-source-filled";
+    textEl.innerHTML = columns.map(p => `<span class="gdacs-src-path">${escapeHtml(p)}</span>`).join("");
+  }
+}
 
 // ── Indicators: Nav switching ─────────────────────────────────────
 const indNav = document.getElementById("ind-nav");
@@ -1473,10 +1668,12 @@ function switchSettingsNav(nav) {
   settingsNav.querySelectorAll(".docs-nav-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.settingsNav === nav);
   });
-  settingsNavGeneral.hidden = nav !== "general";
+  settingsNavFeeds.hidden = nav !== "feeds";
+  settingsNavGdacs.hidden = nav !== "gdacs";
+  settingsNavAasImport.hidden = nav !== "aas-import";
   settingsNavCC.hidden = nav !== "country-codes";
 
-  if (nav === "general") {
+  if (nav === "feeds" || nav === "gdacs" || nav === "aas-import") {
     loadSettings();
   } else if (nav === "country-codes") {
     loadCountryMappings();
@@ -1488,8 +1685,9 @@ async function loadCountryMappings() {
   try {
     const offset = cmPage * CM_PER_PAGE;
     const qs = new URLSearchParams({ limit: CM_PER_PAGE, offset, q: cmQuery });
-    const data = await apiRequest(`/apps/resilience/api/country-mappings?${qs}`);
-    if (!data || data.error) return;
+    const res = await apiRequest(`/apps/resilience/api/country-mappings?${qs}`);
+    if (!res.ok || !res.payload) return;
+    const data = res.payload;
 
     cmTbody.innerHTML = "";
     cmEmpty.hidden = data.items.length > 0;
@@ -1554,10 +1752,9 @@ cmTbody.addEventListener("click", (e) => {
       body.gdacs_names = field === "gdacs_names" ? newVal : gdacsTd.textContent;
       const result = await apiRequest(`/apps/resilience/api/country-mappings/${iso}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body,
       });
-      if (!result || result.error) td.textContent = oldVal;
+      if (!result.ok) td.textContent = oldVal;
     }
   };
 
@@ -1567,6 +1764,480 @@ cmTbody.addEventListener("click", (e) => {
     if (ev.key === "Escape") { input.removeEventListener("blur", save); td.textContent = oldVal; }
   });
 });
+
+// Reset country mappings
+cmResetBtn.addEventListener("click", () => {
+  document.getElementById("cm-confirm-title").textContent = t("cmResetTitle");
+  document.getElementById("cm-confirm-message").textContent = t("cmResetMessage");
+  cmConfirmCancel.textContent = t("cmResetCancel");
+  document.getElementById("cm-confirm-ok").textContent = t("cmResetConfirm");
+  cmConfirmModal.showModal();
+});
+
+cmConfirmCancel.addEventListener("click", () => cmConfirmModal.close());
+
+cmConfirmForm.addEventListener("submit", async (e) => {
+  if (e.submitter?.value !== "confirm") return;
+  cmConfirmModal.close();
+  const res = await apiRequest("/apps/resilience/api/country-mappings/reset", { method: "POST" });
+  if (res.ok) {
+    cmPage = 0;
+    cmQuery = "";
+    cmSearchInput.value = "";
+    loadCountryMappings();
+  }
+});
+
+// Export country mappings
+document.getElementById("cm-export-btn").addEventListener("click", async () => {
+  const res = await apiRequest("/apps/resilience/api/country-mappings/export");
+  if (!res.ok) return;
+  const blob = new Blob([JSON.stringify(res.payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "country-mappings.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// Import country mappings
+const cmImportFile = document.getElementById("cm-import-file");
+document.getElementById("cm-import-btn").addEventListener("click", () => cmImportFile.click());
+cmImportFile.addEventListener("change", async () => {
+  const file = cmImportFile.files[0];
+  cmImportFile.value = "";
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const res = await apiRequest("/apps/resilience/api/country-mappings/import", {
+      method: "POST", body: data
+    });
+    if (res.ok) {
+      alert(t("cmImportSuccess").replace("{n}", res.payload.updated));
+      loadCountryMappings();
+    } else {
+      alert(t("cmImportError"));
+    }
+  } catch {
+    alert(t("cmImportError"));
+  }
+});
+
+// ── AAS Country Import Modal ─────────────────────────────────────
+const aasCmModal = document.getElementById("aas-cm-modal");
+const aasCmCloseBtn = document.getElementById("aas-cm-close");
+const aasCmBackBtn = document.getElementById("aas-cm-back-btn");
+const aasCmCancelBtn = document.getElementById("aas-cm-cancel-btn");
+const aasCmApplyBtn = document.getElementById("aas-cm-apply-btn");
+const aasCmSteps = document.getElementById("aas-cm-steps");
+const aasCmTree = document.getElementById("aas-cm-tree");
+
+let aasCmCurrentStep = 1;
+let aasCmSelectedGroup = null;
+let aasCmSelectedAas = null;
+let aasCmSelectedPath = "";
+let aasCmSelectedPaths = []; // multi-select for columns mode
+let aasCmMatchResults = null;
+let aasCmMode = "import"; // "import", "picker", or "columns"
+
+function showAasCmStep(step) {
+  aasCmCurrentStep = step;
+  document.getElementById("aas-cm-success").hidden = true;
+  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns") ? 3 : 4;
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`aas-cm-step-${i}`).hidden = i !== step;
+    const dot = aasCmSteps.querySelector(`[data-step="${i}"]`);
+    if (i > maxSteps) {
+      dot.hidden = true;
+    } else {
+      dot.hidden = false;
+      dot.classList.toggle("active", i <= step);
+      dot.classList.toggle("done", i < step);
+    }
+    // Hide step-line after last visible dot
+    const line = dot.nextElementSibling;
+    if (line && line.classList.contains("aas-cm-step-line")) {
+      line.hidden = i >= maxSteps;
+    }
+  }
+  aasCmBackBtn.hidden = step <= 1;
+  aasCmApplyBtn.hidden = true;
+  if (step === 3 && aasCmMode === "columns" && aasCmSelectedPaths.length > 0) {
+    aasCmApplyBtn.hidden = false;
+    aasCmApplyBtn.textContent = t("gdacsColsBtn");
+  } else if (step === 3 && aasCmSelectedPath) {
+    aasCmApplyBtn.hidden = false;
+    aasCmApplyBtn.textContent = aasCmMode === "picker" ? t("gdacsAasSourceBtn") : t("aasCmApply");
+  }
+  aasCmCancelBtn.textContent = t("aasCmCancel");
+}
+
+// Open modal (shared for import + picker modes)
+function openAasCmModal(mode) {
+  aasCmMode = mode;
+  aasCmCurrentStep = 1;
+  aasCmSelectedGroup = null;
+  aasCmSelectedAas = null;
+  aasCmSelectedPath = "";
+  aasCmSelectedPaths = [];
+  aasCmMatchResults = null;
+  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), import: t("aasCmTitle") };
+  document.getElementById("aas-cm-title").textContent = titles[mode] || titles.import;
+  document.getElementById("aas-cm-step1-desc").textContent = t("aasCmStep1Desc");
+  document.getElementById("aas-cm-selected-path").hidden = true;
+  document.getElementById("aas-cm-results").hidden = true;
+  document.getElementById("aas-cm-processing").hidden = false;
+  document.getElementById("aas-cm-proc-1-icon").textContent = "\u25CB";
+  document.getElementById("aas-cm-proc-1-count").textContent = "";
+  document.getElementById("aas-cm-proc-2-icon").textContent = "\u25CB";
+  document.getElementById("aas-cm-proc-2-count").textContent = "";
+  document.getElementById("aas-cm-success").hidden = true;
+  showAasCmStep(1);
+  loadAasCmGroups();
+  aasCmModal.showModal();
+}
+
+document.getElementById("cm-aas-import-btn").addEventListener("click", () => openAasCmModal("import"));
+document.getElementById("gdacs-aas-source-btn").addEventListener("click", () => openAasCmModal("picker"));
+document.getElementById("gdacs-cols-btn").addEventListener("click", () => openAasCmModal("columns"));
+
+// Close / cancel
+aasCmCloseBtn.addEventListener("click", () => aasCmModal.close());
+aasCmCancelBtn.addEventListener("click", () => aasCmModal.close());
+aasCmBackBtn.addEventListener("click", () => {
+  if (aasCmCurrentStep > 1) {
+    if (aasCmCurrentStep === 3) aasCmSelectedPath = "";
+    showAasCmStep(aasCmCurrentStep - 1);
+  }
+});
+
+// Step 1: Load groups
+async function loadAasCmGroups() {
+  const res = await apiRequest("/apps/resilience/api/asset-groups");
+  const list = document.getElementById("aas-cm-group-list");
+  list.innerHTML = "";
+  const groups = res.ok ? (res.payload.groups || []) : [];
+  document.getElementById("aas-cm-group-empty").hidden = groups.length > 0;
+  for (const g of groups) {
+    const btn = document.createElement("button");
+    btn.className = "aas-cm-select-item";
+    btn.textContent = `${g.name} (${g.member_count} AAS)`;
+    btn.addEventListener("click", () => {
+      aasCmSelectedGroup = g;
+      document.getElementById("aas-cm-step2-desc").textContent = t("aasCmStep2Desc");
+      showAasCmStep(2);
+      loadAasCmAas(g.group_id);
+    });
+    list.appendChild(btn);
+  }
+}
+
+// Step 2: Load AAS in group
+async function loadAasCmAas(groupId) {
+  const res = await apiRequest(`/apps/resilience/api/asset-groups/${groupId}`);
+  const list = document.getElementById("aas-cm-aas-list");
+  list.innerHTML = "";
+  const members = res.ok ? (res.payload.members || []) : [];
+  document.getElementById("aas-cm-aas-empty").hidden = members.length > 0;
+  for (const m of members) {
+    const btn = document.createElement("button");
+    btn.className = "aas-cm-select-item";
+    btn.textContent = m.aas_id;
+    btn.addEventListener("click", () => {
+      aasCmSelectedAas = m;
+      document.getElementById("aas-cm-step3-desc").textContent = t("aasCmStep3Desc");
+      showAasCmStep(3);
+      loadAasCmTree(m.aas_id);
+    });
+    list.appendChild(btn);
+  }
+}
+
+// Step 3: Load tree
+async function loadAasCmTree(aasId) {
+  aasCmTree.innerHTML = "";
+  const loading = document.getElementById("aas-cm-tree-loading");
+  loading.hidden = false;
+  loading.textContent = t("aasCmTreeLoading");
+
+  const res = await apiRequest(`/apps/resilience/api/aas-import/${encodeURIComponent(aasId)}`);
+  loading.hidden = true;
+  if (!res.ok || !res.payload) {
+    aasCmTree.innerHTML = `<p class="aas-cm-error">${escapeHtml(t("aasCmTreeError"))}</p>`;
+    return;
+  }
+  const submodels = res.payload.submodels || [];
+  if (!submodels.length) {
+    aasCmTree.innerHTML = `<p class="aas-cm-error">${escapeHtml(t("aasCmTreeError"))}</p>`;
+    return;
+  }
+  for (const sm of submodels) {
+    const card = document.createElement("div");
+    card.className = "aas-cm-sm-card";
+    card.innerHTML = `<h4 class="aas-cm-sm-title">${escapeHtml(sm.idShort || sm.id)}</h4>`;
+    const elHtml = renderSelectableEls(sm.submodelElements || [], 0, sm.idShort || "");
+    card.insertAdjacentHTML("beforeend", elHtml);
+    aasCmTree.appendChild(card);
+  }
+}
+
+function renderSelectableEls(elements, depth, parentPath) {
+  let html = `<ul class="aas-el-list" style="padding-left:${depth > 0 ? "1.2rem" : "0"}">`;
+  for (const el of elements) html += renderSelectableEl(el, depth, parentPath);
+  html += "</ul>";
+  return html;
+}
+
+function renderSelectableEl(el, depth, parentPath) {
+  const mt = el.modelType || "";
+  const name = el.idShort || "";
+  const path = parentPath ? `${parentPath}.${name}` : name;
+  switch (mt) {
+    case "Property": {
+      const val = el.value ?? "";
+      return `<li class="aas-el-item aas-cm-prop-item" data-idshort-path="${escapeHtml(path)}"><span class="aas-el-name">${escapeHtml(name)}</span> = <span class="aas-el-value">${escapeHtml(String(val))}</span></li>`;
+    }
+    case "MultiLanguageProperty": {
+      const parts = (el.value || []).map(l => `${l.language}: ${l.text}`).join(", ");
+      return `<li class="aas-el-item aas-cm-prop-item" data-idshort-path="${escapeHtml(path)}"><span class="aas-el-name">${escapeHtml(name)}</span> = <span class="aas-el-value">${escapeHtml(parts)}</span></li>`;
+    }
+    case "SubmodelElementCollection":
+    case "SubmodelElementList": {
+      const children = el.value || [];
+      const label = mt === "SubmodelElementCollection" ? "Collection" : "List";
+      let h = `<li class="aas-el-item aas-el-group"><span class="aas-el-name">${escapeHtml(name)}</span> <span class="aas-el-type">[${label}]</span>`;
+      if (children.length > 0) h += renderSelectableEls(children, depth + 1, path);
+      return h + "</li>";
+    }
+    case "Entity": {
+      const stmts = el.statements || [];
+      let h = `<li class="aas-el-item aas-el-group"><span class="aas-el-name">${escapeHtml(name)}</span> <span class="aas-el-type">[Entity]</span>`;
+      if (stmts.length > 0) h += renderSelectableEls(stmts, depth + 1, path);
+      return h + "</li>";
+    }
+    default:
+      return `<li class="aas-el-item"><span class="aas-el-name">${escapeHtml(name)}</span> <span class="aas-el-type">[${escapeHtml(mt)}]</span></li>`;
+  }
+}
+
+// Tree click: select property
+aasCmTree.addEventListener("click", (e) => {
+  const propEl = e.target.closest("[data-idshort-path]");
+  if (!propEl) return;
+  const path = propEl.dataset.idshortPath;
+  const pathDisplay = document.getElementById("aas-cm-selected-path");
+
+  if (aasCmMode === "columns") {
+    // Multi-select: toggle
+    const idx = aasCmSelectedPaths.indexOf(path);
+    if (idx >= 0) {
+      aasCmSelectedPaths.splice(idx, 1);
+      propEl.classList.remove("aas-cm-prop-selected");
+    } else {
+      aasCmSelectedPaths.push(path);
+      propEl.classList.add("aas-cm-prop-selected");
+    }
+    if (aasCmSelectedPaths.length) {
+      pathDisplay.textContent = t("gdacsColsCount").replace("{n}", aasCmSelectedPaths.length);
+      pathDisplay.hidden = false;
+      aasCmApplyBtn.hidden = false;
+      aasCmApplyBtn.textContent = t("gdacsColsBtn");
+    } else {
+      pathDisplay.hidden = true;
+      aasCmApplyBtn.hidden = true;
+    }
+  } else {
+    // Single-select
+    aasCmTree.querySelectorAll(".aas-cm-prop-selected").forEach(el => el.classList.remove("aas-cm-prop-selected"));
+    propEl.classList.add("aas-cm-prop-selected");
+    aasCmSelectedPath = path;
+    pathDisplay.textContent = t("aasCmSelectedPath").replace("{path}", aasCmSelectedPath);
+    pathDisplay.hidden = false;
+    aasCmApplyBtn.hidden = false;
+    aasCmApplyBtn.textContent = aasCmMode === "picker" ? t("gdacsAasSourceBtn") : t("aasCmApply");
+  }
+});
+
+// Apply / Übernehmen button
+aasCmApplyBtn.addEventListener("click", async () => {
+  if (aasCmCurrentStep === 3 && aasCmSelectedPaths.length > 0 && aasCmMode === "columns") {
+    // Columns mode: save selected paths
+    aasCmApplyBtn.disabled = true;
+    const res = await apiRequest("/apps/resilience/api/settings", {
+      method: "PUT",
+      body: { gdacs_aas_columns: aasCmSelectedPaths },
+    });
+    aasCmApplyBtn.disabled = false;
+    if (res.ok) {
+      updateGdacsColsDisplay(aasCmSelectedPaths);
+      showGdacsCountryHint(t("gdacsColsSaved"), "success");
+      setTimeout(hideGdacsCountryHint, 3000);
+      aasCmModal.close();
+    }
+    return;
+  }
+  if (aasCmCurrentStep === 3 && aasCmSelectedPath && aasCmMode === "picker") {
+    // Picker mode: save group + path to GDACS settings
+    aasCmApplyBtn.disabled = true;
+    const res = await apiRequest("/apps/resilience/api/settings", {
+      method: "PUT",
+      body: {
+        gdacs_aas_group_id: aasCmSelectedGroup.group_id,
+        gdacs_aas_path: aasCmSelectedPath,
+      },
+    });
+    aasCmApplyBtn.disabled = false;
+    if (res.ok) {
+      updateGdacsAasSourceDisplay(aasCmSelectedGroup.name, aasCmSelectedPath);
+      showGdacsCountryHint(t("gdacsAasSourceSaved"), "success");
+      setTimeout(hideGdacsCountryHint, 3000);
+      aasCmModal.close();
+    }
+    return;
+  }
+  if (aasCmCurrentStep === 3 && aasCmSelectedPath) {
+    showAasCmStep(4);
+    await runAasCmProcessing();
+  } else if (aasCmCurrentStep === 4 && aasCmMatchResults) {
+    await applyAasCmResults();
+  }
+});
+
+// Step 4: Processing
+async function runAasCmProcessing() {
+  const proc1Icon = document.getElementById("aas-cm-proc-1-icon");
+  const proc1Count = document.getElementById("aas-cm-proc-1-count");
+  const proc2Icon = document.getElementById("aas-cm-proc-2-icon");
+  const proc2Count = document.getElementById("aas-cm-proc-2-count");
+  const resultsDiv = document.getElementById("aas-cm-results");
+
+  document.getElementById("aas-cm-processing").hidden = false;
+  resultsDiv.hidden = true;
+  proc1Icon.textContent = "\u23F3";
+  proc1Count.textContent = "";
+  proc2Icon.textContent = "\u25CB";
+  proc2Count.textContent = "";
+  document.getElementById("aas-cm-proc-1-label").textContent = t("aasCmProc1");
+  document.getElementById("aas-cm-proc-2-label").textContent = t("aasCmProc2");
+
+  // Extract values
+  const extractRes = await apiRequest("/apps/resilience/api/country-mappings/aas-extract", {
+    method: "POST",
+    body: { group_id: aasCmSelectedGroup.group_id, id_short_path: aasCmSelectedPath }
+  });
+  if (!extractRes.ok) {
+    proc1Icon.textContent = "\u2717";
+    return;
+  }
+  const values = extractRes.payload.values || [];
+  if (values.length === 0) {
+    proc1Icon.textContent = "\u2713";
+    proc1Count.textContent = "0/0";
+    proc2Icon.textContent = "\u2713";
+    proc2Count.textContent = "0/0";
+    aasCmMatchResults = { step1Matched: [], step2Matched: [], unmatched: [] };
+    renderAasCmResults();
+    return;
+  }
+
+  // Step 1: Direct match
+  const matchRes = await apiRequest("/apps/resilience/api/country-mappings/aas-match", {
+    method: "POST", body: { values }
+  });
+  if (!matchRes.ok) { proc1Icon.textContent = "\u2717"; return; }
+  const step1Matched = matchRes.payload.matched;
+  const unmatched = matchRes.payload.unmatched;
+  proc1Icon.textContent = "\u2713";
+  proc1Count.textContent = `${step1Matched.length}/${values.length}`;
+
+  // Step 2: AI match
+  let step2Matched = [];
+  let finalUnmatched = unmatched;
+  if (unmatched.length > 0) {
+    proc2Icon.textContent = "\u23F3";
+    const aiRes = await apiRequest("/apps/resilience/api/country-mappings/aas-ai-match", {
+      method: "POST", body: { values: unmatched }
+    });
+    if (aiRes.ok && !aiRes.payload.ai_unavailable) {
+      step2Matched = aiRes.payload.matched || [];
+      finalUnmatched = aiRes.payload.unmatched || [];
+    } else if (aiRes.ok && aiRes.payload.ai_unavailable) {
+      finalUnmatched = unmatched;
+    }
+  }
+  proc2Icon.textContent = "\u2713";
+  proc2Count.textContent = `${step2Matched.length}/${unmatched.length}`;
+
+  aasCmMatchResults = { step1Matched, step2Matched, unmatched: finalUnmatched };
+  renderAasCmResults();
+}
+
+function renderAasCmResults() {
+  const { step1Matched, step2Matched, unmatched } = aasCmMatchResults;
+  const total = step1Matched.length + step2Matched.length + unmatched.length;
+  const summary = document.getElementById("aas-cm-summary");
+  summary.textContent = t("aasCmSummary")
+    .replace("{total}", total)
+    .replace("{step1}", step1Matched.length)
+    .replace("{step2}", step2Matched.length)
+    .replace("{unmatched}", unmatched.length);
+
+  const tbody = document.getElementById("aas-cm-result-tbody");
+  tbody.innerHTML = "";
+  document.getElementById("aas-cm-th-value").textContent = t("aasCmThValue");
+  document.getElementById("aas-cm-th-match").textContent = t("aasCmThMatch");
+  document.getElementById("aas-cm-th-method").textContent = t("aasCmThMethod");
+
+  for (const m of step1Matched) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(m.value)}</td><td><code>${escapeHtml(m.iso_code)}</code></td><td><span class="aas-cm-badge aas-cm-badge-direct">${escapeHtml(t("aasCmDirect"))}</span></td>`;
+    tbody.appendChild(tr);
+  }
+  for (const m of step2Matched) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(m.value)}</td><td><code>${escapeHtml(m.iso_code)}</code></td><td><span class="aas-cm-badge aas-cm-badge-ai">AI</span></td>`;
+    tbody.appendChild(tr);
+  }
+  for (const v of unmatched) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(v)}</td><td>—</td><td><span class="aas-cm-badge aas-cm-badge-none">${escapeHtml(t("aasCmNoMatch"))}</span></td>`;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("aas-cm-results").hidden = false;
+  if (step1Matched.length + step2Matched.length > 0) {
+    aasCmApplyBtn.hidden = false;
+    aasCmApplyBtn.textContent = t("aasCmApplyResults");
+  }
+  aasCmCancelBtn.textContent = t("aasCmClose");
+}
+
+async function applyAasCmResults() {
+  const { step1Matched, step2Matched } = aasCmMatchResults;
+  const allMapped = [...step1Matched, ...step2Matched];
+  aasCmApplyBtn.disabled = true;
+  aasCmApplyBtn.textContent = t("aasCmApplying");
+
+  const res = await apiRequest("/apps/resilience/api/country-mappings/aas-apply", {
+    method: "POST", body: { mappings: allMapped }
+  });
+  aasCmApplyBtn.disabled = false;
+  if (res.ok) {
+    aasCmApplyBtn.hidden = true;
+    aasCmBackBtn.hidden = true;
+    aasCmCancelBtn.textContent = t("aasCmClose");
+    loadCountryMappings();
+    // Show success screen
+    document.getElementById("aas-cm-step-4").hidden = true;
+    const successDiv = document.getElementById("aas-cm-success");
+    document.getElementById("aas-cm-success-title").textContent = t("aasCmApplied");
+    const { step1Matched, step2Matched } = aasCmMatchResults;
+    document.getElementById("aas-cm-success-detail").textContent =
+      t("aasCmSuccessDetail").replace("{n}", step1Matched.length + step2Matched.length);
+    successDiv.hidden = false;
+  }
+}
 
 // ── Indicator Classes ────────────────────────────────────────────
 const indClassInput = document.getElementById("ind-class-input");
@@ -3494,9 +4165,10 @@ async function loadDashboard() {
   const dashNewsBody = document.getElementById("dash-news-body");
   const dashAlertsBody = document.getElementById("dash-alerts-body");
 
-  const [newsResult, alertsResult] = await Promise.all([
+  const [newsResult, alertsResult, aasOverviewResult] = await Promise.all([
     apiRequest("/apps/resilience/api/news?limit=8"),
     apiRequest("/apps/resilience/api/gdacs/alerts?limit=8"),
+    apiRequest("/apps/resilience/api/gdacs/aas-overview"),
   ]);
 
   // News tile
@@ -3533,7 +4205,101 @@ async function loadDashboard() {
   } else {
     dashAlertsBody.innerHTML = `<div class="dash-card-empty">${t("dashAlertsEmpty")}</div>`;
   }
+
+  // AAS Country Overview tile
+  const dashAasOverview = document.getElementById("dash-aas-overview");
+  const dashAasBody = document.getElementById("dash-aas-body");
+  const dashAasFooter = document.getElementById("dash-aas-footer");
+  if (aasOverviewResult.ok && aasOverviewResult.payload && aasOverviewResult.payload.total > 0) {
+    dashAasOverview.hidden = false;
+    const { items, total, columns, updated_at } = aasOverviewResult.payload;
+    dashAasColumns = columns || [];
+    if (updated_at) {
+      document.getElementById("dash-aas-updated").textContent = t("dashAasUpdated").replace("{time}", formatDateShort(updated_at));
+    }
+    renderDashAasRows(items, dashAasColumns);
+    // Pagination
+    const pages = Math.ceil(total / 20);
+    if (pages > 1) {
+      dashAasFooter.hidden = false;
+      document.getElementById("dash-aas-page-info").textContent = t("dashAasPage").replace("{page}", String(dashAasPage + 1)).replace("{pages}", String(pages));
+      document.getElementById("dash-aas-prev").disabled = dashAasPage <= 0;
+      document.getElementById("dash-aas-next").disabled = dashAasPage >= pages - 1;
+    } else {
+      dashAasFooter.hidden = true;
+    }
+  } else {
+    dashAasOverview.hidden = true;
+  }
 }
+
+let dashAasPage = 0;
+let dashAasColumns = [];
+let dashAasSortBy = "";
+let dashAasSortDir = "asc";
+
+function renderDashAasRows(items, columns) {
+  const body = document.getElementById("dash-aas-body");
+  const cols = columns || [];
+  // Header row with sortable columns
+  const colHeaders = cols.map(p => {
+    const label = p.includes(".") ? p.split(".").pop() : p;
+    const active = dashAasSortBy === p;
+    const arrow = active ? (dashAasSortDir === "asc" ? " \u25B2" : " \u25BC") : "";
+    return `<span class="dash-aas-col-header dash-aas-sortable${active ? " dash-aas-sort-active" : ""}" data-sort-col="${escapeHtml(p)}" title="${escapeHtml(p)}">${escapeHtml(label)}${arrow}</span>`;
+  }).join("");
+  const headerHtml = `<div class="dash-aas-row dash-aas-header">${colHeaders}<span class="dash-aas-alerts">Alerts</span></div>`;
+  // Data rows
+  const rowsHtml = items.map((row) => {
+    const colCells = cols.map(p => {
+      const val = (row.columns_data && row.columns_data[p]) || "";
+      return `<span class="dash-aas-col-cell" title="${escapeHtml(p)}: ${escapeHtml(val)}">${escapeHtml(val) || "\u2014"}</span>`;
+    }).join("");
+    const alertsHtml = row.alerts.map((a) => {
+      const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
+      const ac = a.alertlevel === "Red" ? "alert-red" : a.alertlevel === "Orange" ? "alert-orange" : "alert-green";
+      const link = a.url ? ` href="${escapeHtml(a.url)}" target="_blank" rel="noopener"` : "";
+      return `<a class="dash-aas-alert-chip"${link}>${icon}<span class="alert-badge ${ac}">${escapeHtml(a.alertlevel)}</span></a>`;
+    }).join("");
+    return `<div class="dash-aas-row">${colCells}<span class="dash-aas-alerts">${alertsHtml}</span></div>`;
+  }).join("");
+  body.innerHTML = headerHtml + rowsHtml;
+}
+
+// Sort click handler (delegated)
+document.getElementById("dash-aas-body").addEventListener("click", (e) => {
+  const hdr = e.target.closest(".dash-aas-sortable");
+  if (!hdr) return;
+  const col = hdr.dataset.sortCol;
+  if (dashAasSortBy === col) {
+    dashAasSortDir = dashAasSortDir === "asc" ? "desc" : "asc";
+  } else {
+    dashAasSortBy = col;
+    dashAasSortDir = "asc";
+  }
+  dashAasPage = 0;
+  loadDashAasPage(0);
+});
+
+async function loadDashAasPage(page) {
+  dashAasPage = page;
+  let url = `/apps/resilience/api/gdacs/aas-overview?limit=20&offset=${page * 20}`;
+  if (dashAasSortBy) url += `&sort=${encodeURIComponent(dashAasSortBy)}&sort_dir=${dashAasSortDir}`;
+  const res = await apiRequest(url);
+  if (!res.ok || !res.payload) return;
+  const { items, total, columns } = res.payload;
+  dashAasColumns = columns || dashAasColumns;
+  renderDashAasRows(items, dashAasColumns);
+  const pages = Math.ceil(total / 20);
+  const footer = document.getElementById("dash-aas-footer");
+  footer.hidden = pages <= 1;
+  document.getElementById("dash-aas-page-info").textContent = t("dashAasPage").replace("{page}", String(page + 1)).replace("{pages}", String(pages));
+  document.getElementById("dash-aas-prev").disabled = page <= 0;
+  document.getElementById("dash-aas-next").disabled = page >= pages - 1;
+}
+
+document.getElementById("dash-aas-prev").addEventListener("click", () => { if (dashAasPage > 0) loadDashAasPage(dashAasPage - 1); });
+document.getElementById("dash-aas-next").addEventListener("click", () => loadDashAasPage(dashAasPage + 1));
 
 // Dashboard click handlers
 document.getElementById("dashboard-grid").addEventListener("click", (e) => {
@@ -3902,3 +4668,324 @@ async function init() {
 }
 
 init();
+
+// ======================= CHAT WIDGET =======================
+
+(async function initChatWidget() {
+  const CW_CHAT_KEY = "resilience_cw_chatId";
+  const cwArea = document.getElementById("chat-widget-area");
+  const cwToggle = document.getElementById("chat-widget-toggle");
+  const cwPanel = document.getElementById("chat-widget");
+  const cwMessages = document.getElementById("chat-widget-messages");
+  const cwForm = document.getElementById("chat-widget-form");
+  const cwInput = document.getElementById("chat-widget-input");
+  const cwSend = document.getElementById("chat-widget-send");
+  const cwClear = document.getElementById("chat-widget-clear");
+  const cwTag = document.getElementById("chat-widget-connector-tag");
+  const cwModeToggle = document.getElementById("cw-mode-toggle");
+  const cwModeLabel = document.getElementById("cw-mode-label");
+  const cwSlashMenu = document.getElementById("cw-slash-menu");
+
+  if (!cwArea) return;
+
+  let cwChatId = localStorage.getItem(CW_CHAT_KEY) || null;
+  let cwSending = false;
+  let cwMode = "tools";
+  let cwToolList = [];
+  let cwSlashItems = [];
+  let cwSlashIndex = 0;
+  let cwSlashSelected = null;
+  let cwProviderIsGemini = false;
+  let cwInitialized = false;
+
+  // 1. Check if user has AAS Chat access + API key
+  try {
+    const appsRes = await fetch("/api/apps", { credentials: "same-origin" });
+    if (!appsRes.ok) return;
+    const appsData = await appsRes.json();
+    if (!(appsData.apps || []).some(a => a.id === "aas-chat")) return;
+
+    const settingsRes = await fetch("/apps/aas-chat/api/settings", { credentials: "same-origin" });
+    if (!settingsRes.ok) return;
+    const settings = await settingsRes.json();
+    if (!settings.has_api_key) return;
+    cwProviderIsGemini = settings.provider === "gemini";
+  } catch { return; }
+
+  cwArea.hidden = false;
+
+  // Load tool list for slash commands
+  async function cwLoadTools() {
+    try {
+      const [aasRes, dtiRes] = await Promise.allSettled([
+        fetch("/apps/aas-chat/api/mcp-tools", { credentials: "same-origin" }).then(r => r.ok ? r.json() : { tools: [] }),
+        fetch("/apps/aas-chat/api/dti-tools", { credentials: "same-origin" }).then(r => r.ok ? r.json() : { tools: [] }),
+      ]);
+      const aas = aasRes.status === "fulfilled" ? (aasRes.value.tools || []) : [];
+      const dti = dtiRes.status === "fulfilled" ? (dtiRes.value.tools || []) : [];
+      cwToolList = [...aas, ...dti];
+    } catch { cwToolList = []; }
+  }
+
+  // Ensure chat exists
+  async function ensureChat() {
+    if (cwChatId) {
+      const res = await fetch("/apps/aas-chat/api/chats", { credentials: "same-origin" });
+      if (res.ok) {
+        const data = await res.json();
+        if ((data.chats || []).some(c => c.chat_id === cwChatId)) return;
+      }
+    }
+    const res = await fetch("/apps/aas-chat/api/chats", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Resilience Widget" })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cwChatId = data.chat_id;
+      localStorage.setItem(CW_CHAT_KEY, cwChatId);
+    }
+  }
+
+  // Load persisted messages
+  async function cwLoadMessages() {
+    if (!cwChatId) return;
+    try {
+      const res = await fetch(`/apps/aas-chat/api/messages?chatId=${cwChatId}`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      cwMessages.innerHTML = "";
+      for (const msg of data.messages || []) {
+        cwAppendMsg(msg.role, msg.content);
+      }
+      cwMessages.scrollTop = cwMessages.scrollHeight;
+    } catch { /* ignore */ }
+  }
+
+  // Restore connector tag
+  async function cwRestoreTag() {
+    if (!cwChatId) return;
+    try {
+      const res = await fetch(`/apps/aas-chat/api/connector-status?chatId=${cwChatId}`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.connected && data.name) {
+        cwTag.textContent = data.name;
+        cwTag.hidden = false;
+      } else {
+        cwTag.hidden = true;
+      }
+    } catch { cwTag.hidden = true; }
+  }
+
+  function cwEscape(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function cwAppendMsg(role, text) {
+    const div = document.createElement("div");
+    div.className = "cw-msg " + role;
+    div.innerHTML = cwEscape(text);
+    cwMessages.appendChild(div);
+    return div;
+  }
+
+  // --- Mode toggle ---
+  cwModeToggle.addEventListener("click", () => {
+    cwMode = cwMode === "tools" ? "search" : "tools";
+    cwModeLabel.textContent = cwMode === "tools" ? "MCP" : "WEB";
+    cwModeToggle.classList.toggle("mode-web", cwMode === "search");
+  });
+
+  // --- Slash command menu ---
+  function cwShowSlash() { cwSlashMenu.hidden = false; }
+  function cwHideSlash() { cwSlashMenu.hidden = true; cwSlashItems = []; }
+
+  function cwRenderSlash() {
+    cwSlashMenu.innerHTML = "";
+    cwSlashItems.forEach((tool, i) => {
+      const div = document.createElement("div");
+      div.className = "cw-slash-item" + (i === cwSlashIndex ? " active" : "");
+      div.textContent = "/" + tool.name;
+      div.addEventListener("mousedown", (e) => { e.preventDefault(); cwSelectSlash(i); });
+      cwSlashMenu.appendChild(div);
+    });
+  }
+
+  function cwSelectSlash(idx) {
+    const tool = cwSlashItems[idx];
+    if (!tool) return;
+    cwSlashSelected = tool.name;
+    cwInput.value = "/" + tool.name + " ";
+    cwInput.focus();
+    cwHideSlash();
+    cwSend.disabled = false;
+  }
+
+  function cwHandleSlash() {
+    const val = cwInput.value;
+    if (cwSlashSelected) { cwHideSlash(); return; }
+    if (!val.startsWith("/")) { cwHideSlash(); return; }
+    if (val.indexOf(" ") > 0) { cwHideSlash(); return; }
+    const query = val.slice(1).toLowerCase();
+    cwSlashItems = cwToolList.filter(t => t.name.toLowerCase().includes(query));
+    if (!cwSlashItems.length) { cwHideSlash(); return; }
+    cwSlashIndex = 0;
+    cwRenderSlash();
+    cwShowSlash();
+  }
+
+  // --- Toggle open/close ---
+  cwToggle.addEventListener("click", async () => {
+    const isOpen = !cwPanel.hidden;
+    cwPanel.hidden = isOpen;
+    cwToggle.classList.toggle("open", !isOpen);
+    if (!isOpen) {
+      if (!cwInitialized) {
+        cwInitialized = true;
+        await Promise.all([ensureChat(), cwLoadTools()]);
+      } else {
+        await ensureChat();
+      }
+      await cwLoadMessages();
+      await cwRestoreTag();
+      cwInput.focus();
+    }
+  });
+
+  // --- Auto-resize + slash ---
+  cwInput.addEventListener("input", () => {
+    cwSend.disabled = !cwInput.value.trim();
+    cwInput.style.height = "auto";
+    cwInput.style.height = Math.min(cwInput.scrollHeight, 80) + "px";
+    if (cwSlashSelected && !cwInput.value.startsWith("/" + cwSlashSelected)) {
+      cwSlashSelected = null;
+    }
+    cwHandleSlash();
+  });
+
+  // --- Send message ---
+  async function cwSendMessage() {
+    const text = cwInput.value.trim();
+    if (!text || cwSending) return;
+
+    let forceTool = null;
+    let sendContent = text;
+    const slashMatch = text.match(/^\/(\S+)(?:\s+([\s\S]+))?$/);
+    if (slashMatch && cwToolList.some(t => t.name === slashMatch[1])) {
+      forceTool = slashMatch[1];
+      sendContent = slashMatch[2] || "";
+    }
+    cwSlashSelected = null;
+
+    cwSending = true;
+    cwSend.disabled = true;
+    cwInput.value = "";
+    cwInput.style.height = "auto";
+    cwHideSlash();
+
+    cwAppendMsg("user", text);
+    cwMessages.scrollTop = cwMessages.scrollHeight;
+
+    const typing = document.createElement("div");
+    typing.className = "cw-typing";
+    typing.textContent = "...";
+    cwMessages.appendChild(typing);
+    cwMessages.scrollTop = cwMessages.scrollHeight;
+
+    try {
+      await ensureChat();
+      const body = { chatId: cwChatId, content: sendContent, mode: cwMode };
+      if (forceTool) body.forceTool = forceTool;
+
+      const res = await fetch("/apps/aas-chat/api/messages", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      typing.remove();
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          cwAppendMsg("assistant", data.reply);
+        }
+        if (data.connectorEvent) {
+          if (data.connectorEvent.action === "connect" && data.connectorEvent.name) {
+            cwTag.textContent = data.connectorEvent.name;
+            cwTag.hidden = false;
+          } else if (data.connectorEvent.action === "disconnect") {
+            cwTag.hidden = true;
+          }
+        }
+      } else {
+        let errMsg = "Fehler";
+        try { const err = await res.json(); errMsg = err.error || errMsg; } catch { /* ignore */ }
+        cwAppendMsg("error", errMsg);
+      }
+    } catch {
+      typing.remove();
+      cwAppendMsg("error", "Netzwerkfehler");
+    }
+
+    cwMessages.scrollTop = cwMessages.scrollHeight;
+    cwSending = false;
+    cwSend.disabled = !cwInput.value.trim();
+  }
+
+  cwForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    cwSendMessage();
+  });
+
+  // --- Keyboard navigation ---
+  cwInput.addEventListener("keydown", (e) => {
+    if (!cwSlashMenu.hidden && cwSlashItems.length) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        cwSlashIndex = (cwSlashIndex + 1) % cwSlashItems.length;
+        cwRenderSlash();
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        cwSlashIndex = (cwSlashIndex - 1 + cwSlashItems.length) % cwSlashItems.length;
+        cwRenderSlash();
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && cwSlashItems.length)) {
+        e.preventDefault();
+        cwSelectSlash(cwSlashIndex);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cwHideSlash();
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      cwSendMessage();
+    }
+  });
+
+  // --- Clear chat ---
+  cwClear.addEventListener("click", async () => {
+    if (!cwChatId) return;
+    try {
+      await fetch(`/apps/aas-chat/api/messages?chatId=${cwChatId}`, {
+        method: "DELETE",
+        credentials: "same-origin"
+      });
+    } catch { /* ignore */ }
+    cwMessages.innerHTML = "";
+    cwTag.hidden = true;
+  });
+})();
