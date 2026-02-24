@@ -57,6 +57,13 @@ const geoSingleOkLabel = document.getElementById("geo-single-ok-label");
 const geoSingleCancelBtn = document.getElementById("geo-single-cancel");
 let geoSinglePendingAasId = null;
 
+// Import-single modal DOM refs
+const importSingleModal = document.getElementById("import-single-modal");
+const importSingleOkBtn = document.getElementById("import-single-ok");
+const importSingleOkLabel = document.getElementById("import-single-ok-label");
+const importSingleCancelBtn = document.getElementById("import-single-cancel");
+let importSinglePendingAasId = null;
+
 // Map modal DOM refs
 const mapModal = document.getElementById("map-modal");
 const mapCloseBtn = document.getElementById("map-modal-close");
@@ -233,13 +240,20 @@ const I18N = {
     matchingLat: "Lat",
     matchingLon: "Lon",
     // Single-AAS Geocoding
-    geoSingleTitle: "Import & Geocoding",
-    geoSingleDesc: "AAS-Daten werden neu importiert und geocodiert.",
+    geoSingleTitle: "Geocoding",
+    geoSingleDesc: "AAS-Standort wird geocodiert.",
     geoSingleCancel: "Abbrechen",
     geoSingleStart: "Starten",
     geoSingleSuccess: "Geocoding erfolgreich.",
     geoSingleError: "Geocoding fehlgeschlagen.",
     geoSingleNoPaths: "Matching-Parameter müssen zuerst konfiguriert werden.",
+    // Single-AAS Import
+    importSingleTitle: "Erneut importieren?",
+    importSingleDesc: "Alle gespeicherten Daten dieser AAS werden gelöscht und neu importiert. Geocoding muss danach erneut durchgeführt werden.",
+    importSingleCancel: "Abbrechen",
+    importSingleStart: "Importieren",
+    importSingleSuccess: "Import erfolgreich.",
+    importSingleError: "Import fehlgeschlagen.",
     // World Map
     mapTitle: "Weltkarte",
     mapBtnTitle: "Karte anzeigen",
@@ -654,13 +668,20 @@ const I18N = {
     matchingLat: "Lat",
     matchingLon: "Lon",
     // Single-AAS Geocoding
-    geoSingleTitle: "Import & Geocoding",
-    geoSingleDesc: "AAS data will be re-imported and geocoded.",
+    geoSingleTitle: "Geocoding",
+    geoSingleDesc: "AAS location will be geocoded.",
     geoSingleCancel: "Cancel",
     geoSingleStart: "Start",
     geoSingleSuccess: "Geocoding successful.",
     geoSingleError: "Geocoding failed.",
     geoSingleNoPaths: "Matching parameters must be configured first.",
+    // Single-AAS Import
+    importSingleTitle: "Re-import?",
+    importSingleDesc: "All stored data for this AAS will be deleted and re-imported. Geocoding must be performed again afterwards.",
+    importSingleCancel: "Cancel",
+    importSingleStart: "Import",
+    importSingleSuccess: "Import successful.",
+    importSingleError: "Import failed.",
     // World Map
     mapTitle: "World Map",
     mapBtnTitle: "Show map",
@@ -1167,6 +1188,9 @@ function applyLocaleToUI() {
   // Single-AAS geocoding dialog
   document.getElementById("geo-single-title").textContent = t("geoSingleTitle");
   document.getElementById("geo-single-desc").textContent = t("geoSingleDesc");
+  // Single-AAS import dialog
+  document.getElementById("import-single-title").textContent = t("importSingleTitle");
+  document.getElementById("import-single-desc").textContent = t("importSingleDesc");
   // World map modal labels
   document.getElementById("map-modal-title").textContent = t("mapTitle");
   dashAasMapBtn.title = t("mapBtnTitle");
@@ -2060,7 +2084,8 @@ let aasCmSelectedAas = null;
 let aasCmSelectedPath = "";
 let aasCmSelectedPaths = []; // multi-select for columns mode
 let aasCmMatchResults = null;
-let aasCmMode = "import"; // "import", "picker", "columns", "geocoding", or "matching"
+let aasCmMode = "import"; // "import", "picker", "columns", "geocoding", "matching", or "geo-single"
+let aasCmGeoSingleAasId = null;
 let aasCmGeoCountryPath = "";
 let aasCmGeoCityPath = "";
 let aasCmGeoPhase = "country"; // "country" or "city"
@@ -2073,7 +2098,7 @@ const aasCmSkipBtn = document.getElementById("aas-cm-skip-btn");
 function showAasCmStep(step) {
   aasCmCurrentStep = step;
   document.getElementById("aas-cm-success").hidden = true;
-  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns" || aasCmMode === "geocoding" || aasCmMode === "matching") ? 3 : 4;
+  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns" || aasCmMode === "geocoding" || aasCmMode === "matching" || aasCmMode === "geo-single") ? 3 : 4;
   for (let i = 1; i <= 4; i++) {
     document.getElementById(`aas-cm-step-${i}`).hidden = i !== step;
     const dot = aasCmSteps.querySelector(`[data-step="${i}"]`);
@@ -2090,12 +2115,18 @@ function showAasCmStep(step) {
       line.hidden = i >= maxSteps;
     }
   }
-  aasCmBackBtn.hidden = step <= 1;
+  aasCmBackBtn.hidden = step <= 1 || aasCmMode === "geo-single";
+  // In geo-single mode, hide all step indicators (only 1 visible step)
+  if (aasCmMode === "geo-single") {
+    aasCmSteps.hidden = true;
+  } else {
+    aasCmSteps.hidden = false;
+  }
   aasCmApplyBtn.hidden = true;
   aasCmSkipBtn.hidden = true;
   if (step === 3 && aasCmMode === "matching") {
     updateMatchingPhaseUI();
-  } else if (step === 3 && aasCmMode === "geocoding") {
+  } else if (step === 3 && (aasCmMode === "geocoding" || aasCmMode === "geo-single")) {
     document.getElementById("aas-cm-step3-desc").textContent = t("geocodingStep3Country");
     if (aasCmGeoCountryPath && aasCmGeoCityPath) {
       aasCmApplyBtn.hidden = false;
@@ -2112,7 +2143,7 @@ function showAasCmStep(step) {
 }
 
 // Open modal (shared for import + picker modes)
-function openAasCmModal(mode) {
+function openAasCmModal(mode, aasId) {
   aasCmMode = mode;
   aasCmCurrentStep = 1;
   aasCmSelectedGroup = null;
@@ -2123,10 +2154,11 @@ function openAasCmModal(mode) {
   aasCmGeoCountryPath = "";
   aasCmGeoCityPath = "";
   aasCmGeoPhase = "country";
+  aasCmGeoSingleAasId = null;
   aasCmMatchingPaths = { country: "", city: "", lat: "", lon: "" };
   aasCmMatchingPhase = "country";
   aasCmSkipBtn.hidden = true;
-  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle") };
+  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle"), "geo-single": t("geocodingTitle") };
   document.getElementById("aas-cm-title").textContent = titles[mode] || titles.import;
   document.getElementById("aas-cm-step1-desc").textContent = t("aasCmStep1Desc");
   document.getElementById("aas-cm-selected-path").hidden = true;
@@ -2137,8 +2169,16 @@ function openAasCmModal(mode) {
   document.getElementById("aas-cm-proc-2-icon").textContent = "\u25CB";
   document.getElementById("aas-cm-proc-2-count").textContent = "";
   document.getElementById("aas-cm-success").hidden = true;
-  showAasCmStep(1);
-  loadAasCmGroups();
+
+  if (mode === "geo-single" && aasId) {
+    // Skip steps 1+2, jump directly to tree
+    aasCmGeoSingleAasId = aasId;
+    showAasCmStep(3);
+    loadAasCmTree(aasId);
+  } else {
+    showAasCmStep(1);
+    loadAasCmGroups();
+  }
   aasCmModal.showModal();
 }
 
@@ -2150,6 +2190,11 @@ document.getElementById("aas-ov-geocoding-btn").addEventListener("click", () => 
 aasCmCloseBtn.addEventListener("click", () => aasCmModal.close());
 aasCmCancelBtn.addEventListener("click", () => aasCmModal.close());
 aasCmBackBtn.addEventListener("click", () => {
+  if (aasCmMode === "geo-single") {
+    // geo-single starts at step 3 — back closes the modal
+    aasCmModal.close();
+    return;
+  }
   if (aasCmCurrentStep > 1) {
     if (aasCmCurrentStep === 3) {
       aasCmSelectedPath = "";
@@ -2345,7 +2390,7 @@ aasCmTree.addEventListener("click", (e) => {
     propEl.classList.add(`aas-cm-matching-${aasCmMatchingPhase}`);
     aasCmMatchingPaths[aasCmMatchingPhase] = path;
     advanceMatchingPhase();
-  } else if (aasCmMode === "geocoding") {
+  } else if (aasCmMode === "geocoding" || aasCmMode === "geo-single") {
     // Two-phase: first country, then city
     if (aasCmGeoPhase === "country") {
       // Remove previous country highlight
@@ -2444,6 +2489,32 @@ aasCmApplyBtn.addEventListener("click", async () => {
     if (runRes.ok) {
       aasCmModal.close();
       startGeocodingPolling();
+    }
+    return;
+  }
+  if (aasCmCurrentStep === 3 && aasCmMode === "geo-single" && aasCmGeoCountryPath && aasCmGeoCityPath && aasCmGeoSingleAasId) {
+    // Single-AAS geocoding: call run-single with paths
+    aasCmApplyBtn.disabled = true;
+    const res = await apiRequest("/apps/resilience/api/geocoding/run-single", {
+      method: "POST",
+      body: { aas_id: aasCmGeoSingleAasId, country_path: aasCmGeoCountryPath, city_path: aasCmGeoCityPath },
+    });
+    aasCmApplyBtn.disabled = false;
+    aasCmModal.close();
+    if (res.ok) {
+      const status = res.payload.geocoded_status;
+      // Geo-Button in Tabelle aktualisieren
+      const geoBtn = aasOvTbody.querySelector(`[data-geo-aas="${CSS.escape(aasCmGeoSingleAasId)}"]`);
+      if (geoBtn) {
+        geoBtn.innerHTML = status === "ok"
+          ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+          : `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      }
+      const entry = aasOverviewData.find(e => e.aas_id === aasCmGeoSingleAasId);
+      if (entry) entry.geocoded_status = status;
+      showGdacsCountryHint(status === "ok" ? t("geoSingleSuccess") : t("geoSingleError"), status === "ok" ? "success" : "error");
+    } else {
+      showGdacsCountryHint(t("geoSingleError"), "error");
     }
     return;
   }
@@ -3634,19 +3705,18 @@ function renderAasOverview() {
     const idDisplay = entry.aas_id.length > 60 ? entry.aas_id.slice(0, 60) + "\u2026" : entry.aas_id;
     const grpDisplay = entry.group_name ? escapeHtml(entry.group_name) : "\u2014";
     const impDisplay = entry.imported_at || "\u2014";
-    const statusIcon = entry.imported_at
+    const importSvg = entry.imported_at
       ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
       : `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    const importBtn = `<button class="aas-ov-import-btn" data-import-aas="${escapeHtml(entry.aas_id)}" title="Import">${importSvg}</button>`;
     const viewBtn = entry.imported_at
       ? `<button class="aas-ov-view-btn" data-view-aas="${escapeHtml(entry.aas_id)}" title="${t("aasOvView")}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`
       : "";
     const geoSvg = entry.geocoded_status === "ok"
       ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-      : entry.geocoded_status === "error"
-        ? `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
-        : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
-    const geoBtn = `<button class="aas-ov-geo-btn" data-geo-aas="${escapeHtml(entry.aas_id)}" title="Import &amp; Geocoding">${geoSvg}</button>`;
-    tr.innerHTML = `<td class="src-td-url">${escapeHtml(idDisplay)}</td><td class="aas-ov-copy-cell"><button class="aas-ov-copy-btn" data-copy="${escapeHtml(entry.aas_id)}" title="Copy AAS ID"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td><td>${escapeHtml(entry.source_name)}</td><td>${grpDisplay}</td><td>${impDisplay}</td><td class="aas-ov-status-cell">${statusIcon}</td><td class="aas-ov-geo-cell">${geoBtn}</td><td class="aas-ov-view-cell">${viewBtn}</td>`;
+      : `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    const geoBtn = `<button class="aas-ov-geo-btn" data-geo-aas="${escapeHtml(entry.aas_id)}" title="Geocoding">${geoSvg}</button>`;
+    tr.innerHTML = `<td class="aas-ov-id-cell">${escapeHtml(idDisplay)}</td><td class="aas-ov-copy-cell"><button class="aas-ov-copy-btn" data-copy="${escapeHtml(entry.aas_id)}" title="Copy AAS ID"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td><td>${escapeHtml(entry.source_name)}</td><td>${grpDisplay}</td><td>${impDisplay}</td><td class="aas-ov-status-cell">${importBtn}</td><td class="aas-ov-geo-cell">${geoBtn}</td><td class="aas-ov-view-cell">${viewBtn}</td>`;
     aasOvTbody.appendChild(tr);
   }
 
@@ -3670,14 +3740,7 @@ function renderAasOverview() {
 
 aasOvSearch.addEventListener("input", () => { aasOvPage = 0; renderAasOverview(); });
 
-// ── Single-AAS Import & Geocoding ──────────────────────────
-aasOvTbody.addEventListener("click", (e) => {
-  const geoBtn = e.target.closest(".aas-ov-geo-btn");
-  if (!geoBtn) return;
-  const aasId = geoBtn.dataset.geoAas;
-  if (aasId) openGeoSingleModal(aasId);
-});
-
+// ── Single-AAS Geocoding ────────────────────────────────────
 function openGeoSingleModal(aasId) {
   geoSinglePendingAasId = aasId;
   document.getElementById("geo-single-title").textContent = t("geoSingleTitle");
@@ -3720,6 +3783,71 @@ geoSingleOkBtn.addEventListener("click", async () => {
   }
 
   geoSinglePendingAasId = null;
+});
+
+// ── Single-AAS Import (without geocoding) ───────────────────
+function openImportSingleModal(aasId) {
+  importSinglePendingAasId = aasId;
+  document.getElementById("import-single-title").textContent = t("importSingleTitle");
+  document.getElementById("import-single-desc").textContent = t("importSingleDesc");
+  document.getElementById("import-single-aas-id").textContent = aasId;
+  importSingleCancelBtn.textContent = t("importSingleCancel");
+  importSingleOkLabel.textContent = t("importSingleStart");
+  importSingleOkBtn.disabled = false;
+  importSingleModal.showModal();
+}
+
+importSingleCancelBtn.addEventListener("click", () => importSingleModal.close());
+importSingleModal.addEventListener("click", (e) => { if (e.target === importSingleModal) importSingleModal.close(); });
+
+importSingleOkBtn.addEventListener("click", async () => {
+  if (!importSinglePendingAasId) return;
+  importSingleOkBtn.disabled = true;
+  importSingleOkLabel.textContent = "\u2026";
+
+  const res = await apiRequest("/apps/resilience/api/aas/import-single", {
+    method: "POST",
+    body: { aas_id: importSinglePendingAasId },
+  });
+
+  importSingleModal.close();
+
+  if (res.ok) {
+    // Import-Button → grüner Haken
+    const impBtn = aasOvTbody.querySelector(`[data-import-aas="${CSS.escape(importSinglePendingAasId)}"]`);
+    if (impBtn) {
+      impBtn.innerHTML = `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    }
+    // Geo-Button → rotes X (Geodaten gelöscht)
+    const geoBtn = aasOvTbody.querySelector(`[data-geo-aas="${CSS.escape(importSinglePendingAasId)}"]`);
+    if (geoBtn) {
+      geoBtn.innerHTML = `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    }
+    // Datum aktualisieren
+    const row = impBtn?.closest("tr");
+    if (row) {
+      const dateTd = row.querySelectorAll("td")[4];
+      if (dateTd) dateTd.textContent = res.payload.imported_at;
+    }
+    // Lokale Daten aktualisieren
+    const entry = aasOverviewData.find(e => e.aas_id === importSinglePendingAasId);
+    if (entry) {
+      entry.imported_at = res.payload.imported_at;
+      entry.geocoded_status = "";
+    }
+    // View-Button anzeigen (falls noch nicht vorhanden)
+    if (row) {
+      const viewCell = row.querySelector(".aas-ov-view-cell");
+      if (viewCell && !viewCell.querySelector("button")) {
+        viewCell.innerHTML = `<button class="aas-ov-view-btn" data-view-aas="${escapeHtml(importSinglePendingAasId)}" title="${t("aasOvView")}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`;
+      }
+    }
+    showGdacsCountryHint(t("importSingleSuccess"), "success");
+  } else {
+    showGdacsCountryHint(t("importSingleError"), "error");
+  }
+
+  importSinglePendingAasId = null;
 });
 
 // ── World Map Modal ──────────────────────────────────────────
@@ -3998,29 +4126,44 @@ function startGeocodingPolling() {
   if (result.ok && result.payload?.running) startGeocodingPolling();
 })();
 
-// Overview table click handler (copy, view, row click)
+// Overview table click handler (copy, view, import, geo, AAS ID cell)
 aasOvTbody.addEventListener("click", (e) => {
+  // Import button
+  const impBtn = e.target.closest(".aas-ov-import-btn");
+  if (impBtn) {
+    const aasId = impBtn.dataset.importAas;
+    if (aasId) openImportSingleModal(aasId);
+    return;
+  }
+  // Geocoding button → open wizard in geo-single mode
+  const geoBtn = e.target.closest(".aas-ov-geo-btn");
+  if (geoBtn) {
+    const aasId = geoBtn.dataset.geoAas;
+    if (aasId) openAasCmModal("geo-single", aasId);
+    return;
+  }
   // View imported data (eye icon)
   const viewBtn = e.target.closest(".aas-ov-view-btn");
   if (viewBtn) {
-    e.stopPropagation();
     loadImportedAas(viewBtn.dataset.viewAas);
     return;
   }
   // Copy AAS ID
   const copyBtn = e.target.closest(".aas-ov-copy-btn");
   if (copyBtn) {
-    e.stopPropagation();
     navigator.clipboard.writeText(copyBtn.dataset.copy).then(() => {
       copyBtn.classList.add("copied");
       setTimeout(() => copyBtn.classList.remove("copied"), 1200);
     });
     return;
   }
-  // Click on row → load shell + submodels live
-  const tr = e.target.closest("tr.aas-ov-row");
-  if (!tr) return;
-  loadAasShell(tr.dataset.sourceId, tr.dataset.aasId);
+  // Click on AAS ID cell → load shell + submodels live
+  const idCell = e.target.closest(".aas-ov-id-cell");
+  if (idCell) {
+    const tr = idCell.closest("tr.aas-ov-row");
+    if (tr) loadAasShell(tr.dataset.sourceId, tr.dataset.aasId);
+    return;
+  }
 });
 
 aasOvBackBtn.addEventListener("click", showAasOvList);

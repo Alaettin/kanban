@@ -2070,66 +2070,25 @@ function mountRoutes(router) {
     runGeocodingJob(userId);
   });
 
-  // ── Geocoding: single-AAS import + geocode ──────────────────
+  // ── Geocoding: single-AAS geocode (uses already-imported data) ──
   router.post("/api/geocoding/run-single", auth.requireAuth, async (req, res) => {
     const userId = req.user.id;
-    const { aas_id } = req.body;
+    const { aas_id, country_path, city_path } = req.body;
     if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
+    if (!country_path || !city_path) return res.status(400).json({ error: "NO_GEOCODING_PATHS" });
 
     try {
-      // 1. Settings laden (Pfade für Geocoding)
-      const settings = await db.get(
-        `SELECT geocoding_country_path, geocoding_city_path
-         FROM resilience_settings WHERE user_id = ?`, [userId]);
-      if (!settings?.geocoding_country_path || !settings?.geocoding_city_path)
-        return res.status(400).json({ error: "NO_GEOCODING_PATHS" });
+      // 1. Bereits importierte Daten aus DB laden
+      const imp = await db.get(
+        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+        [aas_id, userId]);
+      if (!imp) return res.status(400).json({ error: "NOT_IMPORTED" });
 
-      // 2. AAS-Quelle finden
-      const entry = await db.get(
-        `SELECT i.aas_id, i.source_id, s.base_url
-         FROM resilience_aas_source_ids i
-         JOIN resilience_aas_sources s ON s.source_id = i.source_id
-         WHERE i.aas_id = ? AND s.user_id = ?`, [aas_id, userId]);
-      if (!entry) return res.status(404).json({ error: "AAS_NOT_FOUND" });
+      let submodels = JSON.parse(imp.submodels_data || "[]");
 
-      // 3. Import: Shell + Submodels von AAS-Quelle fetchen
-      const baseUrl = entry.base_url.replace(/\/+$/, "");
-      const encoded = toBase64Url(entry.aas_id);
-      const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
-        signal: AbortSignal.timeout(15000),
-        headers: { Accept: "application/json" },
-      });
-      if (!shellResp.ok) return res.status(502).json({ error: "AAS_FETCH_FAILED" });
-      const shellData = await shellResp.json();
-
-      const submodelRefs = shellData.submodels || [];
-      let submodels = [];
-      for (const ref of submodelRefs) {
-        const smId = ref.keys?.[0]?.value;
-        if (!smId) continue;
-        try {
-          const smEncoded = toBase64Url(smId);
-          const smResp = await fetch(`${baseUrl}/shells/${encoded}/submodels/${smEncoded}`, {
-            signal: AbortSignal.timeout(15000),
-            headers: { Accept: "application/json" },
-          });
-          if (smResp.ok) submodels.push(await smResp.json());
-        } catch { /* skip */ }
-      }
-
-      const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-      await db.run(
-        `INSERT INTO resilience_aas_imports (aas_id, user_id, source_id, shell_data, submodels_data, imported_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(user_id, aas_id) DO UPDATE SET
-           source_id=excluded.source_id, shell_data=excluded.shell_data,
-           submodels_data=excluded.submodels_data, imported_at=excluded.imported_at`,
-        [entry.aas_id, userId, entry.source_id, JSON.stringify(shellData), JSON.stringify(submodels), now]
-      );
-
-      // 4. Geocoding: City+Country extrahieren → Nominatim
-      const countryRaw = extractFirstValue(submodels, settings.geocoding_country_path);
-      const cityRaw = extractFirstValue(submodels, settings.geocoding_city_path);
+      // 2. City+Country extrahieren → Nominatim
+      const countryRaw = extractFirstValue(submodels, country_path);
+      const cityRaw = extractFirstValue(submodels, city_path);
 
       const mappingRows = await db.all(
         "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
@@ -2153,16 +2112,16 @@ function mountRoutes(router) {
         } catch { /* timeout or network error */ }
       }
 
-      // 5. Geocoding-Submodel injizieren + DB-Update
+      // 3. Geocoding-Submodel injizieren + DB-Update
       submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
       submodels.push(buildGeocodingSubmodel(cityRaw, isoCode, geoResult));
       const geocodedStatus = geoResult ? "ok" : "error";
       await db.run(
         "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
-        [JSON.stringify(submodels), geocodedStatus, entry.aas_id, userId]
+        [JSON.stringify(submodels), geocodedStatus, aas_id, userId]
       );
 
-      // 6. Matches neu berechnen (fire-and-forget)
+      // 4. Matches neu berechnen (fire-and-forget)
       computeAasAlertMatches(userId).catch(() => {});
 
       res.json({ ok: true, geocoded_status: geocodedStatus });
@@ -2170,7 +2129,70 @@ function mountRoutes(router) {
       if (err.name === "TimeoutError" || err.name === "AbortError") {
         return res.status(504).json({ error: "AAS_TIMEOUT" });
       }
+      console.error("POST /api/geocoding/run-single error:", err);
       res.status(500).json({ error: "GEOCODING_FAILED" });
+    }
+  });
+
+  // ── AAS: single import (without geocoding) ─────────────────
+  router.post("/api/aas/import-single", auth.requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    const { aas_id } = req.body;
+    if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
+
+    try {
+      // 1. AAS-Quelle finden
+      const entry = await db.get(
+        `SELECT i.aas_id, i.source_id, s.base_url
+         FROM resilience_aas_source_ids i
+         JOIN resilience_aas_sources s ON s.source_id = i.source_id
+         WHERE i.aas_id = ? AND s.user_id = ?`, [aas_id, userId]);
+      if (!entry) return res.status(404).json({ error: "AAS_NOT_FOUND" });
+
+      // 2. Alles Persistierte löschen (Import + Geo + Matches)
+      await db.run("DELETE FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?", [aas_id, userId]);
+      await db.run("DELETE FROM resilience_gdacs_aas_map WHERE aas_id = ? AND user_id = ?", [aas_id, userId]);
+      await db.run("DELETE FROM resilience_gdacs_aas_matches WHERE aas_id = ? AND user_id = ?", [aas_id, userId]);
+
+      // 3. Shell + Submodels von AAS-Quelle fetchen
+      const baseUrl = entry.base_url.replace(/\/+$/, "");
+      const encoded = toBase64Url(entry.aas_id);
+      const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
+        signal: AbortSignal.timeout(15000),
+        headers: { Accept: "application/json" },
+      });
+      if (!shellResp.ok) return res.status(502).json({ error: "AAS_FETCH_FAILED" });
+      const shellData = await shellResp.json();
+
+      const submodelRefs = shellData.submodels || [];
+      const submodels = [];
+      for (const ref of submodelRefs) {
+        const smId = ref.keys?.[0]?.value;
+        if (!smId) continue;
+        try {
+          const smEncoded = toBase64Url(smId);
+          const smResp = await fetch(`${baseUrl}/shells/${encoded}/submodels/${smEncoded}`, {
+            signal: AbortSignal.timeout(15000),
+            headers: { Accept: "application/json" },
+          });
+          if (smResp.ok) submodels.push(await smResp.json());
+        } catch { /* skip */ }
+      }
+
+      // 4. Persistieren (ohne Geocoding — geocoded_status leer)
+      const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+      await db.run(
+        `INSERT INTO resilience_aas_imports (aas_id, user_id, source_id, shell_data, submodels_data, imported_at, geocoded_status)
+         VALUES (?, ?, ?, ?, ?, ?, '')`,
+        [entry.aas_id, userId, entry.source_id, JSON.stringify(shellData), JSON.stringify(submodels), now]
+      );
+
+      res.json({ ok: true, imported_at: now });
+    } catch (err) {
+      if (err.name === "TimeoutError" || err.name === "AbortError")
+        return res.status(504).json({ error: "AAS_TIMEOUT" });
+      console.error("POST /api/aas/import-single error:", err);
+      res.status(500).json({ error: "IMPORT_FAILED" });
     }
   });
 

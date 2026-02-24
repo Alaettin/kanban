@@ -1154,6 +1154,24 @@
     </div>
   </dialog>
 
+  <!-- Single-AAS Import Confirm -->
+  <dialog id="import-single-modal" class="geo-single-modal">
+    <div class="geo-single-inner">
+      <div class="geo-single-icon">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <h3 id="import-single-title">Erneut importieren?</h3>
+      <p id="import-single-desc">Alle gespeicherten Daten dieser AAS werden gel&ouml;scht und neu importiert. Geocoding muss danach erneut durchgef&uuml;hrt werden.</p>
+      <div class="geo-single-aas-id" id="import-single-aas-id"></div>
+      <div class="geo-single-actions">
+        <button id="import-single-cancel" class="btn btn-secondary btn-sm" type="button">Abbrechen</button>
+        <button id="import-single-ok" class="btn btn-primary btn-sm" type="button">
+          <span id="import-single-ok-label">Importieren</span>
+        </button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- World Map Modal -->
   <dialog id="map-modal" class="map-modal">
     <div class="map-modal-inner">
