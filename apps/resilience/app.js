@@ -121,6 +121,7 @@ const I18N = {
     indicators: "Indikatoren",
     gdacs: "GDACS",
     aiMapping: "AI Mapping",
+    simulation: "Simulation",
     aasData: "AAS Daten",
     newsFeeds: "News Feeds",
     gdacsAlerts: "GDACS Alerts",
@@ -130,6 +131,8 @@ const I18N = {
     indicatorsDesc: "Überwache Resilienz-Indikatoren deiner Lieferkette.",
     aiMappingTitle: "AI Mapping",
     aiMappingDesc: "KI-gestützte Zuordnung und Analyse.",
+    simulationTitle: "Simulation",
+    simulationDesc: "Szenarien simulieren und Auswirkungen analysieren.",
     gdacsTitle: "GDACS",
     gdacsDescPre: "Naturkatastrophen-Daten vom",
     gdacsDescLink: "Global Disaster Alert and Coordination System",
@@ -341,6 +344,9 @@ const I18N = {
     dashAlertsTitle: "GDACS Alerts",
     dashAlertsLink: "Alle anzeigen \u2192",
     dashAlertsEmpty: "Keine Alerts vorhanden.",
+    dashIndicatorsTitle: "Indikatoren",
+    dashIndicatorsLink: "Alle anzeigen \u2192",
+    dashIndicatorsEmpty: "Keine Indikatoren konfiguriert.",
     dashAasTitle: "Naturkatastrophen & Lieferkettenrisiken",
     dashAasEmpty: "Keine betroffenen Standorte erkannt.",
     dashAasUpdated: "Aktualisiert: {time}",
@@ -549,6 +555,7 @@ const I18N = {
     indicators: "Indicators",
     gdacs: "GDACS",
     aiMapping: "AI Mapping",
+    simulation: "Simulation",
     aasData: "AAS Data",
     newsFeeds: "News Feeds",
     gdacsAlerts: "GDACS Alerts",
@@ -558,6 +565,8 @@ const I18N = {
     indicatorsDesc: "Monitor resilience indicators of your supply chain.",
     aiMappingTitle: "AI Mapping",
     aiMappingDesc: "AI-powered mapping and analysis.",
+    simulationTitle: "Simulation",
+    simulationDesc: "Simulate scenarios and analyze impacts.",
     gdacsTitle: "GDACS",
     gdacsDescPre: "Natural disaster data from the",
     gdacsDescLink: "Global Disaster Alert and Coordination System",
@@ -769,6 +778,9 @@ const I18N = {
     dashAlertsTitle: "GDACS Alerts",
     dashAlertsLink: "View all \u2192",
     dashAlertsEmpty: "No alerts available.",
+    dashIndicatorsTitle: "Indicators",
+    dashIndicatorsLink: "View all \u2192",
+    dashIndicatorsEmpty: "No indicators configured.",
     dashAasTitle: "Natural Disasters & Supply Chain Risks",
     dashAasEmpty: "No affected locations detected.",
     dashAasUpdated: "Updated: {time}",
@@ -1036,6 +1048,7 @@ const PAGE_I18N = {
   indicators: "indicators",
   gdacs: "gdacs",
   "ai-mapping": "aiMapping",
+  simulation: "simulation",
   "aas-data": "aasData",
   "news-feeds": "newsFeeds",
   "gdacs-alerts": "gdacsAlerts",
@@ -1142,7 +1155,7 @@ function applyLocaleToUI() {
   if (backBtn) backBtn.title = t("backToDashboard");
 
   // Page titles + descriptions
-  const pages = ["dashboard", "indicators", "gdacs", "ai-mapping", "aas-data", "news-feeds", "gdacs-alerts", "settings", "docs"];
+  const pages = ["dashboard", "indicators", "gdacs", "ai-mapping", "simulation", "aas-data", "news-feeds", "gdacs-alerts", "settings", "docs"];
   for (const page of pages) {
     const key = PAGE_I18N[page] || page;
     const titleEl = document.getElementById(page + "-title");
@@ -1268,6 +1281,9 @@ function applyLocaleToUI() {
   document.getElementById("dash-alerts-title").textContent = t("dashAlertsTitle");
   document.getElementById("dash-alerts-link").textContent = t("dashAlertsLink");
   document.getElementById("dash-alerts-empty").textContent = t("dashAlertsEmpty");
+  document.getElementById("dash-indicators-title").textContent = t("dashIndicatorsTitle");
+  document.getElementById("dash-indicators-link").textContent = t("dashIndicatorsLink");
+  document.getElementById("dash-indicators-empty").textContent = t("dashIndicatorsEmpty");
   document.getElementById("dash-aas-title").textContent = t("dashAasTitle");
   document.getElementById("dash-aas-empty").textContent = t("dashAasEmpty");
 

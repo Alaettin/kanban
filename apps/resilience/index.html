@@ -78,6 +78,13 @@
           </svg>
           <span class="sidebar-label">AI Mapping</span>
         </button>
+        <button class="sidebar-item" data-page="simulation" type="button">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span class="sidebar-label">Simulation</span>
+        </button>
 
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-title" data-i18n="sectionSources">Quellen &amp; Daten</div>
@@ -160,6 +167,16 @@
               </div>
               <div class="dash-card-body" id="dash-alerts-body">
                 <div class="dash-card-empty" id="dash-alerts-empty">Keine Alerts vorhanden.</div>
+              </div>
+            </div>
+            <!-- Indicators tile -->
+            <div class="dash-card dash-card-full" id="dash-indicators">
+              <div class="dash-card-header">
+                <span class="dash-card-title" id="dash-indicators-title">Indikatoren</span>
+                <a href="#" class="dash-card-link" id="dash-indicators-link" data-nav="indicators">Alle anzeigen &rarr;</a>
+              </div>
+              <div class="dash-card-body" id="dash-indicators-body">
+                <div class="dash-card-empty" id="dash-indicators-empty">Keine Indikatoren konfiguriert.</div>
               </div>
             </div>
             <!-- AAS Country Overview tile (full width) -->
@@ -425,6 +442,16 @@
           <div class="page-header">
             <h2 id="ai-mapping-title">AI Mapping</h2>
             <p id="ai-mapping-desc">KI-gestützte Zuordnung und Analyse.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Simulation Page -->
+      <section id="page-simulation" class="page-section">
+        <div class="page-inner">
+          <div class="page-header">
+            <h2 id="simulation-title">Simulation</h2>
+            <p id="simulation-desc">Szenarien simulieren und Auswirkungen analysieren.</p>
           </div>
         </div>
       </section>
