@@ -617,7 +617,7 @@ body.sidebar-collapsed .sidebar-toggle-btn svg {
   border-radius: 6px;
   padding: 0.2rem 0.4rem 0.2rem 0.55rem;
   color: var(--text-2);
-  max-width: 280px;
+  max-width: 100%;
   overflow: hidden;
 }
 .aas-chip-id {
@@ -894,8 +894,6 @@ body.sidebar-collapsed .sidebar-toggle-btn svg {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 350px;
-  overflow-y: auto;
 }
 .eval-result-card {
   border: 1px solid var(--border);
