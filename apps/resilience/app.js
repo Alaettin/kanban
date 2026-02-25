@@ -268,6 +268,11 @@ const I18N = {
     geoSingleSuccess: "Geocoding erfolgreich.",
     geoSingleError: "Geocoding fehlgeschlagen.",
     geoSingleNoPaths: "Matching-Parameter müssen zuerst konfiguriert werden.",
+    companyProcessTitle: "Company Process",
+    companyProcessDesc: "Wähle die Property für den Unternehmensnamen.",
+    companyProcessStart: "Starten",
+    companyProcessSuccess: "Company-Daten erfolgreich gespeichert.",
+    companyProcessError: "Company Process fehlgeschlagen.",
     // Single-AAS Import
     importSingleTitle: "Erneut importieren?",
     importSingleDesc: "Alle gespeicherten Daten dieser AAS werden gelöscht und neu importiert. Geocoding muss danach erneut durchgeführt werden.",
@@ -728,6 +733,11 @@ const I18N = {
     geoSingleSuccess: "Geocoding successful.",
     geoSingleError: "Geocoding failed.",
     geoSingleNoPaths: "Matching parameters must be configured first.",
+    companyProcessTitle: "Company Process",
+    companyProcessDesc: "Select the property for the company name.",
+    companyProcessStart: "Start",
+    companyProcessSuccess: "Company data saved successfully.",
+    companyProcessError: "Company process failed.",
     // Single-AAS Import
     importSingleTitle: "Re-import?",
     importSingleDesc: "All stored data for this AAS will be deleted and re-imported. Geocoding must be performed again afterwards.",
@@ -2186,7 +2196,7 @@ const aasCmSkipBtn = document.getElementById("aas-cm-skip-btn");
 function showAasCmStep(step) {
   aasCmCurrentStep = step;
   document.getElementById("aas-cm-success").hidden = true;
-  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns" || aasCmMode === "geocoding" || aasCmMode === "matching" || aasCmMode === "geo-single") ? 3 : 4;
+  const maxSteps = (aasCmMode === "picker" || aasCmMode === "columns" || aasCmMode === "geocoding" || aasCmMode === "matching" || aasCmMode === "geo-single" || aasCmMode === "company" || aasCmMode === "company-single") ? 3 : 4;
   for (let i = 1; i <= 4; i++) {
     document.getElementById(`aas-cm-step-${i}`).hidden = i !== step;
     const dot = aasCmSteps.querySelector(`[data-step="${i}"]`);
@@ -2203,14 +2213,15 @@ function showAasCmStep(step) {
       line.hidden = i >= maxSteps;
     }
   }
-  aasCmBackBtn.hidden = step <= 1 || aasCmMode === "geo-single";
-  // In geo-single mode, hide all step indicators (only 1 visible step)
-  if (aasCmMode === "geo-single") {
+  aasCmBackBtn.hidden = step <= 1 || aasCmMode === "geo-single" || aasCmMode === "company-single";
+  // In single modes, hide all step indicators (only 1 visible step)
+  if (aasCmMode === "geo-single" || aasCmMode === "company-single") {
     aasCmSteps.hidden = true;
   } else {
     aasCmSteps.hidden = false;
   }
   aasCmApplyBtn.hidden = true;
+  aasCmApplyBtn.disabled = false;
   aasCmSkipBtn.hidden = true;
   if (step === 3 && aasCmMode === "matching") {
     updateMatchingPhaseUI();
@@ -2223,6 +2234,12 @@ function showAasCmStep(step) {
   } else if (step === 3 && aasCmMode === "columns" && aasCmSelectedPaths.length > 0) {
     aasCmApplyBtn.hidden = false;
     aasCmApplyBtn.textContent = t("gdacsColsBtn");
+  } else if (step === 3 && (aasCmMode === "company" || aasCmMode === "company-single")) {
+    document.getElementById("aas-cm-step3-desc").textContent = t("companyProcessDesc");
+    if (aasCmSelectedPath) {
+      aasCmApplyBtn.hidden = false;
+      aasCmApplyBtn.textContent = t("companyProcessStart");
+    }
   } else if (step === 3 && aasCmSelectedPath) {
     aasCmApplyBtn.hidden = false;
     aasCmApplyBtn.textContent = aasCmMode === "picker" ? t("gdacsAasSourceBtn") : t("aasCmApply");
@@ -2246,7 +2263,7 @@ function openAasCmModal(mode, aasId) {
   aasCmMatchingPaths = { country: "", city: "", lat: "", lon: "" };
   aasCmMatchingPhase = "country";
   aasCmSkipBtn.hidden = true;
-  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle"), "geo-single": t("geocodingTitle") };
+  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle"), "geo-single": t("geocodingTitle"), company: t("companyProcessTitle"), "company-single": t("companyProcessTitle") };
   document.getElementById("aas-cm-title").textContent = titles[mode] || titles.import;
   document.getElementById("aas-cm-step1-desc").textContent = t("aasCmStep1Desc");
   document.getElementById("aas-cm-selected-path").hidden = true;
@@ -2258,7 +2275,7 @@ function openAasCmModal(mode, aasId) {
   document.getElementById("aas-cm-proc-2-count").textContent = "";
   document.getElementById("aas-cm-success").hidden = true;
 
-  if (mode === "geo-single" && aasId) {
+  if ((mode === "geo-single" || mode === "company-single") && aasId) {
     // Skip steps 1+2, jump directly to tree
     aasCmGeoSingleAasId = aasId;
     showAasCmStep(3);
@@ -2284,6 +2301,7 @@ document.getElementById("gdacs-matching-delete-btn").addEventListener("click", a
   }
 });
 document.getElementById("aas-ov-geocoding-btn").addEventListener("click", () => openAasCmModal("geocoding"));
+document.getElementById("aas-ov-process-btn").addEventListener("click", () => openAasCmModal("company"));
 
 // Close / cancel
 aasCmCloseBtn.addEventListener("click", () => aasCmModal.close());
@@ -2541,7 +2559,7 @@ aasCmTree.addEventListener("click", (e) => {
     pathDisplay.textContent = t("aasCmSelectedPath").replace("{path}", aasCmSelectedPath);
     pathDisplay.hidden = false;
     aasCmApplyBtn.hidden = false;
-    aasCmApplyBtn.textContent = aasCmMode === "picker" ? t("gdacsAasSourceBtn") : t("aasCmApply");
+    aasCmApplyBtn.textContent = aasCmMode === "picker" ? t("gdacsAasSourceBtn") : (aasCmMode === "company" || aasCmMode === "company-single") ? t("companyProcessStart") : t("aasCmApply");
   }
 });
 
@@ -2614,6 +2632,54 @@ aasCmApplyBtn.addEventListener("click", async () => {
       showGdacsCountryHint(status === "ok" ? t("geoSingleSuccess") : t("geoSingleError"), status === "ok" ? "success" : "error");
     } else {
       showGdacsCountryHint(t("geoSingleError"), "error");
+    }
+    return;
+  }
+  // Company batch mode
+  if (aasCmCurrentStep === 3 && aasCmMode === "company" && aasCmSelectedPath && aasCmSelectedGroup) {
+    aasCmApplyBtn.disabled = true;
+    const saveRes = await apiRequest("/apps/resilience/api/settings", {
+      method: "PUT",
+      body: { company_group_id: aasCmSelectedGroup.group_id, company_name_path: aasCmSelectedPath },
+    });
+    if (!saveRes.ok) { aasCmApplyBtn.disabled = false; return; }
+    const runRes = await apiRequest("/apps/resilience/api/company-process/run", { method: "POST" });
+    aasCmApplyBtn.disabled = false;
+    if (runRes.ok) {
+      aasCmModal.close();
+      startCompanyProcessPolling();
+    }
+    return;
+  }
+  // Company single mode
+  if (aasCmCurrentStep === 3 && aasCmMode === "company-single" && aasCmSelectedPath && aasCmGeoSingleAasId) {
+    aasCmApplyBtn.disabled = true;
+    const singleAasId = aasCmGeoSingleAasId;
+    aasCmModal.close();
+    // Show spinner on row icon while processing
+    const rowBtn = aasOvTbody.querySelector(`[data-process-aas="${CSS.escape(singleAasId)}"]`);
+    if (rowBtn) {
+      rowBtn.disabled = true;
+      rowBtn.innerHTML = `<svg class="aas-ov-spinner" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4m0 12v4m-7.07-15.07 2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/></svg>`;
+    }
+    const res = await apiRequest("/apps/resilience/api/company-process/run-single", {
+      method: "POST",
+      body: { aas_id: singleAasId, company_name_path: aasCmSelectedPath },
+    });
+    if (res.ok && res.payload?.status === "ok") {
+      if (rowBtn) {
+        rowBtn.disabled = false;
+        rowBtn.innerHTML = `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      }
+      const entry = aasOverviewData.find(e => e.aas_id === singleAasId);
+      if (entry) entry.company_status = "ok";
+      showGdacsCountryHint(t("companyProcessSuccess"), "success");
+    } else {
+      if (rowBtn) {
+        rowBtn.disabled = false;
+        rowBtn.innerHTML = `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+      }
+      showGdacsCountryHint(t("companyProcessError"), "error");
     }
     return;
   }
@@ -3818,7 +3884,11 @@ function renderAasOverview() {
       ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
       : `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
     const geoBtn = `<button class="aas-ov-geo-btn" data-geo-aas="${escapeHtml(entry.aas_id)}" title="Geocoding">${geoSvg}</button>`;
-    tr.innerHTML = `<td class="aas-ov-id-cell">${escapeHtml(idDisplay)}</td><td class="aas-ov-copy-cell"><button class="aas-ov-copy-btn" data-copy="${escapeHtml(entry.aas_id)}" title="Copy AAS ID"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td><td>${escapeHtml(entry.source_name)}</td><td>${grpDisplay}</td><td>${impDisplay}</td><td class="aas-ov-status-cell">${importBtn}</td><td class="aas-ov-geo-cell">${geoBtn}</td><td class="aas-ov-view-cell">${viewBtn}</td>`;
+    const processSvg = entry.company_status === "ok"
+      ? `<svg class="aas-ov-status-ok" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+      : `<svg class="aas-ov-status-no" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    const processBtn = `<button class="aas-ov-process-row-btn" data-process-aas="${escapeHtml(entry.aas_id)}" title="Process">${processSvg}</button>`;
+    tr.innerHTML = `<td class="aas-ov-id-cell">${escapeHtml(idDisplay)}</td><td class="aas-ov-copy-cell"><button class="aas-ov-copy-btn" data-copy="${escapeHtml(entry.aas_id)}" title="Copy AAS ID"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></td><td>${escapeHtml(entry.source_name)}</td><td>${grpDisplay}</td><td>${impDisplay}</td><td class="aas-ov-status-cell">${importBtn}</td><td class="aas-ov-geo-cell">${geoBtn}</td><td class="aas-ov-status-cell">${processBtn}</td><td class="aas-ov-view-cell">${viewBtn}</td>`;
     aasOvTbody.appendChild(tr);
   }
 
@@ -4228,6 +4298,57 @@ function startGeocodingPolling() {
   if (result.ok && result.payload?.running) startGeocodingPolling();
 })();
 
+// ── Company Process polling ──────────────────────────────────────
+let companyPollTimer = null;
+
+function startCompanyProcessPolling() {
+  if (companyPollTimer) return;
+  globalImportStatus.hidden = false;
+  globalImportStatus.className = "global-import-status";
+  globalImportBar.style.width = "0%";
+  globalImportText.textContent = "Enrichment — " + t("companyProcessStart") + "…";
+
+  companyPollTimer = setInterval(async () => {
+    const result = await apiRequest("/apps/resilience/api/company-process/status");
+    if (!result.ok || !result.payload) return;
+    const { running, total, done, errors, phase, batchDone, batchTotal, aliasesSoFar } = result.payload;
+
+    if (phase === "extract") {
+      globalImportBar.style.width = "5%";
+      globalImportText.textContent = `Enrichment — ${t("companyProcessDesc")}…`;
+    } else if (phase === "ai" && batchTotal > 0) {
+      const pct = Math.round((batchDone / batchTotal) * 90) + 5; // 5-95%
+      globalImportBar.style.width = pct + "%";
+      globalImportText.textContent = `Enrichment — AI Aliases: ${batchDone} / ${batchTotal} Batches (${aliasesSoFar} ${t("aasOvCount")})`;
+    } else if (phase === "save") {
+      const pct = Math.round((done / total) * 5) + 95; // 95-100%
+      globalImportBar.style.width = pct + "%";
+      globalImportText.textContent = `Enrichment — ${done} / ${total}`;
+    }
+
+    if (!running) {
+      clearInterval(companyPollTimer);
+      companyPollTimer = null;
+      globalImportBar.style.width = "100%";
+      if (errors > 0) {
+        globalImportStatus.className = "global-import-status error";
+        globalImportText.textContent = `${t("companyProcessSuccess")} — ${errors} ${t("geocodingErrors")}`;
+      } else {
+        globalImportStatus.className = "global-import-status done";
+        globalImportText.textContent = t("companyProcessSuccess");
+      }
+      if (activePage === "aas-data" && activeAasNav === "overview") loadAasOverview();
+      setTimeout(() => { globalImportStatus.hidden = true; }, 4000);
+    }
+  }, 2000);
+}
+
+// Check if company process is running on page load
+(async () => {
+  const result = await apiRequest("/apps/resilience/api/company-process/status");
+  if (result.ok && result.payload?.running) startCompanyProcessPolling();
+})();
+
 // Overview table click handler (copy, view, import, geo, AAS ID cell)
 aasOvTbody.addEventListener("click", (e) => {
   // Import button
@@ -4242,6 +4363,13 @@ aasOvTbody.addEventListener("click", (e) => {
   if (geoBtn) {
     const aasId = geoBtn.dataset.geoAas;
     if (aasId) openAasCmModal("geo-single", aasId);
+    return;
+  }
+  // Company process button → open wizard in company-single mode
+  const procBtn = e.target.closest(".aas-ov-process-row-btn");
+  if (procBtn) {
+    const aasId = procBtn.dataset.processAas;
+    if (aasId) openAasCmModal("company-single", aasId);
     return;
   }
   // View imported data (eye icon)

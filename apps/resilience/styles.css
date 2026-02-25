@@ -3098,6 +3098,27 @@ body.sidebar-collapsed .sidebar-foot {
 .aas-ov-geo-btn .aas-ov-status-no { color: #ef4444; }
 .aas-ov-geo-btn:hover .aas-ov-status-no { color: #ef4444; }
 
+.aas-ov-process-row-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.aas-ov-process-row-btn:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+  transform: scale(1.15);
+}
+.aas-ov-process-row-btn .aas-ov-status-ok { color: #059669; }
+.aas-ov-process-row-btn .aas-ov-status-no { color: #ef4444; }
+.aas-ov-spinner { animation: spin 1s linear infinite; color: var(--accent, #4f46e5); }
+
 /* ── World Map Modal ── */
 .dash-card-actions { display: flex; align-items: center; gap: 2px; }
 .dash-aas-map-btn {
@@ -3677,13 +3698,7 @@ body.sidebar-collapsed .sidebar-foot {
   text-align: center;
   width: 32px;
 }
-.aas-geocoding-btn {
-  background: rgba(139, 92, 246, 0.08);
-  color: #7c3aed;
-}
-.aas-geocoding-btn:hover {
-  background: rgba(139, 92, 246, 0.16);
-}
+/* geocoding btn now inherits .aas-import-btn style (accent) */
 
 /* -- MATCH QUALITY INDICATORS -- */
 .match-dot {

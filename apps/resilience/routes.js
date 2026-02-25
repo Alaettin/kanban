@@ -332,6 +332,8 @@ async function initResilienceTables() {
 
   // Migration: add geocoded_status to aas_imports (lightweight marker for overview)
   try { await db.run("ALTER TABLE resilience_aas_imports ADD COLUMN geocoded_status TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
+  // Migration: add company_status to aas_imports
+  try { await db.run("ALTER TABLE resilience_aas_imports ADD COLUMN company_status TEXT NOT NULL DEFAULT ''"); } catch { /* exists */ }
 
   // Migration: add geo columns to gdacs_alerts
   try { await db.run("ALTER TABLE resilience_gdacs_alerts ADD COLUMN centroid_lat REAL DEFAULT NULL"); } catch { /* exists */ }
@@ -370,6 +372,9 @@ async function initResilienceTables() {
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN matching_lat_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN matching_lon_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN dash_aas_match_filter TEXT NOT NULL DEFAULT '["polygon","distance"]'`); } catch { /* exists */ }
+  // Migration: company process settings
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN company_group_id TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN company_name_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
 
   // Migration: city_value + direct coords on aas_map
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN city_value TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
@@ -694,6 +699,171 @@ async function runGeocodingJob(userId) {
 }
 
 // ---------------------------------------------------------------------------
+// Company Process: build submodel + AI alias generation
+// ---------------------------------------------------------------------------
+function buildCompanySubmodel(name, alias) {
+  return {
+    idShort: "Company",
+    modelType: "Submodel",
+    submodelElements: [
+      { idShort: "Name", modelType: "Property", valueType: "xs:string", value: name || "" },
+      { idShort: "Alias", modelType: "Property", valueType: "xs:string", value: alias || "" },
+    ],
+  };
+}
+
+/**
+ * Batch: generate aliases for multiple company names in ONE AI call.
+ * Returns Map<companyName, aliasString>.
+ */
+async function generateCompanyAliases(companyNames, settings, job) {
+  const result = new Map();
+  if (!settings?.provider || !settings?.api_key || !companyNames.length) return result;
+
+  // Split into batches of 50 to avoid token limits
+  const BATCH_SIZE = 50;
+  const batches = [];
+  for (let i = 0; i < companyNames.length; i += BATCH_SIZE) {
+    batches.push(companyNames.slice(i, i + BATCH_SIZE));
+  }
+  console.log("[CompanyAliases] Processing", companyNames.length, "names in", batches.length, "batches");
+  if (job) { job.batchTotal = batches.length; job.batchDone = 0; }
+
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b];
+    const prompt = `For each company below, list common aliases, abbreviations, and alternative names.
+Return ONLY a JSON object where keys are the numbers ("1", "2", ...) and values are comma-separated alias strings. No markdown, no code fences, just raw JSON.
+Example: {"1": "Siemens, Siemens Energy, Siemens Healthineers", "2": "BMW, Bayerische Motoren Werke"}
+
+Companies:
+${batch.map((n, i) => `${i + 1}. ${n}`).join("\n")}`;
+
+    try {
+      let replyText = "";
+      if (settings.provider === "gemini") {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${settings.model}:generateContent?key=${settings.api_key}`;
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0, maxOutputTokens: 16384 },
+          }),
+          signal: AbortSignal.timeout(120000),
+        });
+        const data = await r.json();
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const textParts = parts.filter(p => !p.thought);
+        replyText = textParts.length ? textParts[textParts.length - 1].text || "" : parts[parts.length - 1]?.text || "";
+      } else {
+        const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${settings.api_key}` },
+          body: JSON.stringify({
+            model: settings.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0,
+          }),
+          signal: AbortSignal.timeout(120000),
+        });
+        const data = await r.json();
+        replyText = data?.choices?.[0]?.message?.content || "";
+      }
+      // Strip markdown code fences if present
+      replyText = replyText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+      const jsonMatch = replyText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          for (const [key, aliases] of Object.entries(parsed)) {
+            const idx = parseInt(key, 10) - 1;
+            if (idx >= 0 && idx < batch.length) {
+              const globalIdx = b * BATCH_SIZE + idx;
+              result.set(companyNames[globalIdx], String(aliases).slice(0, 1000));
+            }
+          }
+        } catch (parseErr) { console.error("[CompanyAliases] Batch", b + 1, "JSON parse error:", parseErr.message); }
+      } else {
+        console.log("[CompanyAliases] Batch", b + 1, "no JSON found, reply:", replyText.slice(0, 200));
+      }
+      if (job) { job.batchDone = b + 1; job.aliasesSoFar = result.size; }
+      console.log("[CompanyAliases] Batch", b + 1, "/", batches.length, "done — aliases so far:", result.size);
+    } catch (err) { console.error("[CompanyAliases] Batch", b + 1, "error:", err.message); }
+  }
+  return result;
+}
+
+const companyProcessJobs = {};
+
+async function runCompanyProcessJob(userId, groupId, companyNamePath) {
+  if (companyProcessJobs[userId]?.running) return;
+
+  console.log("[CompanyProcess] Starting batch — group:", groupId, "path:", companyNamePath);
+  const members = await db.all(
+    "SELECT m.aas_id FROM resilience_asset_group_members m JOIN resilience_aas_imports i ON i.aas_id = m.aas_id AND i.user_id = ? WHERE m.group_id = ?",
+    [userId, groupId]
+  );
+  if (!members.length) { console.log("[CompanyProcess] No members found"); return; }
+  console.log("[CompanyProcess] Members:", members.length);
+
+  const job = { total: members.length, done: 0, errors: 0, running: true, phase: "extract", batchDone: 0, batchTotal: 0 };
+  companyProcessJobs[userId] = job;
+
+  // Pass 1: Extract all unique company names
+  const aasNameMap = new Map(); // aas_id → { submodels, companyName }
+  let extractFails = 0;
+  for (const m of members) {
+    try {
+      const imp = await db.get(
+        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+        [m.aas_id, userId]
+      );
+      if (!imp?.submodels_data) { extractFails++; continue; }
+      const submodels = JSON.parse(imp.submodels_data);
+      const companyName = extractFirstValue(submodels, companyNamePath);
+      if (companyName) aasNameMap.set(m.aas_id, { submodels, companyName });
+      else extractFails++;
+    } catch { extractFails++; }
+  }
+
+  const uniqueNames = [...new Set([...aasNameMap.values()].map(v => v.companyName))];
+  console.log("[CompanyProcess] Pass 1 done — extracted:", aasNameMap.size, "failed:", extractFails, "unique names:", uniqueNames.length);
+  if (uniqueNames.length > 0) console.log("[CompanyProcess] Sample names:", uniqueNames.slice(0, 5));
+
+  // Pass 2: One AI call for all unique names (if AI configured)
+  const aiSettings = await db.get(
+    "SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?",
+    [userId]
+  );
+  console.log("[CompanyProcess] AI configured:", !!(aiSettings?.provider && aiSettings?.api_key), aiSettings?.provider || "none");
+  job.phase = "ai";
+  const aliasMap = await generateCompanyAliases(uniqueNames, aiSettings, job);
+  console.log("[CompanyProcess] Pass 2 done — aliases generated:", aliasMap.size);
+  if (aliasMap.size > 0) console.log("[CompanyProcess] Sample alias:", [...aliasMap.entries()][0]);
+
+  // Pass 3: Apply results to each AAS
+  job.phase = "save";
+  for (const m of members) {
+    try {
+      const data = aasNameMap.get(m.aas_id);
+      if (!data) { job.errors++; job.done++; continue; }
+
+      const alias = aliasMap.get(data.companyName) || "";
+      let submodels = data.submodels.filter(sm => sm.idShort !== "Company");
+      submodels.push(buildCompanySubmodel(data.companyName, alias));
+      await db.run(
+        "UPDATE resilience_aas_imports SET submodels_data = ?, company_status = ? WHERE aas_id = ? AND user_id = ?",
+        [JSON.stringify(submodels), "ok", m.aas_id, userId]
+      );
+    } catch {
+      job.errors++;
+    }
+    job.done++;
+  }
+  job.running = false;
+}
+
+// ---------------------------------------------------------------------------
 // Shared helper: walk AAS submodel element tree
 // ---------------------------------------------------------------------------
 function walkElements(elements, segments, depth, values) {
@@ -838,6 +1008,14 @@ function mountRoutes(router) {
           [String(p.group_id), String(p.country_path),
            String(p.group_id), String(p.country_path), String(p.city_path),
            String(p.lat_path), String(p.lon_path), req.user.id]);
+      }
+      if (body.company_group_id !== undefined) {
+        await db.run("UPDATE resilience_settings SET company_group_id = ? WHERE user_id = ?",
+          [String(body.company_group_id), req.user.id]);
+      }
+      if (body.company_name_path !== undefined) {
+        await db.run("UPDATE resilience_settings SET company_name_path = ? WHERE user_id = ?",
+          [String(body.company_name_path), req.user.id]);
       }
       if (body.dash_aas_match_filter !== undefined) {
         const f = body.dash_aas_match_filter;
@@ -2143,7 +2321,7 @@ function mountRoutes(router) {
         `SELECT i.entry_id, i.aas_id, i.entry_type, i.item_id,
                 s.source_id, s.name AS source_name, s.base_url,
                 g.group_id, g.name AS group_name,
-                imp.imported_at, imp.geocoded_status
+                imp.imported_at, imp.geocoded_status, imp.company_status
          FROM resilience_aas_source_ids i
          JOIN resilience_aas_sources s ON s.source_id = i.source_id
          LEFT JOIN resilience_asset_group_members m ON m.aas_id = i.aas_id
@@ -2327,6 +2505,65 @@ function mountRoutes(router) {
     const job = geocodingJobs[req.user.id];
     if (!job) return res.json({ running: false });
     res.json({ running: job.running, total: job.total, done: job.done, errors: job.errors });
+  });
+
+  // ── Company Process: batch run ───────────────────────────────
+  router.post("/api/company-process/run", auth.requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    if (companyProcessJobs[userId]?.running) return res.json({ ok: true, already: true });
+    const settings = await db.get(
+      "SELECT company_group_id, company_name_path FROM resilience_settings WHERE user_id = ?",
+      [userId]
+    );
+    if (!settings?.company_group_id || !settings?.company_name_path) {
+      return res.status(400).json({ error: "NO_COMPANY_SETTINGS" });
+    }
+    res.json({ ok: true });
+    runCompanyProcessJob(userId, settings.company_group_id, settings.company_name_path);
+  });
+
+  // ── Company Process: single AAS ─────────────────────────────
+  router.post("/api/company-process/run-single", auth.requireAuth, async (req, res) => {
+    const userId = req.user.id;
+    const { aas_id, company_name_path } = req.body;
+    if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
+    if (!company_name_path) return res.status(400).json({ error: "MISSING_PATH" });
+    try {
+      const imp = await db.get(
+        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+        [aas_id, userId]
+      );
+      if (!imp?.submodels_data) return res.status(404).json({ error: "NOT_IMPORTED" });
+
+      let submodels = JSON.parse(imp.submodels_data);
+      const companyName = extractFirstValue(submodels, company_name_path);
+      if (!companyName) return res.json({ status: "error", reason: "EMPTY_VALUE" });
+
+      const aiSettings = await db.get(
+        "SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?",
+        [userId]
+      );
+      const aliasMap = await generateCompanyAliases([companyName], aiSettings);
+      const alias = aliasMap.get(companyName) || "";
+
+      submodels = submodels.filter(sm => sm.idShort !== "Company");
+      submodels.push(buildCompanySubmodel(companyName, alias));
+      await db.run(
+        "UPDATE resilience_aas_imports SET submodels_data = ?, company_status = ? WHERE aas_id = ? AND user_id = ?",
+        [JSON.stringify(submodels), "ok", aas_id, userId]
+      );
+      res.json({ status: "ok", company_name: companyName, alias });
+    } catch (err) {
+      console.error("POST /api/company-process/run-single error:", err);
+      res.status(500).json({ error: "PROCESS_FAILED" });
+    }
+  });
+
+  // ── Company Process: poll status ────────────────────────────
+  router.get("/api/company-process/status", auth.requireAuth, (req, res) => {
+    const job = companyProcessJobs[req.user.id];
+    if (!job) return res.json({ running: false });
+    res.json({ running: job.running, total: job.total, done: job.done, errors: job.errors, phase: job.phase, batchDone: job.batchDone, batchTotal: job.batchTotal, aliasesSoFar: job.aliasesSoFar || 0 });
   });
 
   // ── AAS Proxy: get shell (query params to avoid %2F routing issues) ──
