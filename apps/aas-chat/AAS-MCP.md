@@ -54,7 +54,7 @@ Client → Server:  "tools/call"        → Server führt das Tool aus, gibt Erg
 **Kurzfassung:**
 1. User stellt Frage im Chat (z.B. "Welche Assets gibt es?")
 2. Backend sendet Frage + Tool-Definitionen an LLM
-3. LLM entscheidet, welches Tool es braucht (z.B. `listShells`)
+3. LLM entscheidet, welches Tool es braucht (z.B. `getShell`)
 4. Backend ruft das Tool über den MCP Server auf
 5. MCP Server führt den REST-Call gegen den AAS Server aus
 6. Ergebnis geht zurück ans LLM
@@ -203,39 +203,7 @@ Verweis auf ein anderes Element im AAS-Ökosystem.
 
 ## MCP Server — Tool-Definitionen
 
-### Tool 1: `listShells`
-
-Listet alle Asset Administration Shells im Repository auf.
-
-```json
-{
-  "name": "listShells",
-  "description": "Listet alle Asset Administration Shells (AAS) im Repository auf. Gibt ID, IdShort und Asset-Informationen zurück.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "idShort": {
-        "type": "string",
-        "description": "Optional: Filter nach IdShort (Kurzname)"
-      },
-      "limit": {
-        "type": "number",
-        "description": "Optional: Max. Anzahl Ergebnisse (Standard: 100)"
-      },
-      "cursor": {
-        "type": "string",
-        "description": "Optional: Paginierungs-Cursor für nächste Seite"
-      }
-    }
-  }
-}
-```
-
-**Implementierung:** `GET /shells?IdShort=...&Limit=...&Cursor=...`
-
----
-
-### Tool 2: `getShell`
+### Tool 1: `getShell`
 
 Ruft eine einzelne Shell mit allen Details ab.
 
@@ -260,7 +228,7 @@ Ruft eine einzelne Shell mit allen Details ab.
 
 ---
 
-### Tool 3: `getAssetInformation`
+### Tool 2: `getAssetInformation`
 
 Ruft die Asset-Informationen einer Shell ab.
 
@@ -285,7 +253,7 @@ Ruft die Asset-Informationen einer Shell ab.
 
 ---
 
-### Tool 4: `getSubmodelRefs`
+### Tool 3: `getSubmodelRefs`
 
 Listet alle Submodel-Referenzen einer Shell auf.
 
@@ -310,7 +278,7 @@ Listet alle Submodel-Referenzen einer Shell auf.
 
 ---
 
-### Tool 5: `getSubmodel`
+### Tool 4: `getSubmodel`
 
 Ruft ein vollständiges Submodel mit allen Elementen ab.
 
@@ -344,7 +312,7 @@ Ruft ein vollständiges Submodel mit allen Elementen ab.
 
 ---
 
-### Tool 6: `getThumbnail`
+### Tool 5: `getThumbnail`
 
 Ruft das Thumbnail-Bild eines Assets ab.
 
@@ -387,8 +355,7 @@ Backend (MCP Client)  →  MCP Server
 
 MCP Server antwortet:
    [
-     { name: "listShells", description: "...", inputSchema: {...} },
-     { name: "getShell", ... },
+     { name: "getShell", description: "...", inputSchema: {...} },
      { name: "getSubmodel", ... },
      ...
    ]
@@ -401,12 +368,12 @@ Jedes LLM hat sein eigenes Format für Function Calling. Das Backend übersetzt:
 ```
 MCP Format (Standard):                    Gemini Format:
 {                                         {
-  name: "listShells",                       functionDeclarations: [{
-  inputSchema: {                              name: "listShells",
+  name: "getShell",                         functionDeclarations: [{
+  inputSchema: {                              name: "getShell",
     type: "object",                           parameters: {
     properties: {                               type: "OBJECT",
-      idShort: {...}                            properties: {
-    }                                             idShort: {...}
+      aasId: {...}                              properties: {
+    }                                             aasId: {...}
   }                                             }
 }                                             }
                                             }]
@@ -418,22 +385,22 @@ MCP Format (Standard):                    Gemini Format:
 ```
 Backend  →  Gemini API
    messages: "Welche Assets gibt es?"
-   tools: [listShells, getShell, getSubmodel, ...]
+   tools: [getShell, getSubmodel, ...]
 
 Gemini antwortet:
-   functionCall: { name: "listShells", args: {} }
+   functionCall: { name: "getShell", args: { aasId: "urn:..." } }
 ```
 
-Das LLM hat analysiert: "Um diese Frage zu beantworten, brauche ich `listShells`."
+Das LLM hat analysiert: "Um diese Frage zu beantworten, brauche ich `getShell`."
 
 ### Schritt 5: Backend leitet an MCP Server weiter
 
 ```
 Backend (MCP Client)  →  MCP Server
-   JSON-RPC: "tools/call"  { name: "listShells", arguments: {} }
+   JSON-RPC: "tools/call"  { name: "getShell", arguments: { aasId: "urn:..." } }
 
 MCP Server intern:
-   1. Baut URL: GET https://aas-server.example.com/api/v3/shells
+   1. Baut URL: GET https://aas-server.example.com/api/v3/shells/{base64url(aasId)}
    2. Führt HTTP-Request aus
    3. Parst JSON-Antwort
    4. Gibt strukturiertes Ergebnis zurück an Client
@@ -444,16 +411,13 @@ MCP Server intern:
 ```
 Backend  →  Gemini API
    toolResult: {
-     name: "listShells",
-     content: "3 Shells gefunden:\n1. Pumpe_A (id: urn:aas:pumpe-a)\n2. Motor_B (id: urn:aas:motor-b)\n..."
+     name: "getShell",
+     content: "Shell: Pumpe_A\nID: urn:aas:pumpe-a\nAsset-Typ: Instance\nSubmodels: 3\n..."
    }
 
 Gemini antwortet (finale Antwort):
-   "Im Repository befinden sich 3 Assets:
-    - Pumpe A
-    - Motor B
-    - Ventil C
-    Soll ich Details zu einem bestimmten Asset abrufen?"
+   "Die Pumpe A hat 3 Submodelle: Nameplate, TechnicalData, OperationalData.
+    Soll ich Details zu einem bestimmten Submodel abrufen?"
 ```
 
 ### Schritt 7: Antwort wird im Chat angezeigt
@@ -469,8 +433,8 @@ Das LLM kann auch **mehrere Tools nacheinander** aufrufen. Beispiel:
 ```
 User: "Zeig mir die technischen Daten der Pumpe A"
 
-LLM → Tool 1: listShells()                      → findet Pumpe_A ID
-LLM → Tool 2: getSubmodelRefs(aasId: "urn:...")  → findet Submodel "TechnicalData"
+LLM → Tool 1: getShell(aasId: "urn:...")           → findet Pumpe_A Details
+LLM → Tool 2: getSubmodelRefs(aasId: "urn:...")    → findet Submodel "TechnicalData"
 LLM → Tool 3: getSubmodel(aasId: "...", submodelId: "...") → holt alle Properties
 LLM → Finale Antwort: "Die Pumpe A hat folgende technische Daten: ..."
 ```
@@ -536,8 +500,7 @@ Kanban/                              ← Projekt-Root
 ```
 Aufbau:
 ├── MCP-Protokoll via McpServer + StdioServerTransport
-├── 6 Tools registriert (mit Zod-Schemas):
-│   ├── listShells     → GET /shells
+├── 5 Tools registriert (mit Zod-Schemas):
 │   ├── getShell       → GET /shells/{id}
 │   ├── getAssetInfo   → GET /shells/{id}/asset-information
 │   ├── getSubmodelRefs → GET /shells/{id}/submodel-refs
@@ -605,7 +568,7 @@ function toBase64Url(str) {
 ## Status
 
 - [x] MCP SDK installiert (`@modelcontextprotocol/sdk`)
-- [x] MCP Server implementiert (`mcp-server.mjs`) — 6 Tools, AAS API Anbindung
+- [x] MCP Server implementiert (`mcp-server.mjs`) — 5 Tools, AAS API Anbindung
 - [x] MCP Client im Backend (`routes.js`) — dynamischer Import, Client-Lifecycle
 - [x] Gemini Function Calling Loop — inkl. google_search Fallback
 - [x] Groq Function Calling Loop — OpenAI-kompatibles Format

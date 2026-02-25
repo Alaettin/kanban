@@ -52,10 +52,32 @@ async function initUccTables() {
     shell_data   TEXT,
     results_json TEXT,
     evaluated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(user_id, aas_id),
+    UNIQUE(user_id, aas_id, source_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (source_id) REFERENCES ucc_sources(source_id) ON DELETE CASCADE
   )`);
+
+  // Migration: fix UNIQUE constraint to include source_id (allows same aas_id from different servers)
+  const tableInfo = await db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='ucc_evaluations'");
+  if (tableInfo?.sql && tableInfo.sql.includes("UNIQUE(user_id, aas_id)") && !tableInfo.sql.includes("UNIQUE(user_id, aas_id, source_id)")) {
+    console.log("[UCC] Migrating ucc_evaluations: adding source_id to UNIQUE constraint…");
+    await db.run("ALTER TABLE ucc_evaluations RENAME TO ucc_evaluations_old");
+    await db.run(`CREATE TABLE ucc_evaluations (
+      eval_id      TEXT PRIMARY KEY,
+      user_id      TEXT NOT NULL,
+      aas_id       TEXT NOT NULL,
+      source_id    TEXT NOT NULL,
+      shell_data   TEXT,
+      results_json TEXT,
+      evaluated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, aas_id, source_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_id) REFERENCES ucc_sources(source_id) ON DELETE CASCADE
+    )`);
+    await db.run("INSERT INTO ucc_evaluations SELECT * FROM ucc_evaluations_old");
+    await db.run("DROP TABLE ucc_evaluations_old");
+    console.log("[UCC] Migration done.");
+  }
 
   console.log("[UCC] Tables ready.");
 }
@@ -311,7 +333,7 @@ function mountRoutes(router) {
                 e.evaluated_at, e.results_json
          FROM ucc_source_aas a
          JOIN ucc_sources s ON s.source_id = a.source_id
-         LEFT JOIN ucc_evaluations e ON e.aas_id = a.aas_id AND e.user_id = a.user_id
+         LEFT JOIN ucc_evaluations e ON e.aas_id = a.aas_id AND e.user_id = a.user_id AND e.source_id = a.source_id
          WHERE a.user_id = ?
          ORDER BY s.name ASC, a.aas_id ASC`,
         [req.user.id]
@@ -346,12 +368,13 @@ function mountRoutes(router) {
 
   // ==================== CACHED EVALUATION ====================
 
-  router.get("/api/evaluation/:aasId", auth.requireAuth, async (req, res) => {
+  router.get("/api/evaluation/:sourceId/:aasId", auth.requireAuth, async (req, res) => {
     try {
+      const { sourceId } = req.params;
       const aasId = decodeURIComponent(req.params.aasId);
       const row = await db.get(
-        "SELECT results_json, evaluated_at FROM ucc_evaluations WHERE aas_id = ? AND user_id = ?",
-        [aasId, req.user.id]
+        "SELECT results_json, evaluated_at FROM ucc_evaluations WHERE aas_id = ? AND user_id = ? AND source_id = ?",
+        [aasId, req.user.id, sourceId]
       );
       if (!row) return res.status(404).json({ error: "NOT_FOUND" });
       const data = JSON.parse(row.results_json || "{}");
@@ -464,8 +487,8 @@ function mountRoutes(router) {
       await db.run(
         `INSERT INTO ucc_evaluations (eval_id, user_id, aas_id, source_id, shell_data, results_json, evaluated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(user_id, aas_id) DO UPDATE SET
-           source_id=excluded.source_id, shell_data=excluded.shell_data,
+         ON CONFLICT(user_id, aas_id, source_id) DO UPDATE SET
+           shell_data=excluded.shell_data,
            results_json=excluded.results_json, evaluated_at=excluded.evaluated_at`,
         [uid(), userId, aasId, sourceId, JSON.stringify(shellData), JSON.stringify(evalData), now]
       );

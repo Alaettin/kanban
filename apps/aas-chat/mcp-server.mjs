@@ -122,7 +122,7 @@ const server = new McpServer(
       "WICHTIGE REGELN:\n" +
       "- Rufe nur die Tools auf, die zur Beantwortung der Frage NÖTIG sind. Nicht alle verfügbaren Tools durchprobieren!\n" +
       "- Sobald du genug Informationen hast, antworte SOFORT mit Text. Keine weiteren Tool-Aufrufe.\n" +
-      "- Bei einer einfachen Frage zu einer Shell reicht meist EIN Tool-Aufruf (z.B. getShell oder listShells).\n" +
+      "- Bei einer einfachen Frage zu einer Shell reicht meist EIN Tool-Aufruf (z.B. getShell).\n" +
       "- Rufe getSubmodel nur auf, wenn der Nutzer explizit nach Submodel-Daten fragt.\n" +
       "- Rufe getThumbnail oder getAssetInformation nur auf, wenn explizit danach gefragt wird.\n" +
       "- DOKUMENTE LESEN: Wenn der Nutzer nach dem Inhalt eines Dokuments, PDFs, Datenblatts oder Handbuchs fragt, " +
@@ -131,43 +131,7 @@ const server = new McpServer(
   }
 );
 
-// --- Tool 1: listShells ---------------------------------------------------
-server.tool(
-  "listShells",
-  "Listet alle Asset Administration Shells (AAS) im Repository auf. Gibt die vollständige ID (URL/URN), IdShort, Asset-Typ und Submodel-Anzahl zurück. WICHTIG: Die zurückgegebene ID ist immer eine vollständige URL oder URN — diese muss exakt so an andere Tools übergeben werden.",
-  {
-    idShort: z.string().optional().describe("Optional: Filter nach IdShort (Kurzname der Shell)"),
-    limit: z.number().optional().describe("Optional: Max. Anzahl Ergebnisse (Standard: 100)"),
-    cursor: z.string().optional().describe("Optional: Paginierungs-Cursor für die nächste Seite"),
-  },
-  async ({ idShort, limit, cursor }) => {
-    try {
-      const params = new URLSearchParams();
-      if (idShort) params.set("IdShort", idShort);
-      if (limit) params.set("Limit", String(limit));
-      if (cursor) params.set("Cursor", cursor);
-      const qs = params.toString();
-      const data = await aasGet(`/shells${qs ? "?" + qs : ""}`);
-      const shells = (data.result || []).map(summariseShell);
-      const cursorNext = data.paging_metadata?.cursor;
-      let text = `${shells.length} Shell(s) gefunden:\n\n`;
-      for (const s of shells) {
-        text += `- Name: ${s.idShort}\n`;
-        text += `  AAS-ID: ${s.id}\n`;
-        text += `  Asset-Typ: ${s.assetType || "?"}, Kind: ${s.assetKind || "?"}, Submodels: ${s.submodelCount}\n\n`;
-      }
-      if (cursorNext) text += `(Weitere Ergebnisse verfügbar, Cursor: ${cursorNext})`;
-      if (shells.length > 0) {
-        text += `\nHINWEIS: Verwende die vollständige AAS-ID (z.B. "${shells[0].id}") für weitere Abfragen.`;
-      }
-      return textResult(text);
-    } catch (e) {
-      return errorResult(e.message);
-    }
-  }
-);
-
-// --- Tool 2: getShell -----------------------------------------------------
+// --- Tool 1: getShell -----------------------------------------------------
 server.tool(
   "getShell",
   "Ruft eine einzelne Asset Administration Shell anhand ihrer ID ab. Gibt alle Details inkl. Submodel-Referenzen zurück.",

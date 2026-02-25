@@ -365,7 +365,7 @@ async function loadOverview() {
       <td><span class="status-badge status-${item.status}">${esc(statusLabel)}${statusInfo}</span></td>
       <td class="td-eval-date">
         ${hasEval ? `<span class="eval-date-wrap">${item.last_evaluated.replace("T", " ").slice(0, 16)}
-          <button class="btn-sm-icon view-eval-btn" title="${t("viewEval")}" data-aas="${esc(item.aas_id)}">
+          <button class="btn-sm-icon view-eval-btn" title="${t("viewEval")}" data-aas="${esc(item.aas_id)}" data-source="${esc(item.source_id)}">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button></span>` : "—"}
       </td>
@@ -385,7 +385,7 @@ overviewTbody.addEventListener("click", (e) => {
   }
   const viewBtn = e.target.closest(".view-eval-btn");
   if (viewBtn) {
-    viewCachedEval(viewBtn.dataset.aas);
+    viewCachedEval(viewBtn.dataset.source, viewBtn.dataset.aas);
     return;
   }
 });
@@ -740,7 +740,7 @@ async function evaluateAas(sourceId, aasId) {
   if (activePage === "overview") loadOverview();
 }
 
-async function viewCachedEval(aasId) {
+async function viewCachedEval(sourceId, aasId) {
   // Reset dialog to show results directly (no animation steps)
   [evalStep1, evalStep2, evalStep3].forEach(s => s.className = "eval-step done");
   evalAasId.textContent = aasId;
@@ -753,7 +753,7 @@ async function viewCachedEval(aasId) {
 
   evalDialog.showModal();
 
-  const res = await api(`/api/evaluation/${encodeURIComponent(aasId)}`);
+  const res = await api(`/api/evaluation/${encodeURIComponent(sourceId)}/${encodeURIComponent(aasId)}`);
   if (!res.ok) {
     evalResultsList.innerHTML = `<div class="eval-no-cases">${t("evalError")}</div>`;
     evalResults.hidden = false;
