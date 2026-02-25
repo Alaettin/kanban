@@ -339,24 +339,29 @@ function mountRoutes(router) {
         [req.user.id]
       );
       const items = rows.map(r => {
-        let status = "pending", pass_count = null, total_count = null;
+        let status = "pending", pass_count = null, total_count = null, error = null;
         if (r.results_json) {
           try {
             const parsed = JSON.parse(r.results_json);
-            const results = Array.isArray(parsed) ? parsed : (parsed.results || []);
-            total_count = results.length;
-            pass_count = results.filter(x => x.passed).length;
-            if (total_count === 0) status = "pending";
-            else if (pass_count === total_count) status = "pass";
-            else if (pass_count === 0) status = "fail";
-            else status = "partial";
+            if (parsed.error) {
+              status = "error";
+              error = parsed.error;
+            } else {
+              const results = Array.isArray(parsed) ? parsed : (parsed.results || []);
+              total_count = results.length;
+              pass_count = results.filter(x => x.passed).length;
+              if (total_count === 0) status = "pending";
+              else if (pass_count === total_count) status = "pass";
+              else if (pass_count === 0) status = "fail";
+              else status = "partial";
+            }
           } catch { /* keep pending */ }
         }
         return {
           entry_id: r.entry_id, aas_id: r.aas_id, source_id: r.source_id,
           source_name: r.source_name, base_url: r.base_url,
           last_evaluated: r.evaluated_at || null,
-          pass_count, total_count, status
+          pass_count, total_count, status, error
         };
       });
       res.json({ items });
@@ -404,14 +409,36 @@ function mountRoutes(router) {
       const encoded = toBase64Url(aasId);
 
       // 1. Fetch shell
-      const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
-        signal: AbortSignal.timeout(15000),
-        headers: { Accept: "application/json" },
-      });
-      if (!shellResp.ok) {
-        return res.status(502).json({ error: "SHELL_FETCH_FAILED", status: shellResp.status });
+      let shellData;
+      let fetchError = null;
+      try {
+        const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
+          signal: AbortSignal.timeout(15000),
+          headers: { Accept: "application/json" },
+        });
+        if (!shellResp.ok) {
+          fetchError = `HTTP ${shellResp.status}`;
+        } else {
+          shellData = await shellResp.json();
+        }
+      } catch (fetchErr) {
+        fetchError = fetchErr.name === "TimeoutError" ? "Timeout" : (fetchErr.message || "Network error");
       }
-      const shellData = await shellResp.json();
+
+      // Shell not reachable → save error evaluation
+      if (fetchError) {
+        const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+        const evalData = { aas_id: aasId, error: fetchError, results: [] };
+        await db.run(
+          `INSERT INTO ucc_evaluations (eval_id, user_id, aas_id, source_id, shell_data, results_json, evaluated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, aas_id, source_id) DO UPDATE SET
+             shell_data=excluded.shell_data,
+             results_json=excluded.results_json, evaluated_at=excluded.evaluated_at`,
+          [uid(), userId, aasId, sourceId, null, JSON.stringify(evalData), now]
+        );
+        return res.json({ ...evalData, evaluated_at: now, status: "error" });
+      }
 
       // 2. Fetch submodels
       const submodelRefs = shellData.submodels || [];

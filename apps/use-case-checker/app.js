@@ -20,6 +20,7 @@ const I18N = {
     statusPass: "Bestanden",
     statusPartial: "Teilweise",
     statusFail: "Nicht bestanden",
+    statusError: "Nicht erreichbar",
     evaluate: "Auswerten",
     evaluateAll: "Alle auswerten",
     overviewEmpty: "Keine AAS registriert. Lege zuerst Quellen an.",
@@ -86,6 +87,7 @@ const I18N = {
     statusPass: "Passed",
     statusPartial: "Partial",
     statusFail: "Failed",
+    statusError: "Unreachable",
     evaluate: "Evaluate",
     evaluateAll: "Evaluate all",
     overviewEmpty: "No AAS registered. Create sources first.",
@@ -357,12 +359,13 @@ async function loadOverview() {
   for (const item of items) {
     const tr = document.createElement("tr");
     const statusLabel = t("status" + item.status.charAt(0).toUpperCase() + item.status.slice(1));
-    const statusInfo = item.pass_count !== null ? ` (${item.pass_count}/${item.total_count})` : "";
+    const statusInfo = item.status === "error" ? "" : (item.pass_count !== null ? ` (${item.pass_count}/${item.total_count})` : "");
+    const statusTitle = item.error ? ` title="${esc(item.error)}"` : "";
     const hasEval = !!item.last_evaluated;
     tr.innerHTML = `
       <td class="td-aas-id" title="${esc(item.aas_id)}">${esc(item.aas_id)}</td>
       <td class="td-source">${esc(item.source_name)}</td>
-      <td><span class="status-badge status-${item.status}">${esc(statusLabel)}${statusInfo}</span></td>
+      <td><span class="status-badge status-${item.status}"${statusTitle}>${esc(statusLabel)}${statusInfo}</span></td>
       <td class="td-eval-date">
         ${hasEval ? `<span class="eval-date-wrap">${item.last_evaluated.replace("T", " ").slice(0, 16)}
           <button class="btn-sm-icon view-eval-btn" title="${t("viewEval")}" data-aas="${esc(item.aas_id)}" data-source="${esc(item.source_id)}">
@@ -706,10 +709,20 @@ async function evaluateAas(sourceId, aasId) {
     evalStep1.classList.remove("active");
     evalStep1.classList.add("error");
     evalStep1Label.textContent = t("evalError") + (res.payload?.error ? ` (${res.payload.error})` : "");
+    if (activePage === "overview") loadOverview();
     return;
   }
 
   const data = res.payload;
+
+  // Shell unreachable but saved as error evaluation
+  if (data.status === "error" || data.error) {
+    evalStep1.classList.remove("active");
+    evalStep1.classList.add("error");
+    evalStep1Label.textContent = t("statusError") + ` (${data.error})`;
+    if (activePage === "overview") loadOverview();
+    return;
+  }
 
   // Animate step 1 done
   evalStep1.classList.remove("active");
