@@ -754,8 +754,8 @@ async function evaluateAas(sourceId, aasId) {
 }
 
 async function viewCachedEval(sourceId, aasId) {
-  // Reset dialog to show results directly (no animation steps)
-  [evalStep1, evalStep2, evalStep3].forEach(s => s.className = "eval-step done");
+  // Reset dialog
+  [evalStep1, evalStep2, evalStep3].forEach(s => s.className = "eval-step");
   evalAasId.textContent = aasId;
   evalStep1Label.textContent = t("evalStep1").replace("...", "");
   evalStep2Label.textContent = t("evalStep2");
@@ -768,12 +768,23 @@ async function viewCachedEval(sourceId, aasId) {
 
   const res = await api(`/api/evaluation/${encodeURIComponent(sourceId)}/${encodeURIComponent(aasId)}`);
   if (!res.ok) {
+    evalStep1.classList.add("error");
     evalResultsList.innerHTML = `<div class="eval-no-cases">${t("evalError")}</div>`;
     evalResults.hidden = false;
     return;
   }
 
-  renderEvalResults(res.payload);
+  const data = res.payload;
+  if (data.error) {
+    // Cached error evaluation — show as error, not green
+    evalStep1.classList.add("error");
+    evalStep1Label.textContent = t("statusError") + ` (${data.error})`;
+    return;
+  }
+
+  // Successful evaluation — show all steps as done
+  [evalStep1, evalStep2, evalStep3].forEach(s => s.classList.add("done"));
+  renderEvalResults(data);
   evalResults.hidden = false;
 }
 
