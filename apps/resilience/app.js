@@ -76,6 +76,23 @@ let mapMatchesOnly = false;
 let mapShowDist = true;
 let mapCachedData = null;
 
+// Company Detail Modal
+const companyDetailModal = document.getElementById("company-detail-modal");
+const cdModalClose = document.getElementById("cd-modal-close");
+const cdSidebar = document.getElementById("cd-sidebar");
+const cdPageLocation = document.getElementById("cd-page-location");
+const cdPageAlerts = document.getElementById("cd-page-alerts");
+const cdPageData = document.getElementById("cd-page-data");
+const cdPageSubmodels = document.getElementById("cd-page-submodels");
+const cdAlertsBadge = document.getElementById("cd-tab-alerts-badge");
+const cdSubmodelsBadge = document.getElementById("cd-tab-submodels-badge");
+const cdPages = { location: cdPageLocation, alerts: cdPageAlerts, data: cdPageData, submodels: cdPageSubmodels };
+let cdMapInstance = null;
+let cdAlertLayerGroup = null;
+let cdAlertsVisible = true;
+let cdActivePage = "location";
+let cdNewsLoaded = false;
+
 // News DOM refs
 const newsListView = document.getElementById("news-list-view");
 const newsDetailView = document.getElementById("news-detail-view");
@@ -238,6 +255,7 @@ const I18N = {
     matchingLonStep: "Wähle den Pfad für Longitude.",
     matchingSkip: "Überspringen",
     matchingSaved: "Matching-Parameter gespeichert.",
+    matchingDeleted: "Matching-Parameter gelöscht.",
     matchingCountry: "Land",
     matchingCity: "Stadt",
     matchingLat: "Lat",
@@ -352,6 +370,31 @@ const I18N = {
     dashAasUpdated: "Aktualisiert: {time}",
     dashAasPage: "Seite {page} von {pages}",
     dashAasCountryHeader: "Land",
+    // Company Detail Modal
+    cdTitle: "Unternehmensinformation",
+    cdShellTitle: "Shell-Informationen",
+    cdCountry: "Land",
+    cdCity: "Stadt",
+    cdCoordinates: "Koordinaten",
+    cdImportedAt: "Importiert am",
+    cdGeoTitle: "Standort",
+    cdAlertsTitle: "GDACS Alerts",
+    cdSubmodelsTitle: "Submodels",
+    cdColumnsTitle: "Konfigurierte Spalten",
+    cdLoadError: "Fehler beim Laden der Daten.",
+    cdMatchPolygon: "Polygon",
+    cdMatchDistance: "Distanz ({km} km)",
+    cdMatchCountry: "Land",
+    cdNoAlerts: "Keine Alerts zugeordnet.",
+    cdSubmodelElements: "Elemente",
+    cdTabLocation: "Standort",
+    cdTabAlerts: "Nachrichten",
+    cdTabData: "Daten",
+    cdTabSubmodels: "Submodels",
+    cdNewsTitle: "Nachrichten",
+    cdNewsEmpty: "Keine Nachrichten der letzten 7 Tage gefunden.",
+    cdNewsError: "Nachrichten konnten nicht geladen werden.",
+    cdNewsNoContent: "Kein Inhalt verfügbar.",
     // Indicators
     indicatorsDescNew: "Definiere Resilienz-Indikatoren für deine Lieferkette.",
     indNavClasses: "Klassen",
@@ -672,6 +715,7 @@ const I18N = {
     matchingLonStep: "Select the path for longitude.",
     matchingSkip: "Skip",
     matchingSaved: "Matching parameters saved.",
+    matchingDeleted: "Matching parameters deleted.",
     matchingCountry: "Country",
     matchingCity: "City",
     matchingLat: "Lat",
@@ -786,6 +830,31 @@ const I18N = {
     dashAasUpdated: "Updated: {time}",
     dashAasPage: "Page {page} of {pages}",
     dashAasCountryHeader: "Country",
+    // Company Detail Modal
+    cdTitle: "Company Information",
+    cdShellTitle: "Shell Information",
+    cdCountry: "Country",
+    cdCity: "City",
+    cdCoordinates: "Coordinates",
+    cdImportedAt: "Imported At",
+    cdGeoTitle: "Location",
+    cdAlertsTitle: "GDACS Alerts",
+    cdSubmodelsTitle: "Submodels",
+    cdColumnsTitle: "Configured Columns",
+    cdLoadError: "Failed to load data.",
+    cdMatchPolygon: "Polygon",
+    cdMatchDistance: "Distance ({km} km)",
+    cdMatchCountry: "Country",
+    cdNoAlerts: "No alerts matched.",
+    cdSubmodelElements: "Elements",
+    cdTabLocation: "Location",
+    cdTabAlerts: "News",
+    cdTabData: "Data",
+    cdTabSubmodels: "Submodels",
+    cdNewsTitle: "News",
+    cdNewsEmpty: "No news from the last 7 days found.",
+    cdNewsError: "Failed to load news.",
+    cdNewsNoContent: "No content available.",
     // Indicators
     indicatorsDescNew: "Define resilience indicators for your supply chain.",
     indNavClasses: "Classes",
@@ -1870,7 +1939,10 @@ function updateGdacsColsDisplay(columns) {
 // Matching-Parameter display
 function updateMatchingDisplay(groupName, paths) {
   const el = document.getElementById("gdacs-matching-paths");
-  if (!groupName && !paths.country && !paths.city && !paths.lat && !paths.lon) {
+  const delBtn = document.getElementById("gdacs-matching-delete-btn");
+  const hasData = !!(groupName || paths.country || paths.city || paths.lat || paths.lon);
+  if (delBtn) delBtn.hidden = !hasData;
+  if (!hasData) {
     el.innerHTML = `<span class="gdacs-aas-source-empty">${t("matchingEmpty")}</span>`;
     return;
   }
@@ -2200,6 +2272,17 @@ function openAasCmModal(mode, aasId) {
 
 document.getElementById("cm-aas-import-btn").addEventListener("click", () => openAasCmModal("import"));
 document.getElementById("gdacs-matching-btn").addEventListener("click", () => openAasCmModal("matching"));
+document.getElementById("gdacs-matching-delete-btn").addEventListener("click", async () => {
+  const res = await apiRequest("/apps/resilience/api/settings", {
+    method: "PUT",
+    body: { matching_params: { group_id: "", country_path: "", city_path: "", lat_path: "", lon_path: "" } },
+  });
+  if (res.ok) {
+    updateMatchingDisplay("", { country: "", city: "", lat: "", lon: "" });
+    showGdacsCountryHint(t("matchingDeleted"), "success");
+    setTimeout(hideGdacsCountryHint, 3000);
+  }
+});
 document.getElementById("aas-ov-geocoding-btn").addEventListener("click", () => openAasCmModal("geocoding"));
 
 // Close / cancel
@@ -5051,6 +5134,7 @@ async function loadDashboard() {
   if (aasOverviewResult.ok && aasOverviewResult.payload && aasOverviewResult.payload.total > 0) {
     const { items, total, columns } = aasOverviewResult.payload;
     dashAasColumns = columns || [];
+    for (const it of items) dashAasCache.set(it.aas_id, it);
     renderDashAasRows(items, dashAasColumns);
     // Pagination
     const pages = Math.ceil(total / 20);
@@ -5072,6 +5156,7 @@ let dashAasPage = 0;
 let dashAasColumns = [];
 let dashAasSortBy = "";
 let dashAasSortDir = "asc";
+const dashAasCache = new Map();
 
 function renderDashAasRows(items, columns) {
   const body = document.getElementById("dash-aas-body");
@@ -5115,24 +5200,29 @@ function renderDashAasRows(items, columns) {
       else if (mt === "distance") matchTip = t("matchDistance").replace("{km}", a.distance_km != null ? Math.round(a.distance_km) : "?");
       return `<a class="dash-aas-alert-chip ${matchCls}" title="${escapeHtml(matchTip)}"${link}><span class="match-dot"></span>${icon}<span class="alert-badge ${ac}">${escapeHtml(a.alertlevel)}</span></a>`;
     }).join("");
-    return `<div class="dash-aas-row">${colCells}<span class="dash-aas-alerts">${alertsHtml}</span></div>`;
+    return `<div class="dash-aas-row" data-aas-id="${escapeHtml(row.aas_id)}">${colCells}<span class="dash-aas-alerts">${alertsHtml}</span></div>`;
   }).join("");
   body.innerHTML = headerHtml + rowsHtml;
 }
 
-// Sort click handler (delegated)
+// Sort + row click handler (delegated)
 document.getElementById("dash-aas-body").addEventListener("click", (e) => {
   const hdr = e.target.closest(".dash-aas-sortable");
-  if (!hdr) return;
-  const col = hdr.dataset.sortCol;
-  if (dashAasSortBy === col) {
-    dashAasSortDir = dashAasSortDir === "asc" ? "desc" : "asc";
-  } else {
-    dashAasSortBy = col;
-    dashAasSortDir = "asc";
+  if (hdr) {
+    const col = hdr.dataset.sortCol;
+    if (dashAasSortBy === col) {
+      dashAasSortDir = dashAasSortDir === "asc" ? "desc" : "asc";
+    } else {
+      dashAasSortBy = col;
+      dashAasSortDir = "asc";
+    }
+    dashAasPage = 0;
+    loadDashAasPage(0);
+    return;
   }
-  dashAasPage = 0;
-  loadDashAasPage(0);
+  if (e.target.closest(".dash-aas-alert-chip[href]")) return;
+  const row = e.target.closest(".dash-aas-row:not(.dash-aas-header)");
+  if (row && row.dataset.aasId) openCompanyDetailModal(row.dataset.aasId);
 });
 
 async function loadDashAasPage(page) {
@@ -5144,6 +5234,7 @@ async function loadDashAasPage(page) {
   if (!res.ok || !res.payload) return;
   const { items, total, columns } = res.payload;
   dashAasColumns = columns || dashAasColumns;
+  for (const it of items) dashAasCache.set(it.aas_id, it);
   renderDashAasRows(items, dashAasColumns);
   const pages = Math.ceil(total / 20);
   const footer = document.getElementById("dash-aas-footer");
@@ -5155,6 +5246,362 @@ async function loadDashAasPage(page) {
 
 document.getElementById("dash-aas-prev").addEventListener("click", () => { if (dashAasPage > 0) loadDashAasPage(dashAasPage - 1); });
 document.getElementById("dash-aas-next").addEventListener("click", () => loadDashAasPage(dashAasPage + 1));
+
+// ── Company Detail Modal ────────────────────────────────────────
+cdModalClose.addEventListener("click", () => companyDetailModal.close());
+companyDetailModal.addEventListener("click", (e) => { if (e.target === companyDetailModal) companyDetailModal.close(); });
+companyDetailModal.addEventListener("close", () => {
+  if (cdMapInstance) { cdMapInstance.remove(); cdMapInstance = null; }
+  cdAlertLayerGroup = null;
+  Object.values(cdPages).forEach(p => p.innerHTML = "");
+  cdAlertsBadge.hidden = true;
+  cdSubmodelsBadge.hidden = true;
+});
+
+function switchCdPage(name) {
+  cdActivePage = name;
+  cdSidebar.querySelectorAll(".cd-sidebar-btn").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.cdTab === name));
+  Object.entries(cdPages).forEach(([key, el]) => { el.hidden = key !== name; });
+  if (name === "location" && cdMapInstance) setTimeout(() => cdMapInstance.invalidateSize(), 50);
+  if (name === "alerts" && !cdNewsLoaded) { cdNewsLoaded = true; loadCompanyNews(); }
+}
+
+function updateCdTooltips() {
+  document.getElementById("cd-tab-location-tip").textContent = t("cdTabLocation");
+  document.getElementById("cd-tab-alerts-tip").textContent = t("cdTabAlerts");
+  document.getElementById("cd-tab-data-tip").textContent = t("cdTabData");
+  document.getElementById("cd-tab-submodels-tip").textContent = t("cdTabSubmodels");
+}
+
+cdSidebar.addEventListener("click", (e) => {
+  const btn = e.target.closest(".cd-sidebar-btn");
+  if (btn) switchCdPage(btn.dataset.cdTab);
+});
+
+async function openCompanyDetailModal(aasId) {
+  // Reset
+  Object.values(cdPages).forEach(p => p.innerHTML = "");
+  cdAlertsBadge.hidden = true;
+  cdSubmodelsBadge.hidden = true;
+  cdNewsLoaded = false;
+  switchCdPage("location");
+  updateCdTooltips();
+
+  // Phase 1: render page 1 (location) with ALL cached content
+  const cached = dashAasCache.get(aasId);
+  document.getElementById("cd-modal-title").textContent = t("cdTitle");
+  document.getElementById("cd-modal-aas-id").textContent = aasId;
+  const geo = {
+    country_value: cached?.country_value || "",
+    iso_code: cached?.iso_code || "",
+    city_value: cached?.city_value || "",
+    lat: cached?.lat ?? null,
+    lon: cached?.lon ?? null,
+  };
+  const alerts = cached?.alerts || [];
+
+  // Page 1: all content
+  let html = renderLocationTab(geo);
+  html += renderAlertsTab(alerts);
+  html += renderDataTab(cached?.columns_data || {});
+  html += `<div id="cd-sm-area"><div class="cd-sm-loading"><div class="cd-loading-spinner"></div></div></div>`;
+  cdPageLocation.innerHTML = html;
+
+  if (alerts.length > 0) {
+    cdAlertsBadge.textContent = alerts.length;
+    cdAlertsBadge.hidden = false;
+  }
+
+  companyDetailModal.showModal();
+
+  // Init Leaflet map
+  cdAlertsVisible = true;
+  if (geo.lat !== null && geo.lon !== null) {
+    setTimeout(() => {
+      const mapEl = document.getElementById("cd-map-container");
+      if (!mapEl) return;
+      if (cdMapInstance) { cdMapInstance.remove(); cdMapInstance = null; }
+      cdMapInstance = L.map("cd-map-container", { zoomControl: true, scrollWheelZoom: true, dragging: true })
+        .setView([geo.lat, geo.lon], 10);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+        maxZoom: 18,
+      }).addTo(cdMapInstance);
+      L.marker([geo.lat, geo.lon]).addTo(cdMapInstance);
+
+      // Alert markers layer
+      cdAlertLayerGroup = L.layerGroup().addTo(cdMapInstance);
+      for (const a of alerts) {
+        if (a.centroid_lat == null || a.centroid_lon == null) continue;
+        const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
+        const color = a.alertlevel === "Red" ? "#dc2626" : a.alertlevel === "Orange" ? "#ea580c" : "#16a34a";
+        L.circleMarker([a.centroid_lat, a.centroid_lon], {
+          radius: 7, color, fillColor: color, fillOpacity: 0.7, weight: 2,
+        }).bindTooltip(`${icon} ${a.name || ""} (${a.alertlevel})`, { direction: "top", offset: [0, -8] })
+          .addTo(cdAlertLayerGroup);
+        L.polyline([[geo.lat, geo.lon], [a.centroid_lat, a.centroid_lon]], {
+          color: "#d97706", weight: 1.5, opacity: 0.5, dashArray: "6 4",
+        }).addTo(cdAlertLayerGroup);
+      }
+
+      const toggleBtn = document.getElementById("cd-alerts-toggle");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+          cdAlertsVisible = !cdAlertsVisible;
+          if (cdAlertsVisible) cdMapInstance.addLayer(cdAlertLayerGroup);
+          else cdMapInstance.removeLayer(cdAlertLayerGroup);
+          toggleBtn.classList.toggle("cd-alerts-toggle-off", !cdAlertsVisible);
+        });
+      }
+
+      setTimeout(() => cdMapInstance.invalidateSize(), 50);
+    }, 100);
+  }
+
+  // Phase 2: lazy-load shell meta + submodels
+  const smContainer = document.getElementById("cd-sm-area");
+  const res = await apiRequest(`/apps/resilience/api/company-detail/${encodeURIComponent(aasId)}`);
+  if (!res.ok || !res.payload) {
+    if (smContainer) smContainer.innerHTML = "";
+    const metaArea = document.getElementById("cd-aas-meta-area");
+    if (metaArea) metaArea.innerHTML = "";
+    return;
+  }
+  const d = res.payload;
+
+  const metaArea = document.getElementById("cd-aas-meta-area");
+  if (metaArea) metaArea.innerHTML = renderAasMetaCard(d.shell, aasId);
+
+  const smCount = d.submodels?.length || 0;
+  if (smContainer) smContainer.innerHTML = renderSubmodelCards(d.submodels);
+  if (smCount > 0) {
+    cdSubmodelsBadge.textContent = smCount;
+    cdSubmodelsBadge.hidden = false;
+  }
+
+  // Expand/collapse handlers
+  cdPageLocation.querySelectorAll("[data-toggle='cd-sm']").forEach(hdr => {
+    hdr.addEventListener("click", () => {
+      const body = hdr.nextElementSibling;
+      const open = !body.hidden;
+      body.hidden = open;
+      hdr.classList.toggle("cd-sm-open", !open);
+    });
+  });
+}
+
+async function loadCompanyNews() {
+  const query = "Pepperl+Fuchs";
+  cdPageAlerts.innerHTML = `<div class="cd-loading"><div class="cd-loading-spinner"></div></div>`;
+
+  const res = await apiRequest(`/apps/resilience/api/company-news?q=${encodeURIComponent(query)}`);
+  if (!res.ok || !res.payload?.items) {
+    cdPageAlerts.innerHTML = `<div class="cd-error" style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("cdNewsError"))}</div>`;
+    return;
+  }
+  const items = res.payload.items;
+  if (items.length === 0) {
+    cdPageAlerts.innerHTML = `<div class="cd-error" style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("cdNewsEmpty"))}</div>`;
+    return;
+  }
+
+  let html = `<div class="cd-section">
+    <h4 class="cd-section-title">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+      ${escapeHtml(t("cdNewsTitle"))} <span class="cd-badge">${items.length}</span>
+    </h4>
+    <div class="cd-news-list">`;
+  for (const item of items) {
+    const date = formatDateShort(item.pubDate);
+    let source = item.source || "";
+    let title = item.title || "";
+    const sourceUrl = item.sourceUrl || "";
+    const content = item.content || "";
+    // Google News appends " - Source" to the title
+    if (!source && title.includes(" - ")) {
+      const idx = title.lastIndexOf(" - ");
+      source = title.slice(idx + 3);
+      title = title.slice(0, idx);
+    } else if (source && title.endsWith(` - ${source}`)) {
+      title = title.slice(0, -(` - ${source}`).length);
+    }
+    // Favicon from source domain
+    const domain = sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./, "") : "";
+    const faviconUrl = domain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(domain)}` : "";
+    html += `<div class="cd-news-item" data-news-expanded="false">
+      <div class="cd-news-item-header" onclick="this.parentElement.dataset.newsExpanded = this.parentElement.dataset.newsExpanded === 'true' ? 'false' : 'true'">
+        ${faviconUrl ? `<img class="cd-news-favicon" src="${escapeHtml(faviconUrl)}" width="20" height="20" alt="" loading="lazy">` : `<div class="cd-news-favicon-placeholder"></div>`}
+        <div class="cd-news-item-body">
+          <span class="cd-news-item-title">${escapeHtml(title)}</span>
+          <div class="cd-news-item-meta">
+            ${source ? `<span class="cd-news-source">${escapeHtml(source)}</span>` : ""}
+            <span class="cd-news-date">${escapeHtml(date)}</span>
+          </div>
+        </div>
+        <svg class="cd-news-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="cd-news-detail">
+        <p class="cd-news-content">${content ? escapeHtml(content) : `<em>${escapeHtml(t("cdNewsNoContent"))}</em>`}</p>
+        <a class="cd-news-link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">
+          ${domain ? escapeHtml(domain) : "Google News"}
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>`;
+  }
+  html += `</div></div>`;
+  cdPageAlerts.innerHTML = html;
+}
+
+function renderLocationTab(geo) {
+  let html = "";
+  // Info Cards: Location + Coordinates
+  html += `<div class="cd-info-grid">`;
+  html += `<div class="cd-card">
+    <div class="cd-card-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+    <div class="cd-card-content">
+      <span class="cd-card-label">${escapeHtml(t("cdGeoTitle"))}</span>
+      <span class="cd-card-value">${escapeHtml(geo.city_value || "-")}${geo.country_value ? `, ${escapeHtml(geo.country_value)}` : ""}${geo.iso_code ? ` <span class="cd-iso-badge">${escapeHtml(geo.iso_code)}</span>` : ""}</span>
+    </div>
+  </div>`;
+  html += `<div class="cd-card">
+    <div class="cd-card-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+    <div class="cd-card-content">
+      <span class="cd-card-label">${escapeHtml(t("cdCoordinates"))}</span>
+      <span class="cd-card-value">${geo.lat !== null ? `${geo.lat.toFixed(4)}, ${geo.lon.toFixed(4)}` : "-"}</span>
+    </div>
+  </div>`;
+  html += `</div>`;
+  // Map + Alert toggle
+  if (geo.lat !== null && geo.lon !== null) {
+    html += `<div class="cd-section">
+      <div class="cd-section-title">
+        <span>${escapeHtml(t("cdGeoTitle"))}</span>
+        <button id="cd-alerts-toggle" class="cd-alerts-toggle" type="button" title="Alerts auf Karte">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        </button>
+      </div>
+      <div id="cd-map-container" class="cd-map-container"></div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderAlertsTab(alerts) {
+  if (!alerts || alerts.length === 0) {
+    return `<div class="cd-error" style="color:var(--muted)">${escapeHtml(t("cdNoAlerts"))}</div>`;
+  }
+  let html = `<div class="cd-section">
+    <h4 class="cd-section-title">${escapeHtml(t("cdAlertsTitle"))} <span class="cd-badge">${alerts.length}</span></h4>
+    <div class="cd-alerts-list">`;
+  for (const a of alerts) {
+    const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
+    const ac = a.alertlevel === "Red" ? "alert-red" : a.alertlevel === "Orange" ? "alert-orange" : "alert-green";
+    const mt = a.match_tier || "country";
+    const matchCls = `match-${mt}`;
+    let matchLabel = t("cdMatchCountry");
+    if (mt === "polygon") matchLabel = t("cdMatchPolygon");
+    else if (mt === "distance") matchLabel = t("cdMatchDistance").replace("{km}", a.distance_km != null ? Math.round(a.distance_km) : "?");
+    html += `<div class="cd-alert-row ${matchCls}">
+      <span class="cd-alert-icon">${icon}</span>
+      <span class="cd-alert-name">${escapeHtml(a.name || "-")}</span>
+      <span class="alert-badge ${ac}">${escapeHtml(a.alertlevel)}</span>
+      <span class="cd-alert-match">${escapeHtml(matchLabel)}</span>
+      <span class="cd-alert-date">${formatDateShort(a.fromdate)}</span>
+      ${a.url ? `<a class="cd-alert-link" href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ""}
+    </div>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+function renderDataTab(columns_data) {
+  let html = "";
+  const colEntries = Object.entries(columns_data || {}).filter(([, v]) => v);
+  if (colEntries.length > 0) {
+    html += `<div class="cd-section">
+      <h4 class="cd-section-title">${escapeHtml(t("cdColumnsTitle"))}</h4>
+      <div class="cd-columns-grid">`;
+    for (const [path, value] of colEntries) {
+      const label = path.includes(".") ? path.split(".").pop() : path;
+      html += `<div class="cd-col-item">
+        <span class="cd-col-label">${escapeHtml(label)}</span>
+        <span class="cd-col-value">${escapeHtml(String(value))}</span>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  // Placeholder for lazy-loaded AAS meta card
+  html += `<div id="cd-aas-meta-area"></div>`;
+  return html;
+}
+
+function renderAasMetaCard(shell, aasId) {
+  const rows = [];
+  if (shell.id) rows.push(["ID", shell.id]);
+  if (shell.idShort) rows.push(["idShort", shell.idShort]);
+  if (shell.assetKind) rows.push(["Asset Kind", shell.assetKind]);
+  if (shell.assetType) rows.push(["Asset Type", shell.assetType]);
+  if (shell.globalAssetId) rows.push(["Global Asset ID", shell.globalAssetId]);
+  if (shell.submodelCount) rows.push(["Submodels", String(shell.submodelCount)]);
+  let html = `<div class="cd-section">
+    <div class="cd-sm-card">
+      <div class="cd-sm-card-header" data-toggle="cd-sm">
+        <span class="cd-sm-name">AAS</span>
+        <span class="cd-sm-count">${rows.length} ${escapeHtml(t("cdSubmodelElements"))}</span>
+        <svg class="cd-sm-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="cd-sm-card-body" hidden>
+        <table class="cd-sm-table">`;
+  for (const [label, value] of rows) {
+    html += `<tr><td class="cd-sm-prop-name">${escapeHtml(label)}</td><td class="cd-sm-prop-value">${escapeHtml(value)}</td></tr>`;
+  }
+  html += `</table>
+      </div>
+    </div>
+  </div>`;
+  return html;
+}
+
+function renderSubmodelCards(submodels) {
+  if (!submodels || !submodels.length) return "";
+  let html = `<div class="cd-section">
+    <h4 class="cd-section-title">${escapeHtml(t("cdSubmodelsTitle"))} <span class="cd-badge">${submodels.length}</span></h4>
+    <div class="cd-sm-cards">`;
+  for (const sm of submodels) {
+    html += `<div class="cd-sm-card">
+      <div class="cd-sm-card-header" data-toggle="cd-sm">
+        <span class="cd-sm-name">${escapeHtml(sm.idShort || sm.id)}</span>
+        <span class="cd-sm-count">${sm.properties.length} ${escapeHtml(t("cdSubmodelElements"))}</span>
+        <svg class="cd-sm-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="cd-sm-card-body" hidden>
+        <table class="cd-sm-table">`;
+    for (const prop of sm.properties) {
+      const depth = (prop.idShort.match(/\./g) || []).length;
+      const shortName = prop.idShort.includes(".") ? prop.idShort.split(".").pop() : prop.idShort;
+      const isGroup = prop.modelType === "Collection" || prop.modelType === "List";
+      const typeLabel = isGroup ? (prop.modelType === "List" ? "List" : "Collection") : (prop.modelType === "MLP" ? "MLP" : "");
+      if (isGroup) {
+        html += `<tr class="cd-sm-group-row">
+              <td class="cd-sm-prop-name" style="padding-left:${depth * 0.8}rem">${escapeHtml(shortName)} <span class="cd-sm-type-badge">${typeLabel} (${prop.childCount})</span></td>
+              <td class="cd-sm-prop-value"></td>
+            </tr>`;
+      } else {
+        html += `<tr>
+              <td class="cd-sm-prop-name" style="padding-left:${depth * 0.8}rem">${escapeHtml(shortName)}</td>
+              <td class="cd-sm-prop-value">${escapeHtml(prop.value || "-")}${typeLabel ? ` <span class="cd-sm-type-badge">${typeLabel}</span>` : ""}</td>
+            </tr>`;
+      }
+    }
+    html += `</table>
+      </div>
+    </div>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
 
 // Dashboard AAS Tile Settings modal
 const dashAasSettingsModal = document.getElementById("dash-aas-settings-modal");

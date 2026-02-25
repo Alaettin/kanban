@@ -1508,6 +1508,9 @@ function mountRoutes(router) {
           aas_id: entry.aas_id,
           country_value: entry.country_value,
           iso_code: entry.iso_code,
+          city_value: entry.city_value || "",
+          lat: entry.lat,
+          lon: entry.lon,
           columns_data: entry.columns_data,
           alerts: rowAlerts,
         });
@@ -1533,6 +1536,167 @@ function mountRoutes(router) {
     } catch (err) {
       console.error("GET /api/gdacs/aas-overview error:", err);
       res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  // ── Company Detail (modal) ──────────────────────────────────────
+  router.get("/api/company-detail/:aasId", auth.requireAuth, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const aasId = req.params.aasId;
+
+      // All queries in parallel
+      const [imp, mapRow, settings, matchedAlerts] = await Promise.all([
+        db.get("SELECT shell_data, submodels_data, imported_at FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?", [aasId, userId]),
+        db.get("SELECT country_value, iso_code, columns_data FROM resilience_gdacs_aas_map WHERE aas_id = ? AND user_id = ?", [aasId, userId]),
+        db.get("SELECT matching_lat_path, matching_lon_path, geocoding_city_path FROM resilience_settings WHERE user_id = ?", [userId]),
+        db.all(`SELECT m.match_tier, m.distance_km, a.eventid, a.eventtype, a.alertlevel, a.name, a.fromdate, a.url
+                FROM resilience_gdacs_aas_matches m JOIN resilience_gdacs_alerts a ON a.alert_id = m.alert_id
+                WHERE m.user_id = ? AND m.aas_id = ? ORDER BY a.fromdate DESC`, [userId, aasId]),
+      ]);
+      if (!imp) return res.status(404).json({ error: "NOT_IMPORTED" });
+
+      const shell = JSON.parse(imp.shell_data || "{}");
+      const submodels = JSON.parse(imp.submodels_data || "[]");
+
+      // Use cached map data for country/columns (already computed by dashboard)
+      const countryValue = mapRow?.country_value || "";
+      const isoCode = mapRow?.iso_code || "";
+      const colData = JSON.parse(mapRow?.columns_data || "{}");
+
+      // Extract city + coordinates from submodels
+      let cityValue = "";
+      let lat = null, lon = null;
+      if (settings) {
+        if (settings.geocoding_city_path) cityValue = extractFirstValue(submodels, settings.geocoding_city_path);
+        if (settings.matching_lat_path) { const v = parseFloat(extractFirstValue(submodels, settings.matching_lat_path)); if (!isNaN(v)) lat = v; }
+        if (settings.matching_lon_path) { const v = parseFloat(extractFirstValue(submodels, settings.matching_lon_path)); if (!isNaN(v)) lon = v; }
+      }
+      if (lat === null) {
+        const geo = submodels.find(sm => sm.idShort === "Geocoding");
+        if (geo) {
+          const els = geo.submodelElements || [];
+          const latEl = els.find(e => e.idShort === "Latitude");
+          const lonEl = els.find(e => e.idShort === "Longitude");
+          if (latEl?.value) lat = parseFloat(latEl.value);
+          if (lonEl?.value) lon = parseFloat(lonEl.value);
+          if (isNaN(lat) || isNaN(lon)) { lat = null; lon = null; }
+        }
+      }
+
+      // Submodel summary with recursive properties, exclude Geocoding
+      function flattenElements(elements, prefix) {
+        const result = [];
+        for (const el of (elements || [])) {
+          const path = prefix ? `${prefix}.${el.idShort || ""}` : (el.idShort || "");
+          if (el.modelType === "Property") {
+            result.push({ idShort: path, value: el.value || "", modelType: "Property" });
+          } else if (el.modelType === "MultiLanguageProperty") {
+            result.push({ idShort: path, value: (el.value || []).map(v => v.text).filter(Boolean).join(", "), modelType: "MLP" });
+          } else if (el.modelType === "SubmodelElementCollection") {
+            result.push({ idShort: path, value: "", modelType: "Collection", childCount: (el.value || []).length });
+            result.push(...flattenElements(el.value || [], path));
+          } else if (el.modelType === "SubmodelElementList") {
+            const items = el.value || [];
+            result.push({ idShort: path, value: "", modelType: "List", childCount: items.length });
+            result.push(...flattenElements(items, path));
+          } else {
+            result.push({ idShort: path, value: el.value != null ? String(el.value) : "", modelType: el.modelType || "" });
+          }
+        }
+        return result;
+      }
+      const submodelSummary = submodels
+        .filter(sm => sm.idShort !== "Geocoding")
+        .map(sm => ({
+          idShort: sm.idShort || "", id: sm.id || "",
+          semanticId: sm.semanticId?.keys?.[0]?.value || "",
+          properties: flattenElements(sm.submodelElements, ""),
+        }));
+
+      res.json({
+        aas_id: aasId,
+        shell: {
+          idShort: shell.idShort || "",
+          id: shell.id || "",
+          assetKind: shell.assetInformation?.assetKind || "",
+          assetType: shell.assetInformation?.assetType || "",
+          globalAssetId: shell.assetInformation?.globalAssetId || "",
+          submodelCount: (shell.submodels || []).length,
+        },
+        geo: { country_value: countryValue, iso_code: isoCode, city_value: cityValue, lat, lon },
+        columns_data: colData,
+        alerts: matchedAlerts,
+        submodels: submodelSummary,
+        imported_at: imp.imported_at,
+      });
+    } catch (err) {
+      console.error("GET /api/company-detail error:", err);
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  // ── Company News (Google News RSS proxy) ──────────────────────
+  const companyNewsCache = new Map();
+  const COMPANY_NEWS_TTL = 30 * 60 * 1000;
+
+  router.get("/api/company-news", auth.requireAuth, async (req, res) => {
+    try {
+      const q = (req.query.q || "").trim();
+      if (!q) return res.status(400).json({ error: "MISSING_QUERY" });
+
+      const cached = companyNewsCache.get(q);
+      if (cached && (Date.now() - cached.fetchedAt) < COMPANY_NEWS_TTL) {
+        return res.json({ items: cached.items, cached: true });
+      }
+
+      const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=de&gl=DE&ceid=DE:de`;
+
+      // Fetch raw XML to extract <source url="..."> which rss-parser doesn't expose
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const rawXml = await response.text();
+
+      // Extract source URLs from raw XML: <source url="https://domain.com">Name</source>
+      const sourceMap = new Map();
+      const sourceRe = /<source\s+url="([^"]+)"[^>]*>([^<]+)<\/source>/g;
+      let m;
+      while ((m = sourceRe.exec(rawXml)) !== null) {
+        sourceMap.set(m[2].trim(), m[1]); // name → url
+      }
+
+      const parsed = await rssParser.parseString(rawXml);
+
+      // 7-day filter
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const items = (parsed.items || [])
+        .filter(item => {
+          const d = new Date(item.isoDate || item.pubDate);
+          return !isNaN(d) && d.getTime() >= sevenDaysAgo;
+        })
+        .slice(0, 30)
+        .map(item => {
+          const title = (item.title || "").slice(0, 500);
+          // Extract source name from title suffix ("Headline - Source") since rss-parser doesn't expose it
+          let sourceName = item.source?.name || item.creator || "";
+          if (!sourceName && title.includes(" - ")) {
+            sourceName = title.slice(title.lastIndexOf(" - ") + 3);
+          }
+          return {
+            title,
+            link: (item.link || "").slice(0, 2000),
+            pubDate: item.isoDate || item.pubDate || null,
+            source: sourceName,
+            sourceUrl: sourceMap.get(sourceName) || "",
+            content: (item.contentSnippet || item.content || "").replace(/<[^>]+>/g, "").slice(0, 500),
+          };
+        });
+
+      companyNewsCache.set(q, { items, fetchedAt: Date.now() });
+      res.json({ items, cached: false });
+    } catch (err) {
+      console.error("GET /api/company-news error:", err);
+      res.status(502).json({ error: "FETCH_FAILED" });
     }
   });
 
@@ -2623,7 +2787,8 @@ async function buildAasAlertData(userId) {
           aas_id: aas.aas_id, alert_id: alert.alert_id,
           match_tier: matchTier, distance_km: distKm,
           eventtype: alert.eventtype, alertlevel: alert.alertlevel,
-          name: alert.name, fromdate: alert.fromdate, url: alert.url
+          name: alert.name, fromdate: alert.fromdate, url: alert.url,
+          centroid_lat: alert.centroid_lat, centroid_lon: alert.centroid_lon
         });
       }
     }
