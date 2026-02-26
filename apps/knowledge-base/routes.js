@@ -114,7 +114,7 @@ async function generateDescriptionAI(contentText, provider, model, apiKey) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 512, temperature: 0.3 },
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.3 },
       }),
     });
     const data = await res.json();
