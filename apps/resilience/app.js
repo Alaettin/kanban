@@ -4115,7 +4115,7 @@ srcImportBtn.addEventListener("click", async () => {
 
   const result = await apiRequest(`/apps/resilience/api/aas-sources/${editingSourceId}/ids/import`, {
     method: "POST",
-    body: { url },
+    body: { url, item_prefix: srcPrefixInput.value.trim() },
   });
 
   srcImportBtn.disabled = false;

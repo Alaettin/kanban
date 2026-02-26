@@ -2897,7 +2897,7 @@ function mountRoutes(router) {
   // POST import item IDs from external endpoint
   router.post("/api/aas-sources/:sourceId/ids/import", auth.requireAuth, async (req, res) => {
     try {
-      const { url } = req.body;
+      const { url, item_prefix } = req.body;
       if (!url) return res.status(400).json({ error: "MISSING_URL" });
 
       const source = await db.get(
@@ -2918,7 +2918,7 @@ function mountRoutes(router) {
 
       let added = 0;
       let duplicates = 0;
-      const prefix = source.item_prefix || "";
+      const prefix = (item_prefix !== undefined ? item_prefix : source.item_prefix) || "";
 
       for (const raw of data) {
         const itemId = String(raw).trim();
