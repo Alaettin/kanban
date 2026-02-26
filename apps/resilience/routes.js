@@ -2952,12 +2952,16 @@ function mountRoutes(router) {
       const rows = await db.all(
         `SELECT i.entry_id, i.aas_id, i.entry_type, i.item_id,
                 s.source_id, s.name AS source_name, s.base_url,
-                g.group_id, g.name AS group_name,
+                grp.group_id, grp.group_name,
                 imp.imported_at, imp.geocoded_status, imp.company_status
          FROM resilience_aas_source_ids i
          JOIN resilience_aas_sources s ON s.source_id = i.source_id
-         LEFT JOIN resilience_asset_group_members m ON m.aas_id = i.aas_id
-         LEFT JOIN resilience_asset_groups g ON g.group_id = m.group_id AND g.user_id = ?
+         LEFT JOIN (
+           SELECT m.aas_id, m.group_id, g.name AS group_name
+           FROM resilience_asset_group_members m
+           JOIN resilience_asset_groups g ON g.group_id = m.group_id AND g.user_id = ?
+           GROUP BY m.aas_id
+         ) grp ON grp.aas_id = i.aas_id
          LEFT JOIN resilience_aas_imports imp ON imp.aas_id = i.aas_id AND imp.user_id = ?
          WHERE s.user_id = ?
          ORDER BY s.name ASC, i.aas_id ASC`,
