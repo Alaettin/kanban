@@ -182,6 +182,7 @@ const I18N = {
     simStartSim: "Simulation starten",
     simWithMeasures: "Simulation mit Maßnahmen",
     simFinish: "Neue Simulation",
+    simResimulate: "Erneut simulieren",
     simSelectDisruptions: "Wähle Störungen aus, die in die Lieferkette eingebaut werden sollen.",
     simSelectMeasures: "Wähle Gegenmaßnahmen, um die Auswirkungen zu reduzieren.",
     simResults: "Auswertung",
@@ -790,6 +791,7 @@ const I18N = {
     simStartSim: "Start simulation",
     simWithMeasures: "Simulate with measures",
     simFinish: "New simulation",
+    simResimulate: "Re-simulate",
     simSelectDisruptions: "Select disruptions to introduce into the supply chain.",
     simSelectMeasures: "Select countermeasures to reduce the impact.",
     simResults: "Results",
@@ -8406,6 +8408,7 @@ const simLoadingFill = document.getElementById("sim-loading-fill");
 const simLoadingText = document.getElementById("sim-loading-text");
 const simBackBtn = document.getElementById("sim-back-btn");
 const simNextBtn = document.getElementById("sim-next-btn");
+const simResimBtn = document.getElementById("sim-resim-btn");
 const simFooter = document.getElementById("sim-footer");
 
 function updateSimStepper() {
@@ -8441,6 +8444,10 @@ function renderSimStep(step) {
   // Footer buttons
   simBackBtn.hidden = step === 0;
   simBackBtn.textContent = t("simBack");
+
+  // Re-simulate button: visible after results are shown in step 1 or 2
+  simResimBtn.hidden = !((step === 1 && simResults) || (step === 2 && simCompareResults));
+  simResimBtn.textContent = t("simResimulate");
 
   if (step === 0) {
     simNextBtn.textContent = t("simNext");
@@ -8779,5 +8786,27 @@ simBackBtn.addEventListener("click", () => {
   } else if (simStep === 2) {
     simCompareResults = null;
     renderSimStep(1);
+  }
+});
+
+simResimBtn.addEventListener("click", async () => {
+  if (simStep === 1) {
+    simResults = null;
+    renderSimStep(1);
+    if (simDisruptions.size === 0) return;
+    const phasesDE = ["Störszenarien werden angewendet…", "Auswirkungen berechnen…", "Ergebnisse generieren…"];
+    const phasesEN = ["Applying disruption scenarios…", "Calculating impacts…", "Generating results…"];
+    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
+    simResults = generateFakeResults(simDisruptions);
+    renderSimStep(1);
+  } else if (simStep === 2) {
+    simCompareResults = null;
+    renderSimStep(2);
+    if (simMeasures.size === 0) return;
+    const phasesDE = ["Gegenmaßnahmen werden angewendet…", "Neue Szenarien berechnen…", "Vergleich erstellen…"];
+    const phasesEN = ["Applying countermeasures…", "Calculating new scenarios…", "Creating comparison…"];
+    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
+    simCompareResults = generateFakeComparison(simDisruptions, simMeasures);
+    renderSimStep(2);
   }
 });

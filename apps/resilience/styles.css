@@ -587,6 +587,16 @@ body.sidebar-collapsed .sidebar-foot {
   border-color: var(--border-2);
 }
 
+.btn-outline {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.btn-outline:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* -- SETTINGS CARD -- */
 
 .settings-card {
