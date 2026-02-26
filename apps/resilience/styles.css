@@ -605,6 +605,26 @@ body.sidebar-collapsed .sidebar-foot {
   color: var(--text);
 }
 
+.settings-card-danger {
+  border-color: var(--danger, #ef4444);
+}
+.settings-card-danger h3 {
+  color: var(--danger, #ef4444);
+}
+.danger-zone-confirm {
+  margin: 1rem 0 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.danger-zone-confirm label {
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+.danger-zone-confirm input {
+  max-width: 280px;
+}
+
 .feed-add-row {
   display: flex;
   gap: 0.5rem;

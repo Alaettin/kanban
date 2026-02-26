@@ -40,6 +40,7 @@ const settingsNavGdacs = document.getElementById("settings-nav-gdacs");
 const settingsNavAasImport = document.getElementById("settings-nav-aas-import");
 const settingsNavCC = document.getElementById("settings-nav-country-codes");
 const settingsNavGdeltBq = document.getElementById("settings-nav-gdelt-bq");
+const settingsNavDangerZone = document.getElementById("settings-nav-danger-zone");
 const bqSaInput = document.getElementById("bq-sa-input");
 const bqSaSaveBtn = document.getElementById("bq-sa-save-btn");
 const bqSaStatus = document.getElementById("bq-sa-status");
@@ -613,6 +614,14 @@ const I18N = {
     settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Ländercodes",
     settingsNavGdelt: "GDELT",
+    settingsNavDanger: "Danger Zone",
+    dangerZoneTitle: "Alle Daten löschen",
+    dangerZoneDesc: "Diese Aktion löscht unwiderruflich alle Inhalte: Imports, Anreicherungen, Konfigurationen, Feeds, Alerts und Indikatoren. Einstellungen werden zurückgesetzt.",
+    dangerZoneInputLabel: 'Bitte <strong>Löschen</strong> eingeben, um zu bestätigen:',
+    dangerZoneBtn: "Alle Daten unwiderruflich löschen",
+    dangerZoneConfirmWord: "Löschen",
+    dangerZoneSuccess: "Alle Daten wurden gelöscht.",
+    dangerZoneError: "Fehler beim Löschen der Daten.",
     gdeltSettingsTitle: "GDELT / BigQuery",
     gdeltSettingsDesc: "Verbinde einen Google Cloud Service Account für GDELT-Abfragen über BigQuery.",
     gdeltSaLabel: "Service Account JSON",
@@ -1212,6 +1221,14 @@ const I18N = {
     settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Country Codes",
     settingsNavGdelt: "GDELT",
+    settingsNavDanger: "Danger Zone",
+    dangerZoneTitle: "Delete all data",
+    dangerZoneDesc: "This action irreversibly deletes all content: imports, enrichments, configurations, feeds, alerts and indicators. Settings will be reset.",
+    dangerZoneInputLabel: 'Please type <strong>Delete</strong> to confirm:',
+    dangerZoneBtn: "Permanently delete all data",
+    dangerZoneConfirmWord: "Delete",
+    dangerZoneSuccess: "All data has been deleted.",
+    dangerZoneError: "Error deleting data.",
     gdeltSettingsTitle: "GDELT / BigQuery",
     gdeltSettingsDesc: "Connect a Google Cloud service account for GDELT queries via BigQuery.",
     gdeltSaLabel: "Service Account JSON",
@@ -1605,6 +1622,12 @@ function applyLocaleToUI() {
   document.getElementById("settings-nav-aas-btn").textContent = t("settingsNavAasImport");
   document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
   document.getElementById("settings-nav-gdelt-btn").textContent = t("settingsNavGdelt");
+  document.getElementById("settings-nav-danger-btn").textContent = t("settingsNavDanger");
+  document.getElementById("danger-zone-title").textContent = t("dangerZoneTitle");
+  document.getElementById("danger-zone-desc").textContent = t("dangerZoneDesc");
+  document.getElementById("danger-zone-input-label").innerHTML = t("dangerZoneInputLabel");
+  document.getElementById("danger-zone-btn-label").textContent = t("dangerZoneBtn");
+  document.getElementById("danger-zone-input").placeholder = t("dangerZoneConfirmWord");
   document.getElementById("gdelt-settings-title").textContent = t("gdeltSettingsTitle");
   document.getElementById("gdelt-settings-desc").textContent = t("gdeltSettingsDesc");
   document.getElementById("gdelt-sa-label").textContent = t("gdeltSaLabel");
@@ -2338,12 +2361,43 @@ function switchSettingsNav(nav) {
   settingsNavAasImport.hidden = nav !== "aas-import";
   settingsNavCC.hidden = nav !== "country-codes";
   settingsNavGdeltBq.hidden = nav !== "gdelt-bq";
+  settingsNavDangerZone.hidden = nav !== "danger-zone";
 
   if (nav === "feeds" || nav === "gdacs" || nav === "aas-import" || nav === "gdelt-bq") {
     loadSettings();
   } else if (nav === "country-codes") {
     loadCountryMappings();
   }
+}
+
+// ── Danger Zone: delete all data ──────────────────────────────────
+{
+  const dzInput = document.getElementById("danger-zone-input");
+  const dzBtn = document.getElementById("danger-zone-btn");
+  const dzHint = document.getElementById("danger-zone-hint");
+
+  dzInput.addEventListener("input", () => {
+    dzBtn.disabled = dzInput.value.trim() !== t("dangerZoneConfirmWord");
+  });
+
+  dzBtn.addEventListener("click", async () => {
+    if (dzInput.value.trim() !== t("dangerZoneConfirmWord")) return;
+    dzBtn.disabled = true;
+    dzHint.hidden = true;
+    try {
+      const res = await fetch("/apps/resilience/api/delete-all-data", { method: "POST", credentials: "same-origin" });
+      if (!res.ok) throw new Error();
+      dzHint.textContent = t("dangerZoneSuccess");
+      dzHint.style.color = "var(--success, #22c55e)";
+      dzHint.hidden = false;
+      dzInput.value = "";
+    } catch {
+      dzHint.textContent = t("dangerZoneError");
+      dzHint.style.color = "var(--danger, #ef4444)";
+      dzHint.hidden = false;
+      dzBtn.disabled = false;
+    }
+  });
 }
 
 // ── Country Mappings ──────────────────────────────────────────────

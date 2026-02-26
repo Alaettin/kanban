@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resilience – Workspace</title>
-  <link rel="stylesheet" href="/apps/resilience/styles.css?v=27" />
+  <link rel="stylesheet" href="/apps/resilience/styles.css?v=28" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
@@ -933,6 +933,7 @@
               <button class="docs-nav-item" data-settings-nav="aas-import" type="button" id="settings-nav-aas-btn">AAS Import</button>
               <button class="docs-nav-item" data-settings-nav="country-codes" type="button" id="settings-nav-cc-btn">Ländercodes</button>
               <button class="docs-nav-item" data-settings-nav="gdelt-bq" type="button" id="settings-nav-gdelt-btn">GDELT</button>
+              <button class="docs-nav-item" data-settings-nav="danger-zone" type="button" id="settings-nav-danger-btn" style="color:var(--danger,#ef4444)">Danger Zone</button>
             </nav>
 
             <div class="settings-nav-content">
@@ -1170,6 +1171,25 @@
                     <div class="settings-actions-spacer"></div>
                     <button id="bq-sa-save-btn" class="btn btn-primary" type="button">
                       <span id="bq-sa-save-label">Speichern</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── Danger Zone Tab ── -->
+              <div id="settings-nav-danger-zone" hidden>
+                <div class="settings-card settings-card-danger">
+                  <h3 id="danger-zone-title">Alle Daten löschen</h3>
+                  <p class="settings-desc" id="danger-zone-desc">Diese Aktion löscht unwiderruflich alle Inhalte: Imports, Anreicherungen, Konfigurationen, Feeds, Alerts und Indikatoren. Einstellungen werden zurückgesetzt.</p>
+                  <div class="danger-zone-confirm">
+                    <label for="danger-zone-input" id="danger-zone-input-label">Bitte <strong>Löschen</strong> eingeben, um zu bestätigen:</label>
+                    <input id="danger-zone-input" class="feed-url-input" type="text" placeholder="Löschen" autocomplete="off" />
+                  </div>
+                  <div id="danger-zone-hint" class="settings-hint" hidden></div>
+                  <div class="settings-actions">
+                    <div class="settings-actions-spacer"></div>
+                    <button id="danger-zone-btn" class="btn btn-danger" type="button" disabled>
+                      <span id="danger-zone-btn-label">Alle Daten unwiderruflich löschen</span>
                     </button>
                   </div>
                 </div>
@@ -1672,6 +1692,6 @@
     </div>
   </div>
 
-  <script src="/apps/resilience/app.js?v=27"></script>
+  <script src="/apps/resilience/app.js?v=28"></script>
 </body>
 </html>

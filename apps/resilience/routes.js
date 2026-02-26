@@ -3352,6 +3352,36 @@ function mountRoutes(router) {
     }
   });
 
+  // ── Delete ALL user data (factory reset) ─────────────────────────
+  router.post("/api/delete-all-data", auth.requireAuth, async (req, res) => {
+    try {
+      const uid = req.user.id;
+      // Children first (FK cascades handle some, but be explicit)
+      await db.run("DELETE FROM resilience_gdacs_aas_matches WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_gdacs_aas_map WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_gdacs_polygons WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_gdacs_alerts WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_gdacs_countries WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_indicator_conditions WHERE indicator_id IN (SELECT indicator_id FROM resilience_indicators WHERE user_id = ?)", [uid]);
+      await db.run("DELETE FROM resilience_indicator_groups WHERE indicator_id IN (SELECT indicator_id FROM resilience_indicators WHERE user_id = ?)", [uid]);
+      await db.run("DELETE FROM resilience_indicators WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_indicator_classes WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_feed_items WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_feeds WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_aas_imports WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_aas_source_ids WHERE source_id IN (SELECT source_id FROM resilience_aas_sources WHERE user_id = ?)", [uid]);
+      await db.run("DELETE FROM resilience_aas_sources WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_asset_group_members WHERE group_id IN (SELECT group_id FROM resilience_asset_groups WHERE user_id = ?)", [uid]);
+      await db.run("DELETE FROM resilience_asset_groups WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_country_mappings WHERE user_id = ?", [uid]);
+      await db.run("DELETE FROM resilience_settings WHERE user_id = ?", [uid]);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("POST /api/delete-all-data error:", err);
+      res.status(500).json({ error: "DELETE_ALL_FAILED" });
+    }
+  });
+
 }
 
 // ---------------------------------------------------------------------------
