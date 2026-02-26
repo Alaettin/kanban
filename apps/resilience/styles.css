@@ -4779,3 +4779,258 @@ body.sidebar-collapsed .sidebar-foot {
   font-size: 0.7rem; font-weight: 600; color: var(--muted);
   margin-left: 0.4rem; white-space: nowrap;
 }
+
+/* ======================= SIMULATION WIZARD ======================= */
+
+.sim-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+}
+.sim-step {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700;
+  border: 2px solid var(--border);
+  color: var(--text-2);
+  background: var(--surface);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+.sim-step.active {
+  border-color: var(--accent); color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, #4338ca 100%);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+.sim-step.done {
+  border-color: #22c55e; color: #fff; background: #22c55e;
+}
+.sim-step-line {
+  width: 32px; height: 2px; background: var(--border);
+  transition: background 0.3s;
+}
+.sim-step-line.done { background: #22c55e; }
+.sim-step-label {
+  font-size: 0.72rem; font-weight: 600;
+  color: var(--muted); margin: 0 0.5rem;
+  transition: color 0.3s;
+}
+.sim-step-label.active { color: var(--accent); font-weight: 700; }
+.sim-step-label.done { color: #22c55e; }
+
+.sim-content {
+  animation: sim-fade-in 0.35s ease;
+  min-height: 300px;
+}
+
+@keyframes sim-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Section titles */
+.sim-section { margin-bottom: 1.5rem; }
+.sim-section-title {
+  font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted);
+  margin-bottom: 0.75rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.sim-section-title::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+
+/* Material select */
+.sim-select {
+  width: 100%; padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: 0.85rem; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.sim-select:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+/* Info cards (supplier, qty, delivery) */
+.sim-info-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem; margin-top: 0.75rem;
+}
+.sim-info-card {
+  padding: 1rem; border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  animation: sim-fade-in 0.4s ease both;
+}
+.sim-info-card:nth-child(2) { animation-delay: 0.08s; }
+.sim-info-card:nth-child(3) { animation-delay: 0.16s; }
+.sim-info-card-icon {
+  font-size: 1.3rem; margin-bottom: 0.35rem;
+}
+.sim-info-card-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.25rem;
+}
+.sim-info-card-value {
+  font-size: 0.88rem; font-weight: 600; color: var(--text);
+}
+
+/* Form rows */
+.sim-form-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.sim-form-row { display: flex; flex-direction: column; gap: 0.3rem; }
+.sim-form-label {
+  font-size: 0.72rem; font-weight: 600; color: var(--text-2);
+}
+.sim-form-input {
+  padding: 0.5rem 0.7rem; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface);
+  font: inherit; font-size: 0.82rem; color: var(--text);
+  transition: all 0.15s;
+}
+.sim-form-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+/* Option cards (disruptions, measures) */
+.sim-option-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+.sim-option-card {
+  display: flex; align-items: flex-start; gap: 0.65rem;
+  padding: 0.85rem 1rem; border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer; transition: all 0.2s;
+  user-select: none;
+}
+.sim-option-card:hover {
+  border-color: var(--accent); background: var(--surface-2);
+}
+.sim-option-card.selected {
+  border-color: var(--accent);
+  background: rgba(79, 70, 229, 0.06);
+  box-shadow: 0 0 0 1px var(--accent-light);
+}
+.sim-option-icon { font-size: 1.4rem; flex-shrink: 0; line-height: 1; }
+.sim-option-body { flex: 1; min-width: 0; }
+.sim-option-name { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.sim-option-desc { font-size: 0.72rem; color: var(--text-2); margin-top: 0.15rem; }
+.sim-option-check {
+  width: 18px; height: 18px; accent-color: var(--accent);
+  flex-shrink: 0; margin-top: 2px; pointer-events: none;
+}
+
+/* Loading overlay */
+.sim-loading {
+  display: flex; align-items: center; justify-content: center;
+  padding: 2.5rem 0;
+}
+.sim-loading[hidden] { display: none; }
+.sim-loading-inner {
+  width: 100%; max-width: 360px; text-align: center;
+}
+.sim-loading-bar {
+  width: 100%; height: 6px; border-radius: 3px;
+  background: var(--surface-3); overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+.sim-loading-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), #22c55e);
+  width: 0%; transition: width 0.1s linear;
+}
+.sim-loading-text {
+  font-size: 0.82rem; font-weight: 500; color: var(--text-2);
+  margin: 0;
+}
+
+/* Results */
+.sim-results { animation: sim-fade-in 0.4s ease; margin-top: 1.5rem; }
+.sim-metric-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem; margin-bottom: 1.25rem;
+}
+.sim-metric-card {
+  padding: 1rem; border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-align: center;
+  animation: sim-fade-in 0.4s ease both;
+}
+.sim-metric-card:nth-child(2) { animation-delay: 0.06s; }
+.sim-metric-card:nth-child(3) { animation-delay: 0.12s; }
+.sim-metric-card:nth-child(4) { animation-delay: 0.18s; }
+.sim-metric-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.4rem;
+}
+.sim-metric-value {
+  font-size: 1.2rem; font-weight: 800; color: var(--text);
+}
+.sim-metric-delta {
+  font-size: 0.72rem; font-weight: 600; margin-top: 0.25rem;
+}
+.delta-negative { color: #dc2626; }
+.delta-positive { color: #16a34a; }
+
+/* Bar comparison */
+.sim-bar-compare { margin-bottom: 1.25rem; }
+.sim-bar-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.sim-bar-label-col {
+  width: 55px; font-size: 0.72rem; font-weight: 600;
+  color: var(--text-2); text-align: right; flex-shrink: 0;
+}
+.sim-bar-track {
+  flex: 1; height: 22px; border-radius: 6px;
+  background: var(--surface-3); overflow: hidden;
+  position: relative;
+}
+.sim-bar-fill-before {
+  height: 100%; border-radius: 6px;
+  background: linear-gradient(90deg, #f87171, #dc2626);
+  transition: width 1s ease;
+}
+.sim-bar-fill-after {
+  height: 100%; border-radius: 6px;
+  background: linear-gradient(90deg, #4ade80, #16a34a);
+  transition: width 1s ease;
+}
+.sim-bar-val {
+  font-size: 0.72rem; font-weight: 700; color: var(--text);
+  width: 60px; flex-shrink: 0;
+}
+
+/* Summary box */
+.sim-summary {
+  padding: 1rem 1.25rem; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 0.82rem; line-height: 1.6; color: var(--text-2);
+  animation: sim-fade-in 0.5s ease 0.2s both;
+}
+
+/* Footer */
+.sim-footer {
+  display: flex; align-items: center;
+  gap: 0.75rem; margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 700px) {
+  .sim-info-cards { grid-template-columns: 1fr; }
+  .sim-option-grid { grid-template-columns: 1fr; }
+  .sim-metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .sim-form-grid { grid-template-columns: 1fr; }
+}

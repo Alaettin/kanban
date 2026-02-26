@@ -146,7 +146,7 @@ const I18N = {
     sectionSources: "Quellen & Daten",
     indicators: "Indikatoren",
     gdacs: "GDACS",
-    aiMapping: "AI Mapping",
+    aiMapping: "AI Enrichment",
     simulation: "Simulation",
     aasData: "AAS Daten",
     newsFeeds: "News Feeds",
@@ -155,10 +155,43 @@ const I18N = {
     dashboardDesc: "Übersicht der Resilienz-Tools für deine Lieferkette.",
     indicatorsTitle: "Indikatoren",
     indicatorsDesc: "Überwache Resilienz-Indikatoren deiner Lieferkette.",
-    aiMappingTitle: "AI Mapping",
-    aiMappingDesc: "KI-gestützte Zuordnung und Analyse.",
+    aiMappingTitle: "AI Enrichment",
+    aiMappingDesc: "KI-gestützte Anreicherung und Analyse.",
     simulationTitle: "Simulation",
     simulationDesc: "Szenarien simulieren und Auswirkungen analysieren.",
+    simStep1: "Kalibrierung",
+    simStep2: "Störungen",
+    simStep3: "Gegenmaßnahmen",
+    simMaterial: "Komponente auswählen",
+    simSupplier: "Lieferant",
+    simQty: "Benötigte Menge",
+    simDelivery: "Lieferzeitpunkt",
+    simOrderData: "Bestelldaten",
+    simOrderMaterial: "Material-Bedarf",
+    simOrderQty: "Menge pro Bestellung",
+    simOrderDate: "Bestelldatum",
+    simParams: "Simulationsparameter",
+    simStock: "Lagerbestand",
+    simBuffer: "Sicherheitspuffer",
+    simReliability: "Lieferanten-Zuverlässigkeit",
+    simNext: "Weiter",
+    simBack: "Zurück",
+    simParametrizing: "Simulation wird parametriert…",
+    simRunning: "Simulation läuft…",
+    simStartSim: "Simulation starten",
+    simWithMeasures: "Simulation mit Maßnahmen",
+    simFinish: "Neue Simulation",
+    simSelectDisruptions: "Wähle Störungen aus, die in die Lieferkette eingebaut werden sollen.",
+    simSelectMeasures: "Wähle Gegenmaßnahmen, um die Auswirkungen zu reduzieren.",
+    simResults: "Auswertung",
+    simComparison: "Vergleich mit Gegenmaßnahmen",
+    simDelayDays: "Lieferverzögerung",
+    simCostIncrease: "Kostenerhöhung",
+    simFulfillment: "Erfüllungsquote",
+    simRiskScore: "Risiko-Score",
+    simBefore: "Vorher",
+    simAfter: "Nachher",
+    simSummary: "Zusammenfassung",
     gdacsTitle: "GDACS",
     gdacsDescPre: "Naturkatastrophen-Daten vom",
     gdacsDescLink: "Global Disaster Alert and Coordination System",
@@ -713,7 +746,7 @@ const I18N = {
     sectionSources: "Sources & Data",
     indicators: "Indicators",
     gdacs: "GDACS",
-    aiMapping: "AI Mapping",
+    aiMapping: "AI Enrichment",
     simulation: "Simulation",
     aasData: "AAS Data",
     newsFeeds: "News Feeds",
@@ -722,10 +755,43 @@ const I18N = {
     dashboardDesc: "Overview of resilience tools for your supply chain.",
     indicatorsTitle: "Indicators",
     indicatorsDesc: "Monitor resilience indicators of your supply chain.",
-    aiMappingTitle: "AI Mapping",
-    aiMappingDesc: "AI-powered mapping and analysis.",
+    aiMappingTitle: "AI Enrichment",
+    aiMappingDesc: "AI-powered enrichment and analysis.",
     simulationTitle: "Simulation",
     simulationDesc: "Simulate scenarios and analyze impacts.",
+    simStep1: "Calibration",
+    simStep2: "Disruptions",
+    simStep3: "Countermeasures",
+    simMaterial: "Select component",
+    simSupplier: "Supplier",
+    simQty: "Required quantity",
+    simDelivery: "Delivery time",
+    simOrderData: "Order data",
+    simOrderMaterial: "Material demand",
+    simOrderQty: "Quantity per order",
+    simOrderDate: "Order date",
+    simParams: "Simulation parameters",
+    simStock: "Stock level",
+    simBuffer: "Safety buffer",
+    simReliability: "Supplier reliability",
+    simNext: "Next",
+    simBack: "Back",
+    simParametrizing: "Parametrizing simulation…",
+    simRunning: "Running simulation…",
+    simStartSim: "Start simulation",
+    simWithMeasures: "Simulate with measures",
+    simFinish: "New simulation",
+    simSelectDisruptions: "Select disruptions to introduce into the supply chain.",
+    simSelectMeasures: "Select countermeasures to reduce the impact.",
+    simResults: "Results",
+    simComparison: "Comparison with countermeasures",
+    simDelayDays: "Delivery delay",
+    simCostIncrease: "Cost increase",
+    simFulfillment: "Fulfillment rate",
+    simRiskScore: "Risk score",
+    simBefore: "Before",
+    simAfter: "After",
+    simSummary: "Summary",
     gdacsTitle: "GDACS",
     gdacsDescPre: "Natural disaster data from the",
     gdacsDescLink: "Global Disaster Alert and Coordination System",
@@ -1363,6 +1429,7 @@ function navigateTo(page) {
   if (page === "news-feeds") { showNewsList(); loadNews(); }
   if (page === "gdacs-alerts") loadGdacsAlerts();
   if (page === "settings") switchSettingsNav(activeSettingsNav);
+  if (page === "simulation") renderSimStep(simStep);
   if (page === "docs") loadDoc(activeDoc);
 }
 
@@ -8244,4 +8311,419 @@ init();
     cwMessages.innerHTML = "";
     cwTag.hidden = true;
   });
-})();
+
+})(); // end initChatWidget
+
+// ======================= SIMULATION WIZARD =======================
+
+const SIM_MATERIALS = [
+  { id: "alu", name: "Aluminium-Gehäuse", supplier: "MetalWorks GmbH, Stuttgart", qty: "2.400 Einheiten/Monat", delivery: "KW 12–14, 2026" },
+  { id: "lithium", name: "Lithium-Zellen", supplier: "BatteryTech AG, München", qty: "5.000 Zellen/Monat", delivery: "KW 10–12, 2026" },
+  { id: "copper", name: "Kupfer-Leiterplatten", supplier: "CircuitPro Ltd, Shenzhen", qty: "8.000 Stück/Monat", delivery: "KW 13–16, 2026" },
+  { id: "steel", name: "Stahl-Chassis", supplier: "SteelForge GmbH, Essen", qty: "1.200 Einheiten/Monat", delivery: "KW 11–13, 2026" },
+];
+
+const SIM_DISRUPTIONS = [
+  { id: "outage", icon: "\u26A0\uFE0F", nameDE: "Lieferausfall", nameEN: "Supplier outage", descDE: "Lieferant fällt 4 Wochen komplett aus", descEN: "Supplier unavailable for 4 weeks" },
+  { id: "delay", icon: "\uD83D\uDE9A", nameDE: "Transportverzögerung", nameEN: "Transport delay", descDE: "+2 Wochen Lieferzeit", descEN: "+2 weeks delivery time" },
+  { id: "quality", icon: "\uD83D\uDD0D", nameDE: "Qualitätsmangel", nameEN: "Quality issue", descDE: "20% Ausschuss-Quote", descEN: "20% rejection rate" },
+  { id: "demand", icon: "\uD83D\uDCC8", nameDE: "Nachfrageanstieg", nameEN: "Demand surge", descDE: "+50% Bestellmenge unerwartet", descEN: "+50% unexpected order volume" },
+  { id: "scarcity", icon: "\uD83E\uDEA8", nameDE: "Rohstoffknappheit", nameEN: "Raw material scarcity", descDE: "Preis +35%, Menge \u221225%", descEN: "Price +35%, quantity \u221225%" },
+];
+
+const SIM_MEASURES = [
+  { id: "alt-supplier", icon: "\uD83D\uDD04", nameDE: "Alternativ-Lieferant", nameEN: "Alternative supplier", descDE: "Zweiten Lieferanten aktivieren", descEN: "Activate second supplier" },
+  { id: "express", icon: "\u26A1", nameDE: "Expresslieferung", nameEN: "Express delivery", descDE: "Schnellere Lieferung (+Kosten)", descEN: "Faster delivery (+cost)" },
+  { id: "stock", icon: "\uD83D\uDCE6", nameDE: "Lagerbestand erhöhen", nameEN: "Increase stock", descDE: "Sicherheitsbestand aufstocken", descEN: "Increase safety stock" },
+  { id: "reduce", icon: "\uD83D\uDCC9", nameDE: "Bestellmenge reduzieren", nameEN: "Reduce order qty", descDE: "Bestellvolumen anpassen", descEN: "Adjust order volume" },
+  { id: "replan", icon: "\uD83D\uDCCB", nameDE: "Produktionsplan anpassen", nameEN: "Adjust production", descDE: "Zeitplan flexibilisieren", descEN: "Flexible scheduling" },
+];
+
+let simStep = 0;
+let simMaterial = null;
+let simDisruptions = new Set();
+let simMeasures = new Set();
+let simResults = null;
+let simCompareResults = null;
+
+const simContent = document.getElementById("sim-content");
+const simLoading = document.getElementById("sim-loading");
+const simLoadingFill = document.getElementById("sim-loading-fill");
+const simLoadingText = document.getElementById("sim-loading-text");
+const simBackBtn = document.getElementById("sim-back-btn");
+const simNextBtn = document.getElementById("sim-next-btn");
+const simFooter = document.getElementById("sim-footer");
+
+function updateSimStepper() {
+  document.querySelectorAll("#sim-steps .sim-step").forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.toggle("active", s === simStep);
+    el.classList.toggle("done", s < simStep);
+  });
+  document.querySelectorAll("#sim-steps .sim-step-label").forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.toggle("active", s === simStep);
+    el.classList.toggle("done", s < simStep);
+    if (s === 0) el.textContent = t("simStep1");
+    if (s === 1) el.textContent = t("simStep2");
+    if (s === 2) el.textContent = t("simStep3");
+  });
+  document.querySelectorAll("#sim-steps .sim-step-line").forEach((el, i) => {
+    el.classList.toggle("done", i < simStep);
+  });
+}
+
+function renderSimStep(step) {
+  simStep = step;
+  updateSimStepper();
+  simContent.style.animation = "none";
+  void simContent.offsetHeight;
+  simContent.style.animation = "";
+
+  if (step === 0) renderSimCalibration();
+  else if (step === 1) renderSimDisruptions();
+  else if (step === 2) renderSimMeasuresStep();
+
+  // Footer buttons
+  simBackBtn.hidden = step === 0;
+  simBackBtn.textContent = t("simBack");
+
+  if (step === 0) {
+    simNextBtn.textContent = t("simNext");
+    simNextBtn.hidden = false;
+    simNextBtn.className = "btn btn-primary btn-sm";
+  } else if (step === 1 && !simResults) {
+    simNextBtn.textContent = t("simStartSim");
+    simNextBtn.hidden = false;
+    simNextBtn.className = "btn btn-primary btn-sm";
+  } else if (step === 1 && simResults) {
+    simNextBtn.textContent = t("simNext");
+    simNextBtn.hidden = false;
+    simNextBtn.className = "btn btn-primary btn-sm";
+  } else if (step === 2 && !simCompareResults) {
+    simNextBtn.textContent = t("simWithMeasures");
+    simNextBtn.hidden = false;
+    simNextBtn.className = "btn btn-primary btn-sm";
+  } else if (step === 2 && simCompareResults) {
+    simNextBtn.textContent = t("simFinish");
+    simNextBtn.hidden = false;
+    simNextBtn.className = "btn btn-secondary btn-sm";
+  }
+}
+
+function renderSimCalibration() {
+  const mat = simMaterial || SIM_MATERIALS[0];
+  simMaterial = mat;
+  let html = "";
+
+  // Material selection
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simMaterial")}</div>`;
+  html += `<select class="sim-select" id="sim-material-select">`;
+  SIM_MATERIALS.forEach(m => {
+    html += `<option value="${m.id}" ${m.id === mat.id ? "selected" : ""}>${escapeHtml(m.name)}</option>`;
+  });
+  html += `</select>`;
+  html += `<div class="sim-info-cards" id="sim-info-cards">`;
+  html += renderInfoCards(mat);
+  html += `</div></div>`;
+
+  // Order data
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simOrderData")}</div>`;
+  html += `<div class="sim-form-grid">`;
+  html += formRow(t("simOrderMaterial"), "sim-order-mat", "text", "4.800 Einheiten");
+  html += formRow(t("simOrderQty"), "sim-order-qty", "text", "1.200 Einheiten");
+  html += formRow(t("simOrderDate"), "sim-order-date", "date", "2026-03-15");
+  html += `</div></div>`;
+
+  // Simulation params
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simParams")}</div>`;
+  html += `<div class="sim-form-grid">`;
+  html += formRow(t("simStock"), "sim-stock", "text", "800 Einheiten");
+  html += formSelect(t("simBuffer"), "sim-buffer", ["10%", "20%", "30%"], 1);
+  html += formSelect(t("simReliability"), "sim-reliability", ["85%", "90%", "95%", "99%"], 2);
+  html += `</div></div>`;
+
+  simContent.innerHTML = html;
+
+  document.getElementById("sim-material-select").addEventListener("change", (e) => {
+    simMaterial = SIM_MATERIALS.find(m => m.id === e.target.value) || SIM_MATERIALS[0];
+    const cards = document.getElementById("sim-info-cards");
+    cards.innerHTML = renderInfoCards(simMaterial);
+  });
+}
+
+function renderInfoCards(mat) {
+  return `
+    <div class="sim-info-card">
+      <div class="sim-info-card-icon">\uD83C\uDFED</div>
+      <div class="sim-info-card-label">${t("simSupplier")}</div>
+      <div class="sim-info-card-value">${escapeHtml(mat.supplier)}</div>
+    </div>
+    <div class="sim-info-card">
+      <div class="sim-info-card-icon">\uD83D\uDCE6</div>
+      <div class="sim-info-card-label">${t("simQty")}</div>
+      <div class="sim-info-card-value">${escapeHtml(mat.qty)}</div>
+    </div>
+    <div class="sim-info-card">
+      <div class="sim-info-card-icon">\uD83D\uDCC5</div>
+      <div class="sim-info-card-label">${t("simDelivery")}</div>
+      <div class="sim-info-card-value">${escapeHtml(mat.delivery)}</div>
+    </div>`;
+}
+
+function formRow(label, id, type, value) {
+  return `<div class="sim-form-row">
+    <label class="sim-form-label" for="${id}">${label}</label>
+    <input class="sim-form-input" id="${id}" type="${type}" value="${escapeHtml(value)}" />
+  </div>`;
+}
+
+function formSelect(label, id, options, selectedIdx) {
+  let html = `<div class="sim-form-row">
+    <label class="sim-form-label" for="${id}">${label}</label>
+    <select class="sim-form-input" id="${id}">`;
+  options.forEach((o, i) => { html += `<option ${i === selectedIdx ? "selected" : ""}>${o}</option>`; });
+  html += `</select></div>`;
+  return html;
+}
+
+function renderSimDisruptions() {
+  const isDE = locale === "de";
+  let html = `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simStep2")}</div>`;
+  html += `<p style="font-size:0.82rem;color:var(--text-2);margin:0 0 0.75rem">${t("simSelectDisruptions")}</p>`;
+  html += `<div class="sim-option-grid">`;
+  SIM_DISRUPTIONS.forEach(d => {
+    const sel = simDisruptions.has(d.id);
+    html += `<div class="sim-option-card${sel ? " selected" : ""}" data-id="${d.id}">
+      <input type="checkbox" class="sim-option-check" ${sel ? "checked" : ""} />
+      <span class="sim-option-icon">${d.icon}</span>
+      <div class="sim-option-body">
+        <div class="sim-option-name">${escapeHtml(isDE ? d.nameDE : d.nameEN)}</div>
+        <div class="sim-option-desc">${escapeHtml(isDE ? d.descDE : d.descEN)}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  if (simResults) {
+    html += renderResultsHTML(simResults, t("simResults"));
+  }
+
+  simContent.innerHTML = html;
+
+  simContent.querySelectorAll(".sim-option-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.id;
+      if (simDisruptions.has(id)) simDisruptions.delete(id); else simDisruptions.add(id);
+      card.classList.toggle("selected");
+      card.querySelector(".sim-option-check").checked = simDisruptions.has(id);
+    });
+  });
+}
+
+function renderSimMeasuresStep() {
+  const isDE = locale === "de";
+  let html = `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simStep3")}</div>`;
+  html += `<p style="font-size:0.82rem;color:var(--text-2);margin:0 0 0.75rem">${t("simSelectMeasures")}</p>`;
+  html += `<div class="sim-option-grid">`;
+  SIM_MEASURES.forEach(m => {
+    const sel = simMeasures.has(m.id);
+    html += `<div class="sim-option-card${sel ? " selected" : ""}" data-id="${m.id}">
+      <input type="checkbox" class="sim-option-check" ${sel ? "checked" : ""} />
+      <span class="sim-option-icon">${m.icon}</span>
+      <div class="sim-option-body">
+        <div class="sim-option-name">${escapeHtml(isDE ? m.nameDE : m.nameEN)}</div>
+        <div class="sim-option-desc">${escapeHtml(isDE ? m.descDE : m.descEN)}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  if (simCompareResults) {
+    html += renderComparisonHTML(simResults, simCompareResults);
+  }
+
+  simContent.innerHTML = html;
+
+  simContent.querySelectorAll(".sim-option-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.id;
+      if (simMeasures.has(id)) simMeasures.delete(id); else simMeasures.add(id);
+      card.classList.toggle("selected");
+      card.querySelector(".sim-option-check").checked = simMeasures.has(id);
+    });
+  });
+}
+
+function generateFakeResults(disruptions) {
+  let delay = 0, cost = 0, fulfill = 98, risk = 1.2;
+  if (disruptions.has("outage")) { delay += 18; cost += 8400; fulfill -= 22; risk += 2.8; }
+  if (disruptions.has("delay")) { delay += 9; cost += 3200; fulfill -= 8; risk += 1.5; }
+  if (disruptions.has("quality")) { delay += 5; cost += 4800; fulfill -= 12; risk += 1.2; }
+  if (disruptions.has("demand")) { delay += 7; cost += 6100; fulfill -= 15; risk += 1.8; }
+  if (disruptions.has("scarcity")) { delay += 4; cost += 5600; fulfill -= 10; risk += 1.4; }
+  fulfill = Math.max(fulfill, 15);
+  risk = Math.min(risk, 9.5);
+  return { delay, cost, fulfill, risk: Math.round(risk * 10) / 10 };
+}
+
+function generateFakeComparison(disruptions, measures) {
+  const base = generateFakeResults(disruptions);
+  let dReduce = 0, cReduce = 0, fBoost = 0, rReduce = 0;
+  if (measures.has("alt-supplier")) { dReduce += 8; cReduce += 2000; fBoost += 12; rReduce += 1.5; }
+  if (measures.has("express")) { dReduce += 5; cReduce -= 1200; fBoost += 6; rReduce += 0.8; }
+  if (measures.has("stock")) { dReduce += 4; cReduce += 1800; fBoost += 8; rReduce += 1.0; }
+  if (measures.has("reduce")) { dReduce += 2; cReduce += 3200; fBoost += 5; rReduce += 0.6; }
+  if (measures.has("replan")) { dReduce += 3; cReduce += 1400; fBoost += 7; rReduce += 0.9; }
+  return {
+    delay: Math.max(base.delay - dReduce, 0),
+    cost: Math.max(base.cost - cReduce, 0),
+    fulfill: Math.min(base.fulfill + fBoost, 99),
+    risk: Math.max(Math.round((base.risk - rReduce) * 10) / 10, 0.5),
+  };
+}
+
+function renderResultsHTML(r, title) {
+  const riskLabel = r.risk >= 7 ? "Hoch" : r.risk >= 4 ? "Mittel" : "Niedrig";
+  let html = `<div class="sim-results">`;
+  html += `<div class="sim-section-title">${title}</div>`;
+  html += `<div class="sim-metric-grid">`;
+  html += metricCard(t("simDelayDays"), `+${r.delay} ${locale === "de" ? "Tage" : "days"}`, "delta-negative");
+  html += metricCard(t("simCostIncrease"), `+${r.cost.toLocaleString("de-DE")} \u20AC`, "delta-negative");
+  html += metricCard(t("simFulfillment"), `${r.fulfill}%`, r.fulfill < 80 ? "delta-negative" : "");
+  html += metricCard(t("simRiskScore"), `${riskLabel} (${r.risk}/10)`, r.risk >= 5 ? "delta-negative" : "");
+  html += `</div>`;
+
+  // Summary
+  const summaryDE = `Die Simulation zeigt, dass bei den gewählten Störungsszenarien eine Lieferverzögerung von ${r.delay} Tagen und eine Kostenerhöhung von ${r.cost.toLocaleString("de-DE")} € zu erwarten sind. Die Erfüllungsquote sinkt auf ${r.fulfill}%. Der Risiko-Score liegt bei ${r.risk}/10.`;
+  const summaryEN = `The simulation shows that with the selected disruption scenarios, a delivery delay of ${r.delay} days and a cost increase of €${r.cost.toLocaleString("en-US")} are expected. The fulfillment rate drops to ${r.fulfill}%. The risk score is ${r.risk}/10.`;
+  html += `<div class="sim-summary">${locale === "de" ? summaryDE : summaryEN}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function renderComparisonHTML(before, after) {
+  let html = `<div class="sim-results">`;
+  html += `<div class="sim-section-title">${t("simComparison")}</div>`;
+  html += `<div class="sim-metric-grid">`;
+  html += metricCardCompare(t("simDelayDays"), `+${before.delay}d`, `+${after.delay}d`, after.delay < before.delay);
+  html += metricCardCompare(t("simCostIncrease"), `+${before.cost.toLocaleString("de-DE")}\u20AC`, `+${after.cost.toLocaleString("de-DE")}\u20AC`, after.cost < before.cost);
+  html += metricCardCompare(t("simFulfillment"), `${before.fulfill}%`, `${after.fulfill}%`, after.fulfill > before.fulfill);
+  html += metricCardCompare(t("simRiskScore"), `${before.risk}`, `${after.risk}`, after.risk < before.risk);
+  html += `</div>`;
+
+  // Bar comparison
+  const maxDelay = Math.max(before.delay, 30);
+  html += `<div class="sim-bar-compare">`;
+  html += `<div class="sim-bar-row"><span class="sim-bar-label-col">${t("simBefore")}</span><div class="sim-bar-track"><div class="sim-bar-fill-before" style="width:${(before.delay / maxDelay * 100)}%"></div></div><span class="sim-bar-val">+${before.delay}d</span></div>`;
+  html += `<div class="sim-bar-row"><span class="sim-bar-label-col">${t("simAfter")}</span><div class="sim-bar-track"><div class="sim-bar-fill-after" style="width:${(after.delay / maxDelay * 100)}%"></div></div><span class="sim-bar-val">+${after.delay}d</span></div>`;
+  html += `</div>`;
+
+  const summaryDE = `Durch die gewählten Gegenmaßnahmen konnte die Lieferverzögerung von ${before.delay} auf ${after.delay} Tage reduziert werden. Die Erfüllungsquote verbessert sich von ${before.fulfill}% auf ${after.fulfill}%. Der Risiko-Score sinkt von ${before.risk} auf ${after.risk}.`;
+  const summaryEN = `The selected countermeasures reduced the delivery delay from ${before.delay} to ${after.delay} days. The fulfillment rate improved from ${before.fulfill}% to ${after.fulfill}%. The risk score decreased from ${before.risk} to ${after.risk}.`;
+  html += `<div class="sim-summary">${locale === "de" ? summaryDE : summaryEN}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function metricCard(label, value, cls) {
+  return `<div class="sim-metric-card">
+    <div class="sim-metric-label">${label}</div>
+    <div class="sim-metric-value ${cls}">${value}</div>
+  </div>`;
+}
+
+function metricCardCompare(label, before, after, improved) {
+  const arrow = improved ? "\u2193" : "\u2191";
+  const cls = improved ? "delta-positive" : "delta-negative";
+  return `<div class="sim-metric-card">
+    <div class="sim-metric-label">${label}</div>
+    <div class="sim-metric-value">${after}</div>
+    <div class="sim-metric-delta ${cls}">${before} ${arrow} ${after}</div>
+  </div>`;
+}
+
+function fakeSimulate(durationMs, phases) {
+  return new Promise(resolve => {
+    simContent.hidden = true;
+    simFooter.hidden = true;
+    simLoading.hidden = false;
+    simLoadingFill.style.width = "0%";
+    simLoadingText.textContent = phases[0] || "";
+    let elapsed = 0;
+    const interval = 50;
+    const timer = setInterval(() => {
+      elapsed += interval;
+      const pct = Math.min((elapsed / durationMs) * 100, 100);
+      simLoadingFill.style.width = pct + "%";
+      const phaseIdx = Math.min(Math.floor((elapsed / durationMs) * phases.length), phases.length - 1);
+      simLoadingText.textContent = phases[phaseIdx] || "";
+      if (elapsed >= durationMs) {
+        clearInterval(timer);
+        simLoading.hidden = true;
+        simContent.hidden = false;
+        simFooter.hidden = false;
+        resolve();
+      }
+    }, interval);
+  });
+}
+
+simNextBtn.addEventListener("click", async () => {
+  if (simStep === 0) {
+    // Step 1 → fake parametrize → Step 2
+    const phasesDE = ["Parameter werden geladen…", "Lieferkette wird aufgebaut…", "Simulation wird parametriert…"];
+    const phasesEN = ["Loading parameters…", "Building supply chain…", "Parametrizing simulation…"];
+    await fakeSimulate(1500, locale === "de" ? phasesDE : phasesEN);
+    simResults = null;
+    simCompareResults = null;
+    simDisruptions.clear();
+    simMeasures.clear();
+    renderSimStep(1);
+  } else if (simStep === 1 && !simResults) {
+    // Run disruption simulation
+    if (simDisruptions.size === 0) return;
+    const phasesDE = ["Störszenarien werden angewendet…", "Auswirkungen berechnen…", "Ergebnisse generieren…"];
+    const phasesEN = ["Applying disruption scenarios…", "Calculating impacts…", "Generating results…"];
+    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
+    simResults = generateFakeResults(simDisruptions);
+    renderSimStep(1);
+  } else if (simStep === 1 && simResults) {
+    // Step 2 results shown → Step 3
+    simCompareResults = null;
+    simMeasures.clear();
+    renderSimStep(2);
+  } else if (simStep === 2 && !simCompareResults) {
+    // Run measures simulation
+    if (simMeasures.size === 0) return;
+    const phasesDE = ["Gegenmaßnahmen werden angewendet…", "Neue Szenarien berechnen…", "Vergleich erstellen…"];
+    const phasesEN = ["Applying countermeasures…", "Calculating new scenarios…", "Creating comparison…"];
+    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
+    simCompareResults = generateFakeComparison(simDisruptions, simMeasures);
+    renderSimStep(2);
+  } else if (simStep === 2 && simCompareResults) {
+    // Finish → reset
+    simStep = 0;
+    simMaterial = null;
+    simResults = null;
+    simCompareResults = null;
+    simDisruptions.clear();
+    simMeasures.clear();
+    renderSimStep(0);
+  }
+});
+
+simBackBtn.addEventListener("click", () => {
+  if (simStep === 1) {
+    simResults = null;
+    renderSimStep(0);
+  } else if (simStep === 2) {
+    simCompareResults = null;
+    renderSimStep(1);
+  }
+});

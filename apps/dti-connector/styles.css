@@ -1078,7 +1078,7 @@ body.sidebar-collapsed .sidebar-foot {
 
 .model-table-header {
   display: grid;
-  grid-template-columns: 42px 1fr 1fr 90px 30px;
+  grid-template-columns: 30px 42px 1fr 1fr 90px 30px;
   gap: 0;
   padding: 0 0.1rem;
   height: 32px;
@@ -1103,7 +1103,7 @@ body.sidebar-collapsed .sidebar-foot {
 
 .model-row {
   display: grid;
-  grid-template-columns: 42px 1fr 1fr 90px 30px;
+  grid-template-columns: 30px 42px 1fr 1fr 90px 30px;
   gap: 0;
   padding: 0 0.1rem;
   min-height: 33px;
@@ -1234,6 +1234,45 @@ body.sidebar-collapsed .sidebar-foot {
 .model-row-del:hover {
   background: #fef2f2;
   color: #dc2626;
+}
+
+.model-col-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.model-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.model-row.row-selected {
+  background: rgba(59, 130, 246, 0.06);
+}
+.model-row.row-selected:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.model-bulk-del {
+  margin-left: auto;
+}
+.model-bulk-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.3);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0 4px;
+  margin-left: 4px;
 }
 
 .model-actions {
@@ -1496,7 +1535,7 @@ body.sidebar-collapsed .sidebar-foot {
 
 .assets-table-header {
   display: grid;
-  grid-template-columns: 42px 1fr 30px;
+  grid-template-columns: 30px 42px 1fr 30px;
   gap: 0;
   padding: 0 0.1rem;
   height: 32px;
@@ -1516,7 +1555,7 @@ body.sidebar-collapsed .sidebar-foot {
 
 .assets-row {
   display: grid;
-  grid-template-columns: 42px 1fr 30px;
+  grid-template-columns: 30px 42px 1fr 30px;
   gap: 0;
   padding: 0 0.1rem;
   min-height: 33px;
@@ -1540,7 +1579,14 @@ body.sidebar-collapsed .sidebar-foot {
 
 .assets-row.assets-row-new {
   cursor: default;
-  grid-template-columns: 42px 1fr 30px 30px;
+  grid-template-columns: 30px 42px 1fr 30px 30px;
+}
+
+.assets-row.row-selected {
+  background: rgba(59, 130, 246, 0.06);
+}
+.assets-row.row-selected:hover {
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .assets-row-confirm {
@@ -1638,6 +1684,14 @@ body.sidebar-collapsed .sidebar-foot {
 .assets-row-del:hover {
   background: #fef2f2;
   color: #dc2626;
+}
+
+.assets-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 /* Detail view */
@@ -2214,8 +2268,14 @@ body.sidebar-collapsed .sidebar-foot {
 .role-viewer #assets-add-btn,
 .role-viewer #assets-save-btn,
 .role-viewer .hierarchy-remove-btn,
+.role-viewer #model-select-all,
+.role-viewer .model-row .model-checkbox,
+.role-viewer #model-delete-selected-btn,
 .role-viewer .model-row-del,
 .role-viewer .files-row-del,
+.role-viewer #assets-select-all,
+.role-viewer .assets-row .model-checkbox,
+.role-viewer #assets-delete-selected-btn,
 .role-viewer .assets-row-del,
 .role-viewer [data-page="settings"],
 .role-viewer #hierarchy-import-btn,
@@ -2235,12 +2295,14 @@ body.sidebar-collapsed .sidebar-foot {
 .role-viewer .hierarchy-row {
   grid-template-columns: 40px 1fr;
 }
+.role-viewer .model-table-header,
 .role-viewer .model-row {
   grid-template-columns: 42px 1fr 1fr 90px;
 }
 .role-viewer .files-row {
   grid-template-columns: 42px 1fr 1.2fr 1.2fr;
 }
+.role-viewer .assets-table-header,
 .role-viewer .assets-row {
   grid-template-columns: 42px 1fr;
 }
@@ -2261,6 +2323,9 @@ body.sidebar-collapsed .sidebar-foot {
 .type-card-scanner .drag-handle,
 .type-card-scanner #hierarchy-import-btn,
 .type-card-scanner #hierarchy-export-btn,
+.type-card-scanner #model-select-all,
+.type-card-scanner .model-row .model-checkbox,
+.type-card-scanner #model-delete-selected-btn,
 .type-card-scanner #model-add-btn,
 .type-card-scanner #model-save-btn,
 .type-card-scanner .model-row-del,
@@ -2270,6 +2335,9 @@ body.sidebar-collapsed .sidebar-foot {
 .type-card-scanner #files-add-btn,
 .type-card-scanner #files-import-btn,
 .type-card-scanner #files-export-btn,
+.type-card-scanner #assets-select-all,
+.type-card-scanner .assets-row .model-checkbox,
+.type-card-scanner #assets-delete-selected-btn,
 .type-card-scanner #assets-add-btn,
 .type-card-scanner #assets-save-btn,
 .type-card-scanner #assets-import-btn,
@@ -2280,6 +2348,7 @@ body.sidebar-collapsed .sidebar-foot {
 .type-card-scanner .hierarchy-row {
   grid-template-columns: 40px 1fr;
 }
+.type-card-scanner .model-table-header,
 .type-card-scanner .model-row {
   grid-template-columns: 42px 1fr 1fr 90px;
 }
@@ -2564,7 +2633,7 @@ body.sidebar-collapsed .sidebar-foot {
 
   .model-table-header,
   .model-row {
-    min-width: 480px;
+    min-width: 510px;
   }
 
   .files-table-header,

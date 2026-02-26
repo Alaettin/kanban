@@ -158,6 +158,10 @@ const I18N = {
     modelError: "Fehler beim Speichern des Datenmodells.",
     modelConfirmTitle: "Datenmodell übernehmen",
     modelConfirmMessage: "Das Datenmodell wird gespeichert und ist sofort über die API verfügbar. Fortfahren?",
+    modelDeleteSelected: "Auswahl löschen",
+    modelDeleteSelectedConfirmTitle: "Datenpunkte löschen?",
+    modelDeleteSelectedConfirmMsg: "{count} ausgewählte Datenpunkte werden entfernt. Klicke Übernehmen um die Änderung zu speichern.",
+    modelSelectAll: "Alle auswählen",
     filesTitle: "Dateien",
     filesDesc: "Lade Dateien hoch und verknüpfe sie mit einer eindeutigen ID.",
     filesAdd: "Hinzufügen",
@@ -203,6 +207,10 @@ const I18N = {
     assetsDeleteAllConfirmOk: "Alle löschen",
     assetsDeleteAllSuccess: "Alle Assets gelöscht.",
     assetsDeleteAllError: "Fehler beim Löschen aller Assets.",
+    assetsDeleteSelected: "Auswahl löschen",
+    assetsDeleteSelectedConfirmTitle: "Ausgewählte Assets löschen?",
+    assetsDeleteSelectedConfirmMsg: "{count} ausgewählte Assets und deren Werte werden unwiderruflich gelöscht.",
+    assetsSelectAll: "Alle auswählen",
     assetsExportEmpty: "Keine Assets zum Exportieren vorhanden.",
     assetsExportError: "Fehler beim Exportieren.",
     assetsImported: "{count} Assets importiert ({skipped} übersprungen).",
@@ -326,6 +334,10 @@ const I18N = {
     modelError: "Failed to save data model.",
     modelConfirmTitle: "Apply data model",
     modelConfirmMessage: "The data model will be saved and immediately available via the API. Continue?",
+    modelDeleteSelected: "Delete selected",
+    modelDeleteSelectedConfirmTitle: "Delete datapoints?",
+    modelDeleteSelectedConfirmMsg: "{count} selected datapoints will be removed. Click Apply to save the change.",
+    modelSelectAll: "Select all",
     filesTitle: "Files",
     filesDesc: "Upload files and link them with a unique ID.",
     filesAdd: "Add",
@@ -371,6 +383,10 @@ const I18N = {
     assetsDeleteAllConfirmOk: "Delete all",
     assetsDeleteAllSuccess: "All assets deleted.",
     assetsDeleteAllError: "Failed to delete all assets.",
+    assetsDeleteSelected: "Delete selected",
+    assetsDeleteSelectedConfirmTitle: "Delete selected assets?",
+    assetsDeleteSelectedConfirmMsg: "{count} selected assets and their values will be permanently deleted.",
+    assetsSelectAll: "Select all",
     assetsExportEmpty: "No assets to export.",
     assetsExportError: "Export failed.",
     assetsImported: "{count} assets imported ({skipped} skipped).",
@@ -416,12 +432,14 @@ let activePage = "hierarchy";
 let hierarchyLevels = [];
 let modelDatapoints = [];
 let modelSearchQuery = "";
+let modelSelectedIndices = new Set();
 let pendingConfirmAction = "";
 let pendingDeleteAssetId = "";
 let filesData = [];
 let filesSearchQuery = "";
 let assetsData = [];
 let assetsSearchQuery = "";
+let assetsSelectedIds = new Set();
 let currentAssetId = null;
 let currentAssetValues = {};
 let assetsPropsSearchQuery = "";
@@ -544,6 +562,8 @@ function applyLocaleToUI() {
   document.getElementById("model-add-label").textContent = t("modelAdd");
   document.getElementById("model-save-label").textContent = t("modelSave");
   document.getElementById("model-search").placeholder = t("modelSearch");
+  document.getElementById("model-delete-selected-label").textContent = t("modelDeleteSelected");
+  modelSelectAllCb.title = t("modelSelectAll");
 
   // Files page
   document.getElementById("files-title").textContent = t("filesTitle");
@@ -556,7 +576,8 @@ function applyLocaleToUI() {
   document.getElementById("assets-desc").textContent = t("assetsDesc");
   document.getElementById("assets-chars-label").textContent = t("allowedCharsLabel");
   document.getElementById("assets-add-label").textContent = t("assetsAdd");
-  document.getElementById("assets-delete-all-label").textContent = t("assetsDeleteAllLabel");
+  document.getElementById("assets-delete-selected-label").textContent = t("assetsDeleteSelected");
+  assetsSelectAllCb.title = t("assetsSelectAll");
   document.getElementById("assets-search").placeholder = t("assetsSearch");
   document.getElementById("assets-col-id-label").textContent = t("assetsColId");
   document.getElementById("assets-back-label").textContent = t("assetsBack");
@@ -1544,11 +1565,18 @@ confirmCancelBtn.addEventListener("click", () => confirmModal.close());
 confirmForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   confirmModal.close();
-  if (pendingConfirmAction === "deleteAllAssets") {
-    await deleteAllAssets();
+  if (pendingConfirmAction === "deleteSelectedAssets") {
+    await deleteSelectedAssets();
   } else if (pendingConfirmAction === "deleteAsset") {
     await deleteAsset(pendingDeleteAssetId);
     pendingDeleteAssetId = "";
+  } else if (pendingConfirmAction === "modelDeleteSelected") {
+    const sorted = [...modelSelectedIndices].sort((a, b) => b - a);
+    sorted.forEach(i => modelDatapoints.splice(i, 1));
+    modelSelectedIndices.clear();
+    renderModel();
+    showModelHint(t("modelDeleteSelected") + " (" + sorted.length + ")", "success");
+    setTimeout(hideModelHint, 3000);
   } else if (pendingConfirmAction === "model") {
     await saveModel();
   } else if (pendingConfirmAction === "assets") {
@@ -1596,6 +1624,9 @@ const modelExportBtn = document.getElementById("model-export-btn");
 const modelImportBtn = document.getElementById("model-import-btn");
 const modelImportFile = document.getElementById("model-import-file");
 const modelHint = document.getElementById("model-hint");
+const modelSelectAllCb = document.getElementById("model-select-all");
+const modelDeleteSelectedBtn = document.getElementById("model-delete-selected-btn");
+const modelDeleteSelectedCount = document.getElementById("model-delete-selected-count");
 
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9._]+$/;
 
@@ -1604,20 +1635,38 @@ function renderModel() {
   const q = modelSearchQuery.toLowerCase();
   let visibleCount = 0;
 
+  // Clean stale selections
+  modelSelectedIndices = new Set([...modelSelectedIndices].filter(i => i < modelDatapoints.length));
+
   if (modelDatapoints.length === 0) {
     const empty = document.createElement("div");
     empty.className = "model-empty";
     empty.textContent = t("modelEmpty");
     modelTableBody.appendChild(empty);
     updateModelCount(0, 0);
+    updateModelSelection();
     return;
   }
 
   modelDatapoints.forEach((dp, i) => {
     const matchesSearch = !q || dp.id.toLowerCase().includes(q) || (dp.name || "").toLowerCase().includes(q);
     const row = document.createElement("div");
-    row.className = "model-row" + (matchesSearch ? "" : " row-hidden");
+    row.className = "model-row" + (matchesSearch ? "" : " row-hidden") + (modelSelectedIndices.has(i) ? " row-selected" : "");
     if (matchesSearch) visibleCount++;
+
+    const checkCell = document.createElement("span");
+    checkCell.className = "model-col-check";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "model-checkbox";
+    cb.checked = modelSelectedIndices.has(i);
+    cb.addEventListener("change", () => {
+      if (cb.checked) modelSelectedIndices.add(i);
+      else modelSelectedIndices.delete(i);
+      row.classList.toggle("row-selected", cb.checked);
+      updateModelSelection();
+    });
+    checkCell.appendChild(cb);
 
     const num = document.createElement("span");
     num.className = "model-row-num";
@@ -1663,8 +1712,9 @@ function renderModel() {
     delBtn.type = "button";
     delBtn.className = "model-row-del";
     delBtn.textContent = "\u00d7";
-    delBtn.addEventListener("click", () => { modelDatapoints.splice(i, 1); renderModel(); });
+    delBtn.addEventListener("click", () => { modelDatapoints.splice(i, 1); modelSelectedIndices.clear(); renderModel(); });
 
+    row.appendChild(checkCell);
     row.appendChild(num);
     row.appendChild(idInput);
     row.appendChild(nameInput);
@@ -1675,6 +1725,7 @@ function renderModel() {
   });
 
   updateModelCount(visibleCount, modelDatapoints.length);
+  updateModelSelection();
 }
 
 function updateModelCount(filtered, total) {
@@ -1682,6 +1733,26 @@ function updateModelCount(filtered, total) {
     modelCountEl.textContent = t("modelCount").replace("{filtered}", filtered).replace("{total}", total);
   } else {
     modelCountEl.textContent = t("modelCountAll").replace("{total}", total);
+  }
+}
+
+function updateModelSelection() {
+  const count = modelSelectedIndices.size;
+  modelDeleteSelectedBtn.hidden = count === 0;
+  modelDeleteSelectedCount.textContent = count;
+  const q = modelSearchQuery.toLowerCase();
+  const visibleIndices = [];
+  modelDatapoints.forEach((dp, i) => {
+    if (!q || dp.id.toLowerCase().includes(q) || (dp.name || "").toLowerCase().includes(q)) visibleIndices.push(i);
+  });
+  if (visibleIndices.length === 0) {
+    modelSelectAllCb.checked = false;
+    modelSelectAllCb.indeterminate = false;
+  } else {
+    const allSel = visibleIndices.every(i => modelSelectedIndices.has(i));
+    const someSel = visibleIndices.some(i => modelSelectedIndices.has(i));
+    modelSelectAllCb.checked = allSel;
+    modelSelectAllCb.indeterminate = !allSel && someSel;
   }
 }
 
@@ -1707,10 +1778,34 @@ function hideModelHint() { modelHint.hidden = true; }
 
 modelSearchInput.addEventListener("input", () => { modelSearchQuery = modelSearchInput.value; renderModel(); });
 
+modelSelectAllCb.addEventListener("change", () => {
+  const q = modelSearchQuery.toLowerCase();
+  modelDatapoints.forEach((dp, i) => {
+    const vis = !q || dp.id.toLowerCase().includes(q) || (dp.name || "").toLowerCase().includes(q);
+    if (vis) {
+      if (modelSelectAllCb.checked) modelSelectedIndices.add(i);
+      else modelSelectedIndices.delete(i);
+    }
+  });
+  renderModel();
+});
+
+modelDeleteSelectedBtn.addEventListener("click", () => {
+  const count = modelSelectedIndices.size;
+  if (!count) return;
+  pendingConfirmAction = "modelDeleteSelected";
+  confirmTitle.textContent = t("modelDeleteSelectedConfirmTitle");
+  confirmMessage.textContent = t("modelDeleteSelectedConfirmMsg").replace("{count}", count);
+  confirmOkBtn.textContent = t("confirmOk");
+  confirmCancelBtn.textContent = t("confirmCancel");
+  confirmModal.showModal();
+});
+
 modelAddBtn.addEventListener("click", () => {
   modelDatapoints.push({ id: "", name: "", type: 0 });
   modelSearchQuery = "";
   modelSearchInput.value = "";
+  modelSelectedIndices.clear();
   renderModel();
   const rows = modelTableBody.querySelectorAll(".model-row");
   if (rows.length) {
@@ -1780,6 +1875,7 @@ modelImportFile.addEventListener("change", async () => {
     }
 
     modelDatapoints = imported;
+    modelSelectedIndices.clear();
     renderModel();
     showModelHint(t("modelImported").replace("{count}", imported.length), "success");
   } catch (err) {
@@ -1817,6 +1913,7 @@ async function loadModel() {
   if (result.ok && Array.isArray(result.payload)) {
     modelDatapoints = result.payload.map((r) => ({ id: r.id, name: r.name || "", type: r.type }));
   }
+  modelSelectedIndices.clear();
   renderModel();
 }
 
@@ -2236,7 +2333,9 @@ const assetsTableBody = document.getElementById("assets-table-body");
 const assetsSearchInput = document.getElementById("assets-search");
 const assetsCountEl = document.getElementById("assets-count");
 const assetsAddBtn = document.getElementById("assets-add-btn");
-const assetsDeleteAllBtn = document.getElementById("assets-delete-all-btn");
+const assetsSelectAllCb = document.getElementById("assets-select-all");
+const assetsDeleteSelectedBtn = document.getElementById("assets-delete-selected-btn");
+const assetsDeleteSelectedCount = document.getElementById("assets-delete-selected-count");
 const assetsListHint = document.getElementById("assets-list-hint");
 const assetsBackBtn = document.getElementById("assets-back-btn");
 const assetsHierarchyFields = document.getElementById("assets-hierarchy-fields");
@@ -2271,6 +2370,24 @@ function updateAssetsCount(filtered, total) {
   }
 }
 
+function updateAssetsSelection() {
+  const count = assetsSelectedIds.size;
+  assetsDeleteSelectedBtn.hidden = count === 0;
+  assetsDeleteSelectedCount.textContent = count;
+  const q = assetsSearchQuery.toLowerCase();
+  const savedEntries = assetsData.filter((a) => !a._new);
+  const visibleIds = savedEntries.filter(e => !q || e.asset_id.toLowerCase().includes(q)).map(e => e.asset_id);
+  if (visibleIds.length === 0) {
+    assetsSelectAllCb.checked = false;
+    assetsSelectAllCb.indeterminate = false;
+  } else {
+    const allSel = visibleIds.every(id => assetsSelectedIds.has(id));
+    const someSel = visibleIds.some(id => assetsSelectedIds.has(id));
+    assetsSelectAllCb.checked = allSel;
+    assetsSelectAllCb.indeterminate = !allSel && someSel;
+  }
+}
+
 function renderAssets() {
   assetsTableBody.innerHTML = "";
   const q = assetsSearchQuery.toLowerCase();
@@ -2278,20 +2395,41 @@ function renderAssets() {
   const newEntry = assetsData.find((a) => a._new);
   let visibleCount = 0;
 
+  // Clean stale selections
+  const validIds = new Set(savedEntries.map(e => e.asset_id));
+  assetsSelectedIds = new Set([...assetsSelectedIds].filter(id => validIds.has(id)));
+
   if (savedEntries.length === 0 && !newEntry) {
     const empty = document.createElement("div");
     empty.className = "model-empty";
     empty.textContent = t("assetsEmpty");
     assetsTableBody.appendChild(empty);
     updateAssetsCount(0, 0);
+    updateAssetsSelection();
     return;
   }
 
   savedEntries.forEach((entry, i) => {
     const matchesSearch = !q || entry.asset_id.toLowerCase().includes(q);
     const row = document.createElement("div");
-    row.className = "assets-row" + (matchesSearch ? "" : " row-hidden");
+    row.className = "assets-row" + (matchesSearch ? "" : " row-hidden") + (assetsSelectedIds.has(entry.asset_id) ? " row-selected" : "");
     if (matchesSearch) visibleCount++;
+
+    const checkCell = document.createElement("span");
+    checkCell.className = "model-col-check";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "model-checkbox";
+    cb.checked = assetsSelectedIds.has(entry.asset_id);
+    cb.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", (e) => {
+      e.stopPropagation();
+      if (cb.checked) assetsSelectedIds.add(entry.asset_id);
+      else assetsSelectedIds.delete(entry.asset_id);
+      row.classList.toggle("row-selected", cb.checked);
+      updateAssetsSelection();
+    });
+    checkCell.appendChild(cb);
 
     const num = document.createElement("span");
     num.className = "assets-row-num";
@@ -2319,6 +2457,7 @@ function renderAssets() {
     });
 
     row.addEventListener("click", () => openAssetDetail(entry.asset_id));
+    row.appendChild(checkCell);
     row.appendChild(num);
     row.appendChild(idInput);
     row.appendChild(delBtn);
@@ -2328,6 +2467,9 @@ function renderAssets() {
   if (newEntry) {
     const row = document.createElement("div");
     row.className = "assets-row assets-row-new";
+
+    const emptyCheck = document.createElement("span");
+    emptyCheck.className = "model-col-check";
 
     const num = document.createElement("span");
     num.className = "assets-row-num";
@@ -2364,6 +2506,7 @@ function renderAssets() {
       renderAssets();
     });
 
+    row.appendChild(emptyCheck);
     row.appendChild(num);
     row.appendChild(idInput);
     row.appendChild(confirmBtn);
@@ -2373,6 +2516,7 @@ function renderAssets() {
   }
 
   updateAssetsCount(visibleCount, savedEntries.length + (newEntry ? 1 : 0));
+  updateAssetsSelection();
 }
 
 async function saveNewAsset(entry) {
@@ -2405,44 +2549,64 @@ async function deleteAsset(assetId) {
   }
 }
 
-async function deleteAllAssets() {
-  const result = await apiRequest(connApi("/assets"), { method: "DELETE" });
-  if (result.ok) {
-    assetsData = [];
-    renderAssets();
-    showAssetsListHint(t("assetsDeleteAllSuccess"), "success");
-    setTimeout(hideAssetsListHint, 3000);
-  } else {
-    showAssetsListHint(result.payload?.error || t("assetsDeleteAllError"), "error");
+async function deleteSelectedAssets() {
+  const ids = [...assetsSelectedIds];
+  let deleted = 0;
+  for (const id of ids) {
+    const result = await apiRequest(connApi(`/assets/${encodeURIComponent(id)}`), { method: "DELETE" });
+    if (result.ok) {
+      assetsData = assetsData.filter(a => a.asset_id !== id);
+      deleted++;
+    }
+  }
+  assetsSelectedIds.clear();
+  renderAssets();
+  if (deleted > 0) {
+    showAssetsListHint(t("assetsDeleteSelected") + " (" + deleted + ")", "success");
     setTimeout(hideAssetsListHint, 3000);
   }
 }
-
-assetsDeleteAllBtn.addEventListener("click", () => {
-  if (!assetsData.length) return;
-  pendingConfirmAction = "deleteAllAssets";
-  confirmTitle.textContent = t("assetsDeleteAllConfirmTitle");
-  confirmMessage.textContent = t("assetsDeleteAllConfirmMsg").replace("{count}", assetsData.length);
-  confirmOkBtn.textContent = t("assetsDeleteAllConfirmOk");
-  confirmCancelBtn.textContent = t("confirmCancel");
-  confirmModal.showModal();
-});
 
 async function loadAssets() {
   const result = await apiRequest(connApi("/assets/internal"));
   if (result.ok && Array.isArray(result.payload)) {
     assetsData = result.payload.map((r) => ({ asset_id: r.asset_id }));
   }
+  assetsSelectedIds.clear();
   renderAssets();
 }
 
 assetsSearchInput.addEventListener("input", () => { assetsSearchQuery = assetsSearchInput.value; renderAssets(); });
+
+assetsSelectAllCb.addEventListener("change", () => {
+  const q = assetsSearchQuery.toLowerCase();
+  assetsData.filter(a => !a._new).forEach(entry => {
+    const vis = !q || entry.asset_id.toLowerCase().includes(q);
+    if (vis) {
+      if (assetsSelectAllCb.checked) assetsSelectedIds.add(entry.asset_id);
+      else assetsSelectedIds.delete(entry.asset_id);
+    }
+  });
+  renderAssets();
+});
+
+assetsDeleteSelectedBtn.addEventListener("click", () => {
+  const count = assetsSelectedIds.size;
+  if (!count) return;
+  pendingConfirmAction = "deleteSelectedAssets";
+  confirmTitle.textContent = t("assetsDeleteSelectedConfirmTitle");
+  confirmMessage.textContent = t("assetsDeleteSelectedConfirmMsg").replace("{count}", count);
+  confirmOkBtn.textContent = t("confirmOk");
+  confirmCancelBtn.textContent = t("confirmCancel");
+  confirmModal.showModal();
+});
 
 assetsAddBtn.addEventListener("click", () => {
   if (assetsData.some((a) => a._new)) return;
   assetsData.push({ asset_id: "", _new: true });
   assetsSearchQuery = "";
   assetsSearchInput.value = "";
+  assetsSelectedIds.clear();
   renderAssets();
   const idInput = document.getElementById("assets-new-id");
   if (idInput) idInput.focus();

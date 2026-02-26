@@ -168,6 +168,11 @@
               <input id="model-search" class="model-search" type="text" placeholder="Suchen…" />
             </div>
             <span id="model-count" class="model-count"></span>
+            <button id="model-delete-selected-btn" class="btn btn-danger btn-sm-text model-bulk-del" type="button" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              <span id="model-delete-selected-label">Auswahl löschen</span>
+              <span id="model-delete-selected-count" class="model-bulk-count"></span>
+            </button>
             <button id="model-add-btn" class="btn btn-secondary btn-sm-text" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               <span id="model-add-label">Hinzufügen</span>
@@ -176,6 +181,7 @@
 
           <div class="model-table-wrap">
             <div class="model-table-header">
+              <span class="model-col-check"><input type="checkbox" id="model-select-all" class="model-checkbox" /></span>
               <span class="model-col-num">#</span>
               <span class="model-col-id">ID</span>
               <span class="model-col-name">Name</span>
@@ -260,16 +266,10 @@
               <input id="assets-search" class="model-search" type="text" placeholder="Suchen…" />
             </div>
             <span id="assets-count" class="model-count"></span>
-            <button id="assets-import-btn" class="btn-icon" type="button" title="Import">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            </button>
-            <input id="assets-import-file" type="file" accept=".xlsx,.csv" hidden />
-            <button id="assets-export-btn" class="btn-icon" type="button" title="Export">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button id="assets-delete-all-btn" class="btn btn-danger btn-sm-text" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14"/><path d="M10 11v6m4-6v6"/></svg>
-              <span id="assets-delete-all-label">Alle löschen</span>
+            <button id="assets-delete-selected-btn" class="btn btn-danger btn-sm-text model-bulk-del" type="button" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              <span id="assets-delete-selected-label">Auswahl löschen</span>
+              <span id="assets-delete-selected-count" class="model-bulk-count"></span>
             </button>
             <button id="assets-add-btn" class="btn btn-secondary btn-sm-text" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -279,11 +279,22 @@
 
           <div class="model-table-wrap">
             <div class="assets-table-header">
+              <span class="model-col-check"><input type="checkbox" id="assets-select-all" class="model-checkbox" /></span>
               <span class="assets-col-num">#</span>
               <span class="assets-col-id" id="assets-col-id-label">Item ID</span>
               <span class="assets-col-del"></span>
             </div>
             <div id="assets-table-body" class="model-table-body"></div>
+          </div>
+
+          <div class="assets-actions">
+            <button id="assets-import-btn" class="btn-icon" type="button" title="Import">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <input id="assets-import-file" type="file" accept=".xlsx,.csv" hidden />
+            <button id="assets-export-btn" class="btn-icon" type="button" title="Export">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
           </div>
 
           <div id="assets-list-hint" class="hierarchy-hint" hidden></div>
