@@ -389,6 +389,9 @@ async function initResilienceTables() {
   // Migration: score dashboard config
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN score_dashboard_config TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
 
+  // Migration: value tiles config
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN value_tiles_config TEXT NOT NULL DEFAULT '[]'`); } catch { /* exists */ }
+
   // Migration: city_value + direct coords on aas_map
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN city_value TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN direct_lat REAL DEFAULT NULL`); } catch { /* exists */ }
@@ -2358,6 +2361,67 @@ function mountRoutes(router) {
       res.json({ items, title });
     } catch (err) {
       console.error("[Resilience] score-evaluate error:", err);
+      res.status(500).json({ error: "EVALUATE_FAILED" });
+    }
+  });
+
+  // ── Value Tiles ──────────────────────────────────────────────
+  router.get("/api/value-tiles", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get(
+        "SELECT value_tiles_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      res.json(JSON.parse(row?.value_tiles_config || "[]"));
+    } catch {
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  router.put("/api/value-tiles", auth.requireAuth, async (req, res) => {
+    try {
+      const { config } = req.body;
+      if (!Array.isArray(config)) return res.status(400).json({ error: "INVALID_CONFIG" });
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run(
+        "UPDATE resilience_settings SET value_tiles_config = ? WHERE user_id = ?",
+        [JSON.stringify(config), req.user.id]
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "SAVE_FAILED" });
+    }
+  });
+
+  router.get("/api/value-tile-data", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get(
+        "SELECT value_tiles_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const config = JSON.parse(row?.value_tiles_config || "[]");
+      if (!config.length) return res.json([]);
+      const results = [];
+      for (const tile of config) {
+        const imp = await db.get(
+          "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+          [tile.aas_id, req.user.id]
+        );
+        let label = tile.label_path;
+        let value = "";
+        if (imp?.submodels_data) {
+          try {
+            const submodels = JSON.parse(imp.submodels_data);
+            label = extractFirstValue(submodels, tile.label_path) || tile.label_path;
+            value = extractFirstValue(submodels, tile.value_path) || "";
+          } catch { /* parse error, keep defaults */ }
+        }
+        const valueName = (tile.value_path || "").split(".").pop() || "";
+        results.push({ slot: tile.slot, label, value, value_name: valueName, aas_id: tile.aas_id, display: tile.display, color: tile.color });
+      }
+      res.json(results);
+    } catch (err) {
+      console.error("[Resilience] value-tile-data error:", err);
       res.status(500).json({ error: "EVALUATE_FAILED" });
     }
   });

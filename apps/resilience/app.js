@@ -154,6 +154,30 @@ const I18N = {
     gdacsAlerts: "GDACS Alerts",
     dashboardTitle: "Resilience Dashboard",
     dashboardDesc: "Übersicht der Resilienz-Tools für deine Lieferkette.",
+    dashEditBtn: "Kacheln bearbeiten",
+    vtWizardTitle: "Wert-Kachel erstellen",
+    vtStep1Desc: "Wähle eine AAS aus.",
+    vtStep2Desc: "Wähle Pfade für Bezeichnung und Wert.",
+    vtStep3Desc: "Wähle Darstellung und Farbe.",
+    vtSearchPlaceholder: "AAS suchen\u2026",
+    vtLabelField: "Bezeichnung",
+    vtValueField: "Wert",
+    vtFieldEmpty: "Klicke auf eine Property im Baum",
+    vtBigNumber: "Große Zahl",
+    vtProgressBar: "Fortschrittsbalken",
+    vtStatCard: "Statistik-Karte",
+    vtTextPlain: "Einfacher Text",
+    vtTextBadge: "Badge",
+    vtTextHighlight: "Highlight",
+    vtColorLabel: "Farbe",
+    vtCreate: "Erstellen",
+    vtDeleteConfirm: "Kachel wirklich entfernen?",
+    vtDeleteBtn: "Entfernen",
+    vtCancel: "Abbrechen",
+    vtBack: "Zurück",
+    vtNext: "Weiter",
+    vtNoAas: "Keine AAS importiert.",
+    vtLoading: "Laden\u2026",
     indicatorsTitle: "Indikatoren",
     indicatorsDesc: "Überwache Resilienz-Indikatoren deiner Lieferkette.",
     aiMappingTitle: "AI Enrichment",
@@ -763,6 +787,30 @@ const I18N = {
     gdacsAlerts: "GDACS Alerts",
     dashboardTitle: "Resilience Dashboard",
     dashboardDesc: "Overview of resilience tools for your supply chain.",
+    dashEditBtn: "Edit tiles",
+    vtWizardTitle: "Create value tile",
+    vtStep1Desc: "Select an AAS.",
+    vtStep2Desc: "Select paths for label and value.",
+    vtStep3Desc: "Choose display and color.",
+    vtSearchPlaceholder: "Search AAS\u2026",
+    vtLabelField: "Label",
+    vtValueField: "Value",
+    vtFieldEmpty: "Click a property in the tree",
+    vtBigNumber: "Big number",
+    vtProgressBar: "Progress bar",
+    vtStatCard: "Stat card",
+    vtTextPlain: "Plain text",
+    vtTextBadge: "Badge",
+    vtTextHighlight: "Highlight",
+    vtColorLabel: "Color",
+    vtCreate: "Create",
+    vtDeleteConfirm: "Really remove this tile?",
+    vtDeleteBtn: "Remove",
+    vtCancel: "Cancel",
+    vtBack: "Back",
+    vtNext: "Next",
+    vtNoAas: "No AAS imported.",
+    vtLoading: "Loading\u2026",
     indicatorsTitle: "Indicators",
     indicatorsDesc: "Monitor resilience indicators of your supply chain.",
     aiMappingTitle: "AI Enrichment",
@@ -1662,6 +1710,25 @@ function applyLocaleToUI() {
   // GDACS Alerts page labels
   document.getElementById("alerts-refresh-label").textContent = t("alertsRefresh");
   document.getElementById("alerts-empty-text").textContent = t("alertsEmpty");
+
+  // Dashboard edit button
+  document.getElementById("dash-edit-btn").title = t("dashEditBtn");
+
+  // Value tile wizard
+  document.getElementById("vt-wizard-title").textContent = t("vtWizardTitle");
+  document.getElementById("vt-step1-desc").textContent = t("vtStep1Desc");
+  document.getElementById("vt-step2-desc").textContent = t("vtStep2Desc");
+  document.getElementById("vt-step3-desc").textContent = t("vtStep3Desc");
+  document.getElementById("vt-aas-search").placeholder = t("vtSearchPlaceholder");
+  document.getElementById("vt-field-label-text").textContent = t("vtLabelField");
+  document.getElementById("vt-field-value-text").textContent = t("vtValueField");
+  if (!vtLabelPath) document.getElementById("vt-field-label-value").textContent = t("vtFieldEmpty");
+  if (!vtValuePath) document.getElementById("vt-field-value-value").textContent = t("vtFieldEmpty");
+  document.getElementById("vt-color-label").textContent = t("vtColorLabel");
+  document.getElementById("vt-wizard-back").textContent = t("vtBack");
+  document.getElementById("vt-wizard-cancel").textContent = t("vtCancel");
+  document.getElementById("vt-wizard-next").textContent = t("vtNext");
+  document.getElementById("vt-wizard-create").textContent = t("vtCreate");
 
   // Dashboard tile labels
   document.getElementById("dash-news-title").textContent = t("dashNewsTitle");
@@ -5731,6 +5798,9 @@ async function loadDashboard() {
 
   // Indicator Dashboard tile
   renderDashIndicators(indEvalResult);
+
+  // Value tiles
+  await loadVtTiles();
 }
 
 function renderDashScore(result) {
@@ -6934,6 +7004,400 @@ async function loadScoreTree(aasId) {
     treeEl.appendChild(card);
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// Dashboard Value Tiles — Edit Mode + Wizard + Rendering
+// ══════════════════════════════════════════════════════════════
+
+let dashEditMode = false;
+let vtTilesConfig = [];
+let vtTileData = [];
+
+// Colors for value tiles
+const VT_COLORS = ["#3b82f6","#8b5cf6","#ec4899","#f97316","#14b8a6","#22c55e","#ef4444","#eab308","#06b6d4","#6366f1"];
+
+// Display types
+const VT_DISPLAYS = [
+  { id: "big-number", key: "vtBigNumber" },
+  { id: "progress-bar", key: "vtProgressBar" },
+  { id: "stat-card", key: "vtStatCard" },
+  { id: "text-plain", key: "vtTextPlain" },
+  { id: "text-badge", key: "vtTextBadge" },
+  { id: "text-highlight", key: "vtTextHighlight" },
+];
+
+// ── Load + Render Tiles ─────────────────────────────────────
+async function loadVtTiles() {
+  const cfgRes = await apiRequest("/apps/resilience/api/value-tiles");
+  vtTilesConfig = cfgRes.ok && Array.isArray(cfgRes.payload) ? cfgRes.payload : [];
+  if (vtTilesConfig.length) {
+    const dataRes = await apiRequest("/apps/resilience/api/value-tile-data");
+    vtTileData = dataRes.ok && Array.isArray(dataRes.payload) ? dataRes.payload : [];
+  } else {
+    vtTileData = [];
+  }
+  renderVtGrid();
+}
+
+function renderVtGrid() {
+  const ph = document.getElementById("dash-placeholders");
+  const hasAnyTile = vtTilesConfig.length > 0;
+
+  // Build 6 slots
+  let html = "";
+  for (let i = 0; i < 6; i++) {
+    const tile = vtTilesConfig.find(t => t.slot === i);
+    if (tile) {
+      const data = vtTileData.find(d => d.slot === i);
+      html += renderVtTileHtml(tile, data);
+    } else if (dashEditMode) {
+      html += `<div class="dash-placeholder-card" data-slot="${i}"><span class="dash-placeholder-icon">+</span></div>`;
+    }
+  }
+
+  // Show grid if edit mode OR has tiles
+  if (dashEditMode || hasAnyTile) {
+    ph.hidden = false;
+    ph.innerHTML = html;
+    ph.classList.toggle("edit-active", dashEditMode);
+  } else {
+    ph.hidden = true;
+    ph.innerHTML = "";
+  }
+}
+
+function renderVtTileHtml(tile, data) {
+  const label = escapeHtml(data?.label || tile.label_path || "—");
+  const value = escapeHtml(data?.value || "—");
+  const vname = escapeHtml(data?.value_name || (tile.value_path || "").split(".").pop() || "");
+  const color = tile.color || "#3b82f6";
+  const del = `<button class="dash-vt-delete-btn" data-slot="${tile.slot}" title="${t("vtDeleteBtn")}">&times;</button>`;
+  const vnameHtml = vname ? `<div class="vt-vname">${vname}</div>` : "";
+
+  let inner = "";
+  switch (tile.display) {
+    case "big-number":
+      inner = `<div class="vt-big-number"><div class="vt-val">${value}</div>${vnameHtml}<div class="vt-lbl">${label}</div></div>`;
+      break;
+    case "progress-bar": {
+      const num = parseFloat(data?.value) || 0;
+      const pct = Math.min(Math.max(num, 0), 100);
+      inner = `<div class="vt-progress"><div class="vt-progress-header"><span class="vt-lbl">${label}</span><span class="vt-val" style="color:${color}">${value}</span></div>${vnameHtml}<div class="vt-progress-track"><div class="vt-progress-bar" style="width:${pct}%;background:${color}"></div></div></div>`;
+      break;
+    }
+    case "stat-card":
+      inner = `<div class="vt-stat"><div class="vt-lbl">${label}</div><div class="vt-val" style="color:${color}">${value}</div>${vnameHtml}</div>`;
+      break;
+    case "text-plain":
+      inner = `<div class="vt-text-plain"><div class="vt-lbl"><span class="vt-dot" style="background:${color}"></span>${label}</div><div class="vt-val">${value}</div>${vnameHtml}</div>`;
+      break;
+    case "text-badge":
+      inner = `<div class="vt-text-badge"><div class="vt-lbl">${label}</div><span class="vt-badge" style="background:${color}20;color:${color}">${value}</span>${vnameHtml}</div>`;
+      break;
+    case "text-highlight":
+      inner = `<div class="vt-text-highlight"><div class="vt-lbl">${label}</div><div class="vt-val">${value}</div>${vnameHtml}</div>`;
+      break;
+    default:
+      inner = `<div class="vt-big-number"><div class="vt-val">${value}</div>${vnameHtml}<div class="vt-lbl">${label}</div></div>`;
+  }
+
+  return `<div class="dash-vt-tile vt-style-${tile.display}" data-slot="${tile.slot}" style="--vt-color:${color};--vt-color-light:${color}18">${del}${inner}</div>`;
+}
+
+// ── Edit Mode Toggle ────────────────────────────────────────
+document.getElementById("dash-edit-btn").addEventListener("click", () => {
+  dashEditMode = !dashEditMode;
+  document.getElementById("dash-edit-btn").classList.toggle("active", dashEditMode);
+  renderVtGrid();
+});
+
+// ── Grid Click Delegation ───────────────────────────────────
+document.getElementById("dash-placeholders").addEventListener("click", (e) => {
+  // Delete button
+  const delBtn = e.target.closest(".dash-vt-delete-btn");
+  if (delBtn) {
+    vtDeleteTargetSlot = parseInt(delBtn.dataset.slot);
+    document.getElementById("vt-confirm-text").textContent = t("vtDeleteConfirm");
+    document.getElementById("vt-confirm-cancel").textContent = t("vtCancel");
+    document.getElementById("vt-confirm-ok").textContent = t("vtDeleteBtn");
+    document.getElementById("vt-confirm-dialog").showModal();
+    return;
+  }
+  // Placeholder "+" card
+  const card = e.target.closest(".dash-placeholder-card");
+  if (card) {
+    openVtWizard(parseInt(card.dataset.slot));
+  }
+});
+
+// ── Delete Confirm ──────────────────────────────────────────
+let vtDeleteTargetSlot = -1;
+document.getElementById("vt-confirm-cancel").addEventListener("click", () => {
+  document.getElementById("vt-confirm-dialog").close();
+});
+document.getElementById("vt-confirm-ok").addEventListener("click", async () => {
+  document.getElementById("vt-confirm-dialog").close();
+  vtTilesConfig = vtTilesConfig.filter(t => t.slot !== vtDeleteTargetSlot);
+  await apiRequest("/apps/resilience/api/value-tiles", { method: "PUT", body: { config: vtTilesConfig } });
+  vtTileData = vtTileData.filter(d => d.slot !== vtDeleteTargetSlot);
+  renderVtGrid();
+});
+
+// ══════════════════════════════════════════════════════════════
+// Value Tile Wizard
+// ══════════════════════════════════════════════════════════════
+
+let vtWizardStep = 1;
+let vtSelectedAasId = null;
+let vtActiveField = "label"; // "label" | "value"
+let vtLabelPath = "";
+let vtValuePath = "";
+let vtDisplay = "big-number";
+let vtColor = "";
+let vtTargetSlot = 0;
+let vtCachedAasList = [];
+let vtCachedSubmodels = null;
+
+const vtWizardModal = document.getElementById("vt-wizard-modal");
+
+function openVtWizard(slot) {
+  vtTargetSlot = slot;
+  vtWizardStep = 1;
+  vtSelectedAasId = null;
+  vtActiveField = "label";
+  vtLabelPath = "";
+  vtValuePath = "";
+  vtDisplay = "big-number";
+  vtCachedSubmodels = null;
+  // Auto-assign unused color
+  const usedColors = vtTilesConfig.map(t => t.color);
+  vtColor = VT_COLORS.find(c => !usedColors.includes(c)) || VT_COLORS[Math.floor(Math.random() * VT_COLORS.length)];
+  showVtStep(1);
+  vtWizardModal.showModal();
+  loadVtAasList();
+}
+
+function showVtStep(step) {
+  vtWizardStep = step;
+  for (let s = 1; s <= 3; s++) {
+    document.getElementById(`vt-step-${s}`).hidden = s !== step;
+  }
+  document.querySelectorAll("#vt-wizard-steps .aas-cm-step").forEach(sp => {
+    const s = parseInt(sp.dataset.step);
+    sp.classList.toggle("active", s === step);
+    sp.classList.toggle("done", s < step);
+  });
+  document.getElementById("vt-wizard-back").hidden = step <= 1;
+  document.getElementById("vt-wizard-next").hidden = step !== 2;
+  document.getElementById("vt-wizard-next").disabled = !(vtLabelPath && vtValuePath);
+  document.getElementById("vt-wizard-create").hidden = step !== 3;
+  document.getElementById("vt-wizard-cancel").hidden = false;
+}
+
+// ── Step 1: AAS List ────────────────────────────────────────
+async function loadVtAasList() {
+  const list = document.getElementById("vt-aas-list");
+  list.innerHTML = `<div class="aas-cm-loading">${t("vtLoading")}</div>`;
+  const res = await apiRequest("/apps/resilience/api/aas-overview");
+  if (!res.ok || !res.payload?.entries?.length) {
+    list.innerHTML = `<div class="aas-cm-empty">${t("vtNoAas")}</div>`;
+    vtCachedAasList = [];
+    return;
+  }
+  // Deduplicate by aas_id (overview can have duplicates from multiple sources)
+  const seen = new Set();
+  vtCachedAasList = res.payload.entries.filter(e => {
+    if (seen.has(e.aas_id)) return false;
+    seen.add(e.aas_id);
+    return true;
+  });
+  renderVtAasList("");
+}
+
+function renderVtAasList(filter) {
+  const list = document.getElementById("vt-aas-list");
+  const lf = filter.toLowerCase();
+  const filtered = lf ? vtCachedAasList.filter(e => e.aas_id.toLowerCase().includes(lf) || (e.source_name || "").toLowerCase().includes(lf)) : vtCachedAasList;
+  if (!filtered.length) {
+    list.innerHTML = `<div class="aas-cm-empty">${t("vtNoAas")}</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(e => {
+    const shortId = e.aas_id.length > 50 ? "\u2026" + e.aas_id.slice(-45) : e.aas_id;
+    return `<button type="button" class="aas-cm-select-item" data-aas-id="${escapeHtml(e.aas_id)}"><span class="aas-cm-select-label">${escapeHtml(shortId)}</span><span class="aas-cm-select-meta">${escapeHtml(e.source_name || "")}</span></button>`;
+  }).join("");
+}
+
+document.getElementById("vt-aas-search").addEventListener("input", (e) => {
+  renderVtAasList(e.target.value.trim());
+});
+
+document.getElementById("vt-aas-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".aas-cm-select-item");
+  if (!btn) return;
+  vtSelectedAasId = btn.dataset.aasId;
+  showVtStep(2);
+  loadVtTree(vtSelectedAasId);
+});
+
+// ── Step 2: Tree + Path Fields ──────────────────────────────
+async function loadVtTree(aasId) {
+  const treeEl = document.getElementById("vt-tree");
+  const loading = document.getElementById("vt-tree-loading");
+  treeEl.innerHTML = "";
+  loading.hidden = false;
+  const res = await apiRequest(`/apps/resilience/api/company-detail/${encodeURIComponent(aasId)}`);
+  loading.hidden = true;
+  if (!res.ok || !res.payload?.submodels?.length) {
+    treeEl.innerHTML = `<div class="aas-cm-empty">${t("vtNoAas")}</div>`;
+    vtCachedSubmodels = null;
+    return;
+  }
+  vtCachedSubmodels = res.payload.submodels;
+  // Render clickable tree
+  let html = "";
+  for (const sm of vtCachedSubmodels) {
+    html += `<div class="vt-tree-sm">`;
+    html += `<div class="vt-tree-sm-header">${escapeHtml(sm.idShort || sm.id || "")}</div>`;
+    if (sm.properties?.length) {
+      html += `<div class="vt-tree-props">`;
+      for (const prop of sm.properties) {
+        if (prop.modelType === "Collection" || prop.modelType === "List") continue;
+        const fullPath = sm.idShort + "." + prop.idShort;
+        const val = prop.value || "";
+        const shortVal = val.length > 40 ? val.slice(0, 37) + "\u2026" : val;
+        html += `<button type="button" class="vt-tree-prop" data-path="${escapeHtml(fullPath)}"><span class="vt-tree-prop-name">${escapeHtml(prop.idShort)}</span><span class="vt-tree-prop-val">${escapeHtml(shortVal)}</span></button>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  treeEl.innerHTML = html;
+}
+
+// Path field clicks
+document.getElementById("vt-path-fields").addEventListener("click", (e) => {
+  const field = e.target.closest(".vt-path-field");
+  if (!field) return;
+  vtActiveField = field.dataset.field;
+  document.getElementById("vt-field-label").classList.toggle("active", vtActiveField === "label");
+  document.getElementById("vt-field-value").classList.toggle("active", vtActiveField === "value");
+});
+
+// Tree property clicks
+document.getElementById("vt-tree").addEventListener("click", (e) => {
+  const prop = e.target.closest(".vt-tree-prop");
+  if (!prop) return;
+  const path = prop.dataset.path;
+  if (vtActiveField === "label") {
+    vtLabelPath = path;
+    document.getElementById("vt-field-label-value").textContent = path;
+    document.getElementById("vt-field-label").classList.add("filled");
+    // Auto-switch to value field if not yet set
+    if (!vtValuePath) {
+      vtActiveField = "value";
+      document.getElementById("vt-field-label").classList.remove("active");
+      document.getElementById("vt-field-value").classList.add("active");
+    }
+  } else {
+    vtValuePath = path;
+    document.getElementById("vt-field-value-value").textContent = path;
+    document.getElementById("vt-field-value").classList.add("filled");
+  }
+  // Highlight selected in tree
+  document.querySelectorAll("#vt-tree .vt-tree-prop.selected").forEach(p => p.classList.remove("selected"));
+  prop.classList.add("selected");
+  // Enable/disable next
+  document.getElementById("vt-wizard-next").disabled = !(vtLabelPath && vtValuePath);
+});
+
+// ── Step 3: Display + Color ─────────────────────────────────
+function renderVtDisplayOptions() {
+  const grid = document.getElementById("vt-display-grid");
+  const previews = {
+    "big-number": `<span class="vt-preview-big">42</span>`,
+    "progress-bar": `<div class="vt-preview-bar"></div>`,
+    "stat-card": `<span class="vt-preview-stat">42</span>`,
+    "text-plain": `<span class="vt-preview-plain">Text</span>`,
+    "text-badge": `<span class="vt-preview-badge">Badge</span>`,
+    "text-highlight": `<span class="vt-preview-highlight">Value</span>`,
+  };
+  grid.innerHTML = VT_DISPLAYS.map(d =>
+    `<div class="vt-display-option${d.id === vtDisplay ? " selected" : ""}" data-display="${d.id}"><div class="vt-display-option-preview">${previews[d.id]}</div><div class="vt-display-option-label">${t(d.key)}</div></div>`
+  ).join("");
+
+  // Color swatches
+  const swatches = document.getElementById("vt-color-swatches");
+  swatches.innerHTML = VT_COLORS.map(c =>
+    `<button type="button" class="vt-color-swatch${c === vtColor ? " selected" : ""}" data-color="${c}" style="background:${c}"></button>`
+  ).join("");
+}
+
+document.getElementById("vt-display-grid").addEventListener("click", (e) => {
+  const opt = e.target.closest(".vt-display-option");
+  if (!opt) return;
+  vtDisplay = opt.dataset.display;
+  document.querySelectorAll("#vt-display-grid .vt-display-option").forEach(o => o.classList.toggle("selected", o.dataset.display === vtDisplay));
+});
+
+document.getElementById("vt-color-swatches").addEventListener("click", (e) => {
+  const sw = e.target.closest(".vt-color-swatch");
+  if (!sw) return;
+  vtColor = sw.dataset.color;
+  document.querySelectorAll("#vt-color-swatches .vt-color-swatch").forEach(s => s.classList.toggle("selected", s.dataset.color === vtColor));
+});
+
+// ── Wizard Navigation ───────────────────────────────────────
+document.getElementById("vt-wizard-back").addEventListener("click", () => {
+  if (vtWizardStep === 2) {
+    vtLabelPath = "";
+    vtValuePath = "";
+    document.getElementById("vt-field-label-value").textContent = t("vtFieldEmpty");
+    document.getElementById("vt-field-value-value").textContent = t("vtFieldEmpty");
+    document.getElementById("vt-field-label").classList.remove("filled");
+    document.getElementById("vt-field-value").classList.remove("filled");
+    vtActiveField = "label";
+    document.getElementById("vt-field-label").classList.add("active");
+    document.getElementById("vt-field-value").classList.remove("active");
+    showVtStep(1);
+  } else if (vtWizardStep === 3) {
+    showVtStep(2);
+  }
+});
+
+document.getElementById("vt-wizard-next").addEventListener("click", () => {
+  if (vtWizardStep === 2 && vtLabelPath && vtValuePath) {
+    renderVtDisplayOptions();
+    showVtStep(3);
+  }
+});
+
+document.getElementById("vt-wizard-cancel").addEventListener("click", () => {
+  vtWizardModal.close();
+});
+document.getElementById("vt-wizard-close").addEventListener("click", () => {
+  vtWizardModal.close();
+});
+
+document.getElementById("vt-wizard-create").addEventListener("click", async () => {
+  const tile = {
+    slot: vtTargetSlot,
+    aas_id: vtSelectedAasId,
+    label_path: vtLabelPath,
+    value_path: vtValuePath,
+    display: vtDisplay,
+    color: vtColor,
+  };
+  // Replace if slot already used, otherwise push
+  vtTilesConfig = vtTilesConfig.filter(t => t.slot !== vtTargetSlot);
+  vtTilesConfig.push(tile);
+  await apiRequest("/apps/resilience/api/value-tiles", { method: "PUT", body: { config: vtTilesConfig } });
+  vtWizardModal.close();
+  // Reload tile data
+  const dataRes = await apiRequest("/apps/resilience/api/value-tile-data");
+  vtTileData = dataRes.ok && Array.isArray(dataRes.payload) ? dataRes.payload : [];
+  renderVtGrid();
+});
 
 // Open modal: load config, show display
 document.getElementById("dash-score-settings-btn").addEventListener("click", async () => {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resilience – Workspace</title>
-  <link rel="stylesheet" href="/apps/resilience/styles.css?v=28" />
+  <link rel="stylesheet" href="/apps/resilience/styles.css?v=30" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
@@ -144,9 +144,19 @@
       <!-- Dashboard Page -->
       <section id="page-dashboard" class="page-section active">
         <div class="page-inner">
-          <div class="page-header">
+          <div class="page-header dash-header">
             <h2 id="dashboard-title">Resilience Dashboard</h2>
-            <p id="dashboard-desc">Übersicht der Resilienz-Tools für deine Lieferkette.</p>
+            <button id="dash-edit-btn" class="dash-edit-btn" type="button" title="Kacheln bearbeiten">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+          </div>
+          <div id="dash-placeholders" class="dash-placeholder-grid" hidden>
+            <div class="dash-placeholder-card"><span class="dash-placeholder-icon">+</span></div>
+            <div class="dash-placeholder-card"><span class="dash-placeholder-icon">+</span></div>
+            <div class="dash-placeholder-card"><span class="dash-placeholder-icon">+</span></div>
+            <div class="dash-placeholder-card"><span class="dash-placeholder-icon">+</span></div>
+            <div class="dash-placeholder-card"><span class="dash-placeholder-icon">+</span></div>
+            <div class="dash-placeholder-card"><span class="dash-placeholder-icon">+</span></div>
           </div>
           <div class="dashboard-grid" id="dashboard-grid">
             <!-- News tile -->
@@ -1694,6 +1704,73 @@
     </div>
   </div>
 
-  <script src="/apps/resilience/app.js?v=28"></script>
+  <!-- Value Tile Wizard Modal -->
+  <dialog id="vt-wizard-modal" class="aas-cm-modal vt-wizard-modal">
+    <div class="aas-cm-inner">
+      <div class="aas-cm-header">
+        <h2 id="vt-wizard-title">Wert-Kachel erstellen</h2>
+        <div class="aas-cm-steps" id="vt-wizard-steps">
+          <span class="aas-cm-step active" data-step="1">1</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="2">2</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="3">3</span>
+        </div>
+        <button id="vt-wizard-close" class="aas-cm-close-btn" type="button">&times;</button>
+      </div>
+      <!-- Step 1: AAS Selection -->
+      <div class="aas-cm-body" id="vt-step-1">
+        <p class="aas-cm-desc" id="vt-step1-desc">W&auml;hle eine AAS aus.</p>
+        <input type="text" id="vt-aas-search" class="vt-search-input" placeholder="AAS suchen&hellip;">
+        <div id="vt-aas-list" class="aas-cm-select-list"></div>
+      </div>
+      <!-- Step 2: Path Selection -->
+      <div class="aas-cm-body" id="vt-step-2" hidden>
+        <p class="aas-cm-desc" id="vt-step2-desc">W&auml;hle Pfade f&uuml;r Bezeichnung und Wert.</p>
+        <div class="vt-path-fields" id="vt-path-fields">
+          <div class="vt-path-field active" id="vt-field-label" data-field="label">
+            <span class="vt-path-field-label" id="vt-field-label-text">Bezeichnung</span>
+            <span class="vt-path-field-value" id="vt-field-label-value">Klicke auf eine Property im Baum</span>
+          </div>
+          <div class="vt-path-field" id="vt-field-value" data-field="value">
+            <span class="vt-path-field-label" id="vt-field-value-text">Wert</span>
+            <span class="vt-path-field-value" id="vt-field-value-value">Klicke auf eine Property im Baum</span>
+          </div>
+        </div>
+        <div id="vt-tree-loading" class="aas-cm-loading" hidden>Laden&hellip;</div>
+        <div id="vt-tree" class="aas-cm-tree"></div>
+      </div>
+      <!-- Step 3: Display + Color -->
+      <div class="aas-cm-body" id="vt-step-3" hidden>
+        <p class="aas-cm-desc" id="vt-step3-desc">W&auml;hle Darstellung und Farbe.</p>
+        <div class="vt-display-grid" id="vt-display-grid"></div>
+        <div class="vt-color-section">
+          <span class="vt-color-label" id="vt-color-label">Farbe</span>
+          <div class="vt-color-swatches" id="vt-color-swatches"></div>
+        </div>
+      </div>
+      <div class="aas-cm-footer">
+        <button id="vt-wizard-back" class="btn btn-sm" type="button" hidden>Zur&uuml;ck</button>
+        <span class="aas-cm-footer-spacer"></span>
+        <button id="vt-wizard-cancel" class="btn btn-sm" type="button">Abbrechen</button>
+        <button id="vt-wizard-next" class="btn btn-primary btn-sm" type="button" hidden>Weiter</button>
+        <button id="vt-wizard-create" class="btn btn-primary btn-sm" type="button" hidden>Erstellen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Value Tile Delete Confirm -->
+  <dialog id="vt-confirm-dialog" class="ind-confirm-dialog">
+    <div class="ind-confirm-inner">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <p id="vt-confirm-text">Kachel wirklich entfernen?</p>
+      <div class="ind-confirm-actions">
+        <button id="vt-confirm-cancel" class="btn btn-sm" type="button">Abbrechen</button>
+        <button id="vt-confirm-ok" class="btn btn-sm btn-danger" type="button">Entfernen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/apps/resilience/app.js?v=30"></script>
 </body>
 </html>
