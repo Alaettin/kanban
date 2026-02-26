@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const db = require("../../shared/db");
 const auth = require("../../shared/auth");
 const RssParser = require("rss-parser");
+const { BigQuery } = require("@google-cloud/bigquery");
 const ISO_COUNTRIES = require("./iso-countries");
 
 const rssParser = new RssParser({ timeout: 15000 });
@@ -258,6 +259,9 @@ async function initResilienceTables() {
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
 
+  // Migration: per-condition input field
+  try { await db.run(`ALTER TABLE resilience_indicator_conditions ADD COLUMN input TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
+
   // AAS-Quellen (Repository-Server)
   await db.run(`CREATE TABLE IF NOT EXISTS resilience_aas_sources (
     source_id    TEXT PRIMARY KEY,
@@ -376,6 +380,15 @@ async function initResilienceTables() {
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN company_group_id TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN company_name_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
 
+  // Migration: GDELT BigQuery credentials
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN bq_service_account TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+
+  // Migration: indicator dashboard config
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN indicator_dashboard_config TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
+
+  // Migration: score dashboard config
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN score_dashboard_config TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
+
   // Migration: city_value + direct coords on aas_map
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN city_value TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN direct_lat REAL DEFAULT NULL`); } catch { /* exists */ }
@@ -427,8 +440,7 @@ async function fetchGdacsRange(type, from, to, alertlevel, depth = 0) {
     }
 
     return features;
-  } catch (err) {
-    console.error(`[GDACS] fetchGdacsRange ${type} ${fmt(from)}..${fmt(to)} depth=${depth}:`, err.message);
+  } catch {
     return [];
   }
 }
@@ -889,7 +901,7 @@ function mountRoutes(router) {
   router.get("/api/settings", auth.requireAuth, async (req, res) => {
     try {
       const settings = await db.get(
-        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter FROM resilience_settings WHERE user_id = ?",
+        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter, bq_service_account FROM resilience_settings WHERE user_id = ?",
         [req.user.id]
       );
       const feeds = await db.all(
@@ -927,6 +939,8 @@ function mountRoutes(router) {
         matching_lat_path: settings?.matching_lat_path ?? "",
         matching_lon_path: settings?.matching_lon_path ?? "",
         dash_aas_match_filter: JSON.parse(settings?.dash_aas_match_filter || '["polygon","distance"]'),
+        bq_has_credentials: !!(settings?.bq_service_account),
+        bq_project_id: (() => { try { return JSON.parse(settings?.bq_service_account || "{}").project_id || ""; } catch { return ""; } })(),
         feeds,
         gdacs_countries: gdacsCountries,
       });
@@ -1023,6 +1037,24 @@ function mountRoutes(router) {
           await db.run("UPDATE resilience_settings SET dash_aas_match_filter = ? WHERE user_id = ?",
             [JSON.stringify(f), req.user.id]);
         }
+      }
+      if (body.bq_service_account !== undefined) {
+        const val = (body.bq_service_account || "").trim();
+        if (val && !val.startsWith("\u2022")) {
+          // New JSON — validate
+          try {
+            const parsed = JSON.parse(val);
+            if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+              return res.status(400).json({ error: "INVALID_SERVICE_ACCOUNT" });
+            }
+            await db.run("UPDATE resilience_settings SET bq_service_account = ? WHERE user_id = ?", [val, req.user.id]);
+          } catch {
+            return res.status(400).json({ error: "INVALID_JSON" });
+          }
+        } else if (val === "") {
+          await db.run("UPDATE resilience_settings SET bq_service_account = '' WHERE user_id = ?", [req.user.id]);
+        }
+        // If val starts with "•" → keep existing (do nothing)
       }
       res.json({ ok: true });
     } catch {
@@ -1828,34 +1860,56 @@ function mountRoutes(router) {
         return res.json({ items: cached.items, cached: true });
       }
 
-      const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=de&gl=DE&ceid=DE:de`;
+      // Fetch DE + EN in parallel
+      const locales = [
+        { hl: "de", gl: "DE", ceid: "DE:de" },
+        { hl: "en", gl: "US", ceid: "US:en" },
+      ];
+      const encodedQ = encodeURIComponent(q);
+      const feedResults = await Promise.allSettled(
+        locales.map(async ({ hl, gl, ceid }) => {
+          const url = `https://news.google.com/rss/search?q=${encodedQ}+when:14d&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+          const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.text();
+        })
+      );
 
-      // Fetch raw XML to extract <source url="..."> which rss-parser doesn't expose
-      const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const rawXml = await response.text();
-
-      // Extract source URLs from raw XML: <source url="https://domain.com">Name</source>
+      // Merge results from all feeds
       const sourceMap = new Map();
       const sourceRe = /<source\s+url="([^"]+)"[^>]*>([^<]+)<\/source>/g;
-      let m;
-      while ((m = sourceRe.exec(rawXml)) !== null) {
-        sourceMap.set(m[2].trim(), m[1]); // name → url
+      let allParsedItems = [];
+      for (const result of feedResults) {
+        if (result.status !== "fulfilled") continue;
+        const rawXml = result.value;
+        let m;
+        while ((m = sourceRe.exec(rawXml)) !== null) {
+          sourceMap.set(m[2].trim(), m[1]);
+        }
+        const parsed = await rssParser.parseString(rawXml);
+        allParsedItems.push(...(parsed.items || []));
       }
 
-      const parsed = await rssParser.parseString(rawXml);
+      // Deduplicate by link
+      const seen = new Set();
+      allParsedItems = allParsedItems.filter(item => {
+        const key = item.link || item.title;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-      // 7-day filter
-      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const items = (parsed.items || [])
+      // 14-day filter, sort by date desc
+      const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      const items = allParsedItems
         .filter(item => {
           const d = new Date(item.isoDate || item.pubDate);
-          return !isNaN(d) && d.getTime() >= sevenDaysAgo;
+          return !isNaN(d) && d.getTime() >= cutoff;
         })
-        .slice(0, 30)
+        .sort((a, b) => new Date(b.isoDate || b.pubDate) - new Date(a.isoDate || a.pubDate))
+        .slice(0, 50)
         .map(item => {
           const title = (item.title || "").slice(0, 500);
-          // Extract source name from title suffix ("Headline - Source") since rss-parser doesn't expose it
           let sourceName = item.source?.name || item.creator || "";
           if (!sourceName && title.includes(" - ")) {
             sourceName = title.slice(title.lastIndexOf(" - ") + 3);
@@ -1875,6 +1929,277 @@ function mountRoutes(router) {
     } catch (err) {
       console.error("GET /api/company-news error:", err);
       res.status(502).json({ error: "FETCH_FAILED" });
+    }
+  });
+
+  // ── GDELT BigQuery ───────────────────────────────────────────
+  const gdeltCache = new Map();
+  const GDELT_CACHE_TTL = 30 * 60 * 1000;
+
+  function getBigQueryClient(serviceAccountJson) {
+    const sa = JSON.parse(serviceAccountJson);
+    return new BigQuery({
+      projectId: sa.project_id,
+      credentials: { client_email: sa.client_email, private_key: sa.private_key },
+    });
+  }
+
+  router.get("/api/gdelt/company", auth.requireAuth, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const companyName = (req.query.name || "").trim();
+      const companyAlias = (req.query.alias || "").trim();
+      const country = (req.query.country || "").trim();
+
+      if (!companyName) {
+        return res.status(400).json({ error: "NO_COMPANY" });
+      }
+
+      // 1. Load credentials
+      const settings = await db.get(
+        "SELECT bq_service_account FROM resilience_settings WHERE user_id = ?", [userId]);
+      if (!settings?.bq_service_account) {
+        return res.status(400).json({ error: "NO_CREDENTIALS" });
+      }
+
+      // 2. Check cache
+      const cacheKey = `${userId}:${companyName}`;
+      const cached = gdeltCache.get(cacheKey);
+      if (cached && (Date.now() - cached.fetchedAt) < GDELT_CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
+      // 3. Build search terms (only aliases with 3+ chars to avoid noise)
+      const searchTerms = [companyName];
+      if (companyAlias) {
+        for (const a of companyAlias.split(",")) {
+          const trimmed = a.trim();
+          if (trimmed && trimmed.length >= 3 && trimmed.toLowerCase() !== companyName.toLowerCase()) {
+            searchTerms.push(trimmed);
+          }
+        }
+      }
+
+      // 4. Build BigQuery query — search V2Organizations AND AllNames for broader coverage
+      const orgConditions = searchTerms
+        .map((_, i) => `(V2Organizations LIKE @term${i} OR AllNames LIKE @term${i})`)
+        .join(" OR ");
+      const params = {};
+      searchTerms.forEach((term, i) => { params[`term${i}`] = `%${term}%`; });
+
+      const sql = `
+        SELECT
+          SUBSTR(CAST(DATE AS STRING), 1, 8) AS day,
+          DocumentIdentifier AS url,
+          SourceCommonName AS source,
+          V2Tone
+        FROM \`gdelt-bq.gdeltv2.gkg_partitioned\`
+        WHERE _PARTITIONTIME >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+          AND (${orgConditions})
+        ORDER BY DATE DESC
+        LIMIT 500
+      `;
+
+      // 5. Execute query
+      const bq = getBigQueryClient(settings.bq_service_account);
+      const [rows] = await bq.query({
+        query: sql,
+        params,
+        location: "US",
+        maximumBytesBilled: "10000000000",
+      });
+
+      // 6. Process results
+      const mentions = rows.map(row => {
+        const toneParts = (row.V2Tone || "").split(",");
+        const tone = parseFloat(toneParts[0]) || 0;
+        return {
+          day: row.day || "",
+          url: (row.url || "").slice(0, 2000),
+          source: row.source || "",
+          tone: Math.round(tone * 10) / 10,
+        };
+      });
+
+      // Aggregate chart data by day
+      const dayMap = new Map();
+      for (const m of mentions) {
+        if (!m.day) continue;
+        const entry = dayMap.get(m.day) || { day: m.day, count: 0, toneSum: 0 };
+        entry.count++;
+        entry.toneSum += m.tone;
+        dayMap.set(m.day, entry);
+      }
+      const chart = [...dayMap.values()]
+        .map(d => ({ day: d.day, count: d.count, avgTone: Math.round((d.toneSum / d.count) * 10) / 10 }))
+        .sort((a, b) => a.day.localeCompare(b.day));
+
+      const data = { chart, mentions, total: mentions.length };
+      gdeltCache.set(cacheKey, { data, fetchedAt: Date.now() });
+      res.json(data);
+    } catch (err) {
+      console.error("[GDELT] Error:", err.message, err.errors || "");
+      res.status(500).json({ error: "QUERY_FAILED", message: err.message });
+    }
+  });
+
+  // ── World Bank Governance Indicators ──────────────────────────
+  const worldBankCache = new Map();
+  const WB_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+  const WB_INDICATORS = [
+    { id: "CC.EST", name: "Control of Corruption" },
+    { id: "GE.EST", name: "Government Effectiveness" },
+    { id: "PV.EST", name: "Political Stability" },
+    { id: "RQ.EST", name: "Regulatory Quality" },
+    { id: "RL.EST", name: "Rule of Law" },
+    { id: "VA.EST", name: "Voice and Accountability" },
+  ];
+  const WB_LOGISTICS_ID = "LP.LPI.OVRL.XQ";
+
+  router.get("/api/world-bank", auth.requireAuth, async (req, res) => {
+    try {
+      const iso = (req.query.iso || "").trim().toUpperCase();
+      if (!iso || iso.length !== 2) return res.status(400).json({ error: "INVALID_ISO" });
+
+      const cached = worldBankCache.get(iso);
+      if (cached && (Date.now() - cached.fetchedAt) < WB_CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
+      const allIds = [...WB_INDICATORS.map(i => i.id), WB_LOGISTICS_ID];
+      const results = await Promise.allSettled(allIds.map(async (indId) => {
+        const url = `https://api.worldbank.org/v2/country/${encodeURIComponent(iso)}/indicator/${encodeURIComponent(indId)}?date=2018:2024&format=json`;
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const json = await r.json();
+        if (!Array.isArray(json) || !Array.isArray(json[1])) return null;
+        // Find newest year with a value
+        for (const entry of json[1]) {
+          if (entry.value !== null) {
+            return { id: indId, value: Math.round(entry.value * 100) / 100, year: parseInt(entry.date), country: entry.country?.value || "" };
+          }
+        }
+        return null;
+      }));
+
+      let country = "";
+      const governance = [];
+      let logistics = null;
+
+      for (let i = 0; i < results.length; i++) {
+        const val = results[i].status === "fulfilled" ? results[i].value : null;
+        if (!val) continue;
+        if (!country && val.country) country = val.country;
+        if (val.id === WB_LOGISTICS_ID) {
+          logistics = { value: val.value, year: val.year };
+        } else {
+          governance.push({ id: val.id, value: val.value, year: val.year });
+        }
+      }
+
+      const data = { country, iso, governance, logistics };
+      worldBankCache.set(iso, { data, fetchedAt: Date.now() });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: "WB_FETCH_FAILED" });
+    }
+  });
+
+  // ── INFORM Risk Index ───────────────────────────────────────
+  const informCache = new Map();
+  const INFORM_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+  let informWorkflowId = null;
+  let informWorkflowName = "";
+  let informWorkflowFetchedAt = 0;
+  const INFORM_WF_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+  // ISO2 → ISO3 fallback map for common countries
+  const ISO2_TO_ISO3 = {
+    AF:"AFG",AL:"ALB",DZ:"DZA",AD:"AND",AO:"AGO",AR:"ARG",AM:"ARM",AU:"AUS",AT:"AUT",AZ:"AZE",
+    BS:"BHS",BH:"BHR",BD:"BGD",BY:"BLR",BE:"BEL",BZ:"BLZ",BJ:"BEN",BT:"BTN",BO:"BOL",BA:"BIH",
+    BW:"BWA",BR:"BRA",BN:"BRN",BG:"BGR",BF:"BFA",BI:"BDI",KH:"KHM",CM:"CMR",CA:"CAN",CF:"CAF",
+    TD:"TCD",CL:"CHL",CN:"CHN",CO:"COL",CG:"COG",CD:"COD",CR:"CRI",CI:"CIV",HR:"HRV",CU:"CUB",
+    CY:"CYP",CZ:"CZE",DK:"DNK",DJ:"DJI",DO:"DOM",EC:"ECU",EG:"EGY",SV:"SLV",GQ:"GNQ",ER:"ERI",
+    EE:"EST",ET:"ETH",FI:"FIN",FR:"FRA",GA:"GAB",GM:"GMB",GE:"GEO",DE:"DEU",GH:"GHA",GR:"GRC",
+    GT:"GTM",GN:"GIN",GW:"GNB",GY:"GUY",HT:"HTI",HN:"HND",HU:"HUN",IS:"ISL",IN:"IND",ID:"IDN",
+    IR:"IRN",IQ:"IRQ",IE:"IRL",IL:"ISR",IT:"ITA",JM:"JAM",JP:"JPN",JO:"JOR",KZ:"KAZ",KE:"KEN",
+    KW:"KWT",KG:"KGZ",LA:"LAO",LV:"LVA",LB:"LBN",LS:"LSO",LR:"LBR",LY:"LBY",LT:"LTU",LU:"LUX",
+    MG:"MDG",MW:"MWI",MY:"MYS",ML:"MLI",MT:"MLT",MR:"MRT",MU:"MUS",MX:"MEX",MD:"MDA",MN:"MNG",
+    ME:"MNE",MA:"MAR",MZ:"MOZ",MM:"MMR",NA:"NAM",NP:"NPL",NL:"NLD",NZ:"NZL",NI:"NIC",NE:"NER",
+    NG:"NGA",KP:"PRK",MK:"MKD",NO:"NOR",OM:"OMN",PK:"PAK",PA:"PAN",PG:"PNG",PY:"PRY",PE:"PER",
+    PH:"PHL",PL:"POL",PT:"PRT",QA:"QAT",RO:"ROU",RU:"RUS",RW:"RWA",SA:"SAU",SN:"SEN",RS:"SRB",
+    SL:"SLE",SG:"SGP",SK:"SVK",SI:"SVN",SO:"SOM",ZA:"ZAF",KR:"KOR",SS:"SSD",ES:"ESP",LK:"LKA",
+    SD:"SDN",SR:"SUR",SZ:"SWZ",SE:"SWE",CH:"CHE",SY:"SYR",TW:"TWN",TJ:"TJK",TZ:"TZA",TH:"THA",
+    TL:"TLS",TG:"TGO",TT:"TTO",TN:"TUN",TR:"TUR",TM:"TKM",UG:"UGA",UA:"UKR",AE:"ARE",GB:"GBR",
+    US:"USA",UY:"URY",UZ:"UZB",VE:"VEN",VN:"VNM",YE:"YEM",ZM:"ZMB",ZW:"ZWE"
+  };
+
+  async function getInformWorkflowId() {
+    if (informWorkflowId && (Date.now() - informWorkflowFetchedAt) < INFORM_WF_TTL) {
+      return { id: informWorkflowId, name: informWorkflowName };
+    }
+    const r = await fetch("https://drmkc.jrc.ec.europa.eu/inform-index/API/InformAPI/Workflows/Default");
+    if (!r.ok) throw new Error("INFORM workflow fetch failed");
+    const wf = await r.json();
+    informWorkflowId = wf.WorkflowId;
+    informWorkflowName = wf.Name || "";
+    informWorkflowFetchedAt = Date.now();
+    return { id: informWorkflowId, name: informWorkflowName };
+  }
+
+  router.get("/api/inform-risk", auth.requireAuth, async (req, res) => {
+    try {
+      const iso = (req.query.iso || "").trim().toUpperCase();
+      if (!iso || iso.length !== 2) return res.status(400).json({ error: "INVALID_ISO" });
+
+      const cached = informCache.get(iso);
+      if (cached && (Date.now() - cached.fetchedAt) < INFORM_CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
+      // Resolve ISO3
+      let alpha3 = ISO2_TO_ISO3[iso] || "";
+      if (!alpha3) {
+        const row = await db.get("SELECT alpha3 FROM resilience_country_mappings WHERE iso_code = ? AND alpha3 != '' LIMIT 1", [iso]);
+        if (row) alpha3 = row.alpha3;
+      }
+      if (!alpha3) return res.status(400).json({ error: "NO_ISO3" });
+
+      const wf = await getInformWorkflowId();
+      const indicatorIds = "INFORM,HA,VU,CC,HA.NAT,HA.HUM,VU.SEV,VU.VGR,CC.INF,CC.INS";
+      const url = `https://drmkc.jrc.ec.europa.eu/inform-index/API/InformAPI/countries/Scores?WorkflowId=${wf.id}&ISO3=${encodeURIComponent(alpha3)}&IndicatorId=${indicatorIds}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("INFORM scores fetch failed");
+      const scores = await r.json();
+
+      const scoreMap = {};
+      for (const s of scores) {
+        scoreMap[s.IndicatorId] = Math.round((s.IndicatorScore || 0) * 10) / 10;
+      }
+
+      const data = {
+        country: alpha3,
+        workflowName: wf.name,
+        overall: scoreMap.INFORM || 0,
+        dimensions: [
+          { id: "HA", name: "Hazard & Exposure", score: scoreMap.HA || 0 },
+          { id: "VU", name: "Vulnerability", score: scoreMap.VU || 0 },
+          { id: "CC", name: "Lack of Coping Capacity", score: scoreMap.CC || 0 },
+        ],
+        details: [
+          { id: "HA.NAT", name: "Natural Hazards", score: scoreMap["HA.NAT"] || 0, parent: "HA" },
+          { id: "HA.HUM", name: "Human Hazards", score: scoreMap["HA.HUM"] || 0, parent: "HA" },
+          { id: "VU.SEV", name: "Socio-Economic", score: scoreMap["VU.SEV"] || 0, parent: "VU" },
+          { id: "VU.VGR", name: "Vulnerable Groups", score: scoreMap["VU.VGR"] || 0, parent: "VU" },
+          { id: "CC.INF", name: "Infrastructure", score: scoreMap["CC.INF"] || 0, parent: "CC" },
+          { id: "CC.INS", name: "Institutional", score: scoreMap["CC.INS"] || 0, parent: "CC" },
+        ],
+      };
+      informCache.set(iso, { data, fetchedAt: Date.now() });
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: "INFORM_FETCH_FAILED" });
     }
   });
 
@@ -1930,12 +2255,11 @@ function mountRoutes(router) {
 
   // ── Indicators CRUD ─────────────────────────────────────────────
   const VALID_OPERATORS = new Set([">", "<", ">=", "<=", "==", "!="]);
-  const VALID_INPUT_TYPES = new Set(["number", "text", "boolean"]);
 
   router.get("/api/indicators", auth.requireAuth, async (req, res) => {
     try {
       const indicators = await db.all(
-        `SELECT i.indicator_id, i.name, i.class_id, i.input_type, i.input_label, i.created_at,
+        `SELECT i.indicator_id, i.name, i.class_id, i.created_at,
                 c.name AS class_name,
                 (SELECT COUNT(*) FROM resilience_indicator_groups g WHERE g.indicator_id = i.indicator_id) AS group_count
          FROM resilience_indicators i
@@ -1947,6 +2271,316 @@ function mountRoutes(router) {
       res.json({ indicators });
     } catch {
       res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  // ── Indicator Dashboard Config (must be before :indicatorId) ──
+  router.get("/api/indicators/dashboard-config", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get(
+        "SELECT indicator_dashboard_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      res.json(JSON.parse(row?.indicator_dashboard_config || "{}"));
+    } catch {
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  router.put("/api/indicators/dashboard-config", auth.requireAuth, async (req, res) => {
+    try {
+      const config = req.body.config;
+      if (config === undefined) return res.status(400).json({ error: "MISSING_CONFIG" });
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run(
+        "UPDATE resilience_settings SET indicator_dashboard_config = ? WHERE user_id = ?",
+        [JSON.stringify(config), req.user.id]
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "SAVE_FAILED" });
+    }
+  });
+
+  // ── Score Dashboard Config ─────────────────────────────────────
+  router.get("/api/score/dashboard-config", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get(
+        "SELECT score_dashboard_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      res.json(JSON.parse(row?.score_dashboard_config || "{}"));
+    } catch {
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  router.put("/api/score/dashboard-config", auth.requireAuth, async (req, res) => {
+    try {
+      const config = req.body.config;
+      if (config === undefined) return res.status(400).json({ error: "MISSING_CONFIG" });
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run(
+        "UPDATE resilience_settings SET score_dashboard_config = ? WHERE user_id = ?",
+        [JSON.stringify(config), req.user.id]
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "SAVE_FAILED" });
+    }
+  });
+
+  router.get("/api/score/dashboard-evaluate", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get(
+        "SELECT score_dashboard_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const config = JSON.parse(row?.score_dashboard_config || "{}");
+      if (!config.group_id || !Array.isArray(config.aas_ids) || !config.aas_ids.length || !config.label_path || !config.target_path) {
+        return res.json({ items: [] });
+      }
+      const items = [];
+      for (const aasId of config.aas_ids) {
+        const imp = await db.get(
+          "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+          [aasId, req.user.id]
+        );
+        if (!imp?.submodels_data) continue;
+        let submodels;
+        try { submodels = JSON.parse(imp.submodels_data); } catch { continue; }
+        const label = extractFirstValue(submodels, config.label_path) || aasId;
+        const target = parseFloat(extractFirstValue(submodels, config.target_path)) || 0;
+        items.push({ aas_id: aasId, label, target });
+      }
+      const pathParts = config.target_path.split(".");
+      const title = pathParts[pathParts.length - 1] || "Score";
+      res.json({ items, title });
+    } catch (err) {
+      console.error("[Resilience] score-evaluate error:", err);
+      res.status(500).json({ error: "EVALUATE_FAILED" });
+    }
+  });
+
+  router.get("/api/indicators/dashboard-evaluate", auth.requireAuth, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+      const offset = parseInt(req.query.offset) || 0;
+      const sortBy = req.query.sort || "";
+      const sortDir = req.query.sort_dir === "desc" ? -1 : 1;
+
+      const row = await db.get(
+        "SELECT indicator_dashboard_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const config = JSON.parse(row?.indicator_dashboard_config || "{}");
+      if (!config.group_id || !Array.isArray(config.indicators) || !config.indicators.length) {
+        return res.json({ items: [], total: 0 });
+      }
+
+      // Resolve group name
+      const grp = await db.get("SELECT name FROM resilience_asset_groups WHERE group_id = ?", [config.group_id]);
+      const groupName = grp?.name || config.group_id;
+
+      // Get ALL group members (sort happens in-memory before pagination)
+      const members = await db.all(
+        "SELECT aas_id FROM resilience_asset_group_members WHERE group_id = ? ORDER BY aas_id ASC",
+        [config.group_id]
+      );
+
+      // Configured columns
+      const columns = Array.isArray(config.columns) ? config.columns : [];
+      const columnPaths = columns.map(c => typeof c === "string" ? c : c.path);
+
+      // Load indicator definitions (with groups + conditions)
+      const indicatorDefs = new Map();
+      const indicatorNames = [];
+      for (const ic of config.indicators) {
+        const ind = await db.get(
+          "SELECT * FROM resilience_indicators WHERE indicator_id = ? AND user_id = ?",
+          [ic.indicator_id, req.user.id]
+        );
+        if (!ind) continue;
+        const groups = await db.all(
+          "SELECT * FROM resilience_indicator_groups WHERE indicator_id = ? ORDER BY sort_order ASC",
+          [ind.indicator_id]
+        );
+        for (const g of groups) {
+          g.conditions = await db.all(
+            "SELECT * FROM resilience_indicator_conditions WHERE group_id = ? ORDER BY sort_order ASC",
+            [g.group_id]
+          );
+        }
+        indicatorDefs.set(ic.indicator_id, { ...ind, groups, condMappings: ic.condition_mappings || {} });
+        indicatorNames.push({ indicator_id: ic.indicator_id, name: ind.name });
+      }
+
+      // Evaluate each AAS item
+      const allItems = [];
+      for (const m of members) {
+        const imp = await db.get(
+          "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+          [m.aas_id, req.user.id]
+        );
+        if (!imp?.submodels_data) continue;
+        let submodels;
+        try { submodels = JSON.parse(imp.submodels_data); } catch { continue; }
+
+        const results = {};
+        for (const [indId, def] of indicatorDefs) {
+          let matched = null;
+          for (let gi = 0; gi < def.groups.length; gi++) {
+            const g = def.groups[gi];
+            let allMatch = g.conditions.length > 0;
+            for (let ci = 0; ci < g.conditions.length; ci++) {
+              const c = g.conditions[ci];
+              const condKey = `g${gi}_c${ci}`;
+              const path = def.condMappings[condKey] || "";
+              const rawVal = path ? extractFirstValue(submodels, path) : "";
+              if (!evalCondition(c.input, c.operator, c.value, rawVal)) {
+                allMatch = false;
+                break;
+              }
+            }
+            if (allMatch) {
+              matched = { label: g.output_label, color: g.output_color, score: g.output_score };
+              break;
+            }
+          }
+          results[indId] = matched || {
+            label: def.default_label, color: def.default_color, score: def.default_score
+          };
+        }
+
+        // Extract column values
+        let columns_data = {};
+        if (columns.length) {
+          for (const col of columns) {
+            const p = typeof col === "string" ? col : col.path;
+            columns_data[p] = extractFirstValue(submodels, p);
+          }
+        }
+
+        allItems.push({ aas_id: m.aas_id, results, columns_data });
+      }
+
+      // Sorting
+      if (sortBy) {
+        const indIds = indicatorNames.map(n => n.indicator_id);
+        allItems.sort((a, b) => {
+          let ra, rb;
+          if (sortBy === "_aas") {
+            ra = a.aas_id; rb = b.aas_id;
+          } else if (indIds.includes(sortBy)) {
+            // Sort by indicator score
+            ra = a.results[sortBy]?.score ?? 0;
+            rb = b.results[sortBy]?.score ?? 0;
+            const na = Number(ra), nb = Number(rb);
+            if (!isNaN(na) && !isNaN(nb)) return (na - nb) * sortDir;
+          } else if (columnPaths.includes(sortBy)) {
+            ra = (a.columns_data && a.columns_data[sortBy]) || "";
+            rb = (b.columns_data && b.columns_data[sortBy]) || "";
+          } else {
+            return 0;
+          }
+          if (ra === undefined) ra = "";
+          if (rb === undefined) rb = "";
+          const na = Number(ra), nb = Number(rb);
+          if (String(ra) !== "" && String(rb) !== "" && !isNaN(na) && !isNaN(nb)) return (na - nb) * sortDir;
+          return String(ra).toLowerCase() < String(rb).toLowerCase() ? -sortDir : String(ra).toLowerCase() > String(rb).toLowerCase() ? sortDir : 0;
+        });
+      }
+
+      const total = allItems.length;
+      const items = allItems.slice(offset, offset + limit);
+
+      res.json({ group_name: groupName, indicator_names: indicatorNames, columns, items, total });
+    } catch (err) {
+      console.error("[Resilience] dashboard-evaluate error:", err);
+      res.status(500).json({ error: "EVALUATE_FAILED" });
+    }
+  });
+
+  // ── Indicator Detail for a single AAS item ──────────────────
+  router.get("/api/indicators/dashboard-detail/:aasId", auth.requireAuth, async (req, res) => {
+    try {
+      const aasId = req.params.aasId;
+      const row = await db.get(
+        "SELECT indicator_dashboard_config FROM resilience_settings WHERE user_id = ?",
+        [req.user.id]
+      );
+      const config = JSON.parse(row?.indicator_dashboard_config || "{}");
+      if (!config.group_id || !Array.isArray(config.indicators) || !config.indicators.length) {
+        return res.status(404).json({ error: "NOT_CONFIGURED" });
+      }
+
+      // Load AAS submodels
+      const imp = await db.get(
+        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+        [aasId, req.user.id]
+      );
+      if (!imp?.submodels_data) return res.status(404).json({ error: "AAS_NOT_FOUND" });
+      let submodels;
+      try { submodels = JSON.parse(imp.submodels_data); } catch { return res.status(500).json({ error: "PARSE_ERROR" }); }
+
+      // Extract column values
+      const columns = Array.isArray(config.columns) ? config.columns : [];
+      const columns_data = {};
+      for (const col of columns) {
+        const p = typeof col === "string" ? col : col.path;
+        columns_data[p] = extractFirstValue(submodels, p);
+      }
+
+      // Evaluate each indicator
+      const indicators = [];
+      for (const ic of config.indicators) {
+        const ind = await db.get(
+          `SELECT i.*, c.name AS class_name
+           FROM resilience_indicators i
+           LEFT JOIN resilience_indicator_classes c ON c.class_id = i.class_id
+           WHERE i.indicator_id = ? AND i.user_id = ?`,
+          [ic.indicator_id, req.user.id]
+        );
+        if (!ind) continue;
+
+        const groups = await db.all(
+          "SELECT * FROM resilience_indicator_groups WHERE indicator_id = ? ORDER BY sort_order ASC",
+          [ind.indicator_id]
+        );
+        const condMappings = ic.condition_mappings || {};
+        let matched = null;
+
+        for (let gi = 0; gi < groups.length; gi++) {
+          const g = groups[gi];
+          const conditions = await db.all(
+            "SELECT * FROM resilience_indicator_conditions WHERE group_id = ? ORDER BY sort_order ASC",
+            [g.group_id]
+          );
+          let allMatch = conditions.length > 0;
+          for (let ci = 0; ci < conditions.length; ci++) {
+            const c = conditions[ci];
+            const condKey = `g${gi}_c${ci}`;
+            const path = condMappings[condKey] || "";
+            const rawVal = path ? extractFirstValue(submodels, path) : "";
+            if (!evalCondition(c.input, c.operator, c.value, rawVal)) { allMatch = false; break; }
+          }
+          if (allMatch) { matched = { label: g.output_label, color: g.output_color, score: g.output_score }; break; }
+        }
+
+        const result = matched || { label: ind.default_label, color: ind.default_color, score: ind.default_score };
+
+        indicators.push({
+          indicator_id: ind.indicator_id,
+          name: ind.name,
+          class_name: ind.class_name || null,
+          result
+        });
+      }
+
+      res.json({ aas_id: aasId, columns_data, indicators });
+    } catch (err) {
+      console.error("[Resilience] dashboard-detail error:", err);
+      res.status(500).json({ error: "DETAIL_FAILED" });
     }
   });
 
@@ -1982,14 +2616,13 @@ function mountRoutes(router) {
       const b = req.body || {};
       const name = (b.name || "").trim();
       if (!name) return res.status(400).json({ error: "INVALID_NAME" });
-      const inputType = VALID_INPUT_TYPES.has(b.input_type) ? b.input_type : "number";
 
       const indicatorId = crypto.randomUUID();
       await db.run(
-        `INSERT INTO resilience_indicators (indicator_id, user_id, name, class_id, input_type, input_label, default_label, default_color, default_score)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [indicatorId, req.user.id, name, b.class_id || null, inputType,
-         (b.input_label || "").trim(), (b.default_label || "").trim(),
+        `INSERT INTO resilience_indicators (indicator_id, user_id, name, class_id, default_label, default_color, default_score)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [indicatorId, req.user.id, name, b.class_id || null,
+         (b.default_label || "").trim(),
          b.default_color || "#9ca3af", parseFloat(b.default_score) || 0]
       );
 
@@ -2009,9 +2642,9 @@ function mountRoutes(router) {
           const c = conds[ci];
           const op = VALID_OPERATORS.has(c.operator) ? c.operator : ">=";
           await db.run(
-            `INSERT INTO resilience_indicator_conditions (condition_id, group_id, indicator_id, user_id, sort_order, operator, value)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [crypto.randomUUID(), groupId, indicatorId, req.user.id, ci, op, String(c.value ?? "")]
+            `INSERT INTO resilience_indicator_conditions (condition_id, group_id, indicator_id, user_id, sort_order, input, operator, value)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [crypto.randomUUID(), groupId, indicatorId, req.user.id, ci, (c.input || "").trim(), op, String(c.value ?? "")]
           );
         }
       }
@@ -2033,12 +2666,11 @@ function mountRoutes(router) {
       const b = req.body || {};
       const name = (b.name || "").trim();
       if (!name) return res.status(400).json({ error: "INVALID_NAME" });
-      const inputType = VALID_INPUT_TYPES.has(b.input_type) ? b.input_type : "number";
 
       await db.run(
-        `UPDATE resilience_indicators SET name = ?, class_id = ?, input_type = ?, input_label = ?,
+        `UPDATE resilience_indicators SET name = ?, class_id = ?,
          default_label = ?, default_color = ?, default_score = ? WHERE indicator_id = ?`,
-        [name, b.class_id || null, inputType, (b.input_label || "").trim(),
+        [name, b.class_id || null,
          (b.default_label || "").trim(), b.default_color || "#9ca3af",
          parseFloat(b.default_score) || 0, ind.indicator_id]
       );
@@ -2062,9 +2694,9 @@ function mountRoutes(router) {
           const c = conds[ci];
           const op = VALID_OPERATORS.has(c.operator) ? c.operator : ">=";
           await db.run(
-            `INSERT INTO resilience_indicator_conditions (condition_id, group_id, indicator_id, user_id, sort_order, operator, value)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [crypto.randomUUID(), groupId, ind.indicator_id, req.user.id, ci, op, String(c.value ?? "")]
+            `INSERT INTO resilience_indicator_conditions (condition_id, group_id, indicator_id, user_id, sort_order, input, operator, value)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [crypto.randomUUID(), groupId, ind.indicator_id, req.user.id, ci, (c.input || "").trim(), op, String(c.value ?? "")]
           );
         }
       }
@@ -3095,6 +3727,31 @@ function matchCountryValue(value, mappingRows) {
     if (aasTokens.includes(vl)) return r.iso_code;
   }
   return "";
+}
+
+function evalCondition(inputType, operator, expected, actual) {
+  if (actual === "" || actual === undefined || actual === null) return false;
+  if (inputType === "number") {
+    const a = parseFloat(actual), e = parseFloat(expected);
+    if (isNaN(a) || isNaN(e)) return false;
+    switch (operator) {
+      case "==": return a === e;
+      case "!=": return a !== e;
+      case ">":  return a > e;
+      case "<":  return a < e;
+      case ">=": return a >= e;
+      case "<=": return a <= e;
+      default:   return false;
+    }
+  }
+  if (inputType === "boolean") {
+    const a = String(actual).toLowerCase() === "true";
+    const e = String(expected).toLowerCase() === "true";
+    return operator === "==" ? a === e : a !== e;
+  }
+  // text
+  const a = String(actual), e = String(expected);
+  return operator === "==" ? a === e : a !== e;
 }
 
 function extractFirstValue(submodels, pathStr) {

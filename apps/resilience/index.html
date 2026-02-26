@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resilience – Workspace</title>
-  <link rel="stylesheet" href="/apps/resilience/styles.css?v=18" />
+  <link rel="stylesheet" href="/apps/resilience/styles.css?v=26" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
@@ -169,14 +169,33 @@
                 <div class="dash-card-empty" id="dash-alerts-empty">Keine Alerts vorhanden.</div>
               </div>
             </div>
+            <!-- Score tile -->
+            <div class="dash-card" id="dash-score">
+              <div class="dash-card-header">
+                <span class="dash-card-title" id="dash-score-title">Score</span>
+                <button id="dash-score-settings-btn" class="dash-aas-settings-btn" type="button" title="Einstellungen">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+              </div>
+              <div class="dash-card-body" id="dash-score-body">
+                <div class="dash-card-empty" id="dash-score-empty">Nicht konfiguriert.</div>
+              </div>
+            </div>
             <!-- Indicators tile -->
             <div class="dash-card dash-card-full" id="dash-indicators">
               <div class="dash-card-header">
                 <span class="dash-card-title" id="dash-indicators-title">Indikatoren</span>
-                <a href="#" class="dash-card-link" id="dash-indicators-link" data-nav="indicators">Alle anzeigen &rarr;</a>
+                <button id="dash-ind-settings-btn" class="dash-aas-settings-btn" type="button" title="Einstellungen">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </button>
               </div>
               <div class="dash-card-body" id="dash-indicators-body">
                 <div class="dash-card-empty" id="dash-indicators-empty">Keine Indikatoren konfiguriert.</div>
+              </div>
+              <div class="dash-aas-footer" id="dash-ind-footer" hidden>
+                <button class="dash-aas-page-btn" id="dash-ind-prev" type="button" disabled>&laquo;</button>
+                <span class="dash-aas-page-info" id="dash-ind-page-info"></span>
+                <button class="dash-aas-page-btn" id="dash-ind-next" type="button" disabled>&raquo;</button>
               </div>
             </div>
             <!-- AAS Country Overview tile (full width) -->
@@ -262,7 +281,6 @@
                   <tr>
                     <th id="ind-th-name">Name</th>
                     <th id="ind-th-class">Klasse</th>
-                    <th id="ind-th-input">Input</th>
                     <th id="ind-th-rules">Regeln</th>
                     <th></th>
                   </tr>
@@ -292,18 +310,6 @@
                   <label id="ind-class-label" for="ind-class-select">Klasse</label>
                   <select id="ind-class-select" class="settings-select"></select>
                 </div>
-                <div class="ind-field">
-                  <label id="ind-input-type-label" for="ind-input-type">Input-Typ</label>
-                  <select id="ind-input-type" class="settings-select">
-                    <option value="number">Zahl</option>
-                    <option value="text">Text</option>
-                    <option value="boolean">Boolean</option>
-                  </select>
-                </div>
-                <div class="ind-field">
-                  <label id="ind-input-label-label" for="ind-input-label">Input-Bezeichnung</label>
-                  <input id="ind-input-label" type="text" class="ind-input" placeholder="z.B. Magnitude" />
-                </div>
               </div>
 
               <div class="ind-section">
@@ -327,7 +333,8 @@
                 </div>
                 <div class="ind-field-sm ind-field-color">
                   <label id="ind-default-color-label">Farbe</label>
-                  <input id="ind-default-color" type="color" class="ind-color-input" value="#9ca3af" />
+                  <button id="ind-default-color" type="button" class="ind-color-swatch-btn" data-color="#9ca3af" style="background:#9ca3af"></button>
+                  <input id="ind-default-color-hidden" type="hidden" value="#9ca3af" />
                 </div>
                 <div class="ind-field-sm">
                   <label id="ind-default-score-label">Score</label>
@@ -895,6 +902,7 @@
               <button class="docs-nav-item" data-settings-nav="gdacs" type="button" id="settings-nav-gdacs-btn">GDACS</button>
               <button class="docs-nav-item" data-settings-nav="aas-import" type="button" id="settings-nav-aas-btn">AAS Import</button>
               <button class="docs-nav-item" data-settings-nav="country-codes" type="button" id="settings-nav-cc-btn">Ländercodes</button>
+              <button class="docs-nav-item" data-settings-nav="gdelt-bq" type="button" id="settings-nav-gdelt-btn">GDELT</button>
             </nav>
 
             <div class="settings-nav-content">
@@ -970,22 +978,6 @@
                   <div id="gdacs-country-list" class="feed-list"></div>
                   <div id="gdacs-country-list-empty" class="feed-list-empty" hidden>
                     <span id="gdacs-country-empty-label">Noch keine Länder konfiguriert.</span>
-                  </div>
-
-                  <div class="gdacs-matching-params">
-                    <label id="gdacs-matching-label">Matching-Parameter</label>
-                    <div class="gdacs-matching-display">
-                      <div class="gdacs-matching-paths" id="gdacs-matching-paths">
-                        <span class="gdacs-aas-source-empty" id="gdacs-matching-text">Nicht konfiguriert</span>
-                      </div>
-                      <button id="gdacs-matching-btn" class="btn btn-sm cm-io-btn" type="button">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        <span id="gdacs-matching-btn-label">Konfigurieren</span>
-                      </button>
-                      <button id="gdacs-matching-delete-btn" class="btn btn-sm btn-icon-danger" type="button" title="Löschen" hidden>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                      </button>
-                    </div>
                   </div>
 
                   <div class="gdacs-threshold-section">
@@ -1130,6 +1122,26 @@
                   <button class="btn btn-sm" id="cm-prev-btn" type="button" disabled>Zurück</button>
                   <span id="cm-page-info" class="news-page-info"></span>
                   <button class="btn btn-sm" id="cm-next-btn" type="button" disabled>Weiter</button>
+                </div>
+              </div>
+
+              <!-- ── GDELT / BigQuery Tab ── -->
+              <div id="settings-nav-gdelt-bq" hidden>
+                <div class="settings-card">
+                  <h3 id="gdelt-settings-title">GDELT / BigQuery</h3>
+                  <p class="settings-desc" id="gdelt-settings-desc"></p>
+                  <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:0.4rem">
+                    <label for="bq-sa-input" id="gdelt-sa-label">Service Account JSON</label>
+                    <textarea id="bq-sa-input" class="feed-url-input" rows="6" style="font-family:var(--font-mono,monospace);font-size:0.75rem;resize:vertical"
+                      placeholder='{"type":"service_account","project_id":"...","client_email":"...","private_key":"..."}'></textarea>
+                  </div>
+                  <div id="bq-sa-status" class="settings-hint" hidden></div>
+                  <div class="settings-actions">
+                    <div class="settings-actions-spacer"></div>
+                    <button id="bq-sa-save-btn" class="btn btn-primary" type="button">
+                      <span id="bq-sa-save-label">Speichern</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1346,28 +1358,43 @@
       </div>
       <div class="dash-aas-settings-body">
         <div class="dash-settings-section">
-          <label id="dash-aas-filter-label">Match-Qualität anzeigen</label>
-          <div class="dash-aas-filter-checks">
-            <label><input type="checkbox" id="dash-filter-polygon" checked> <span style="color:#059669">&#9679;</span> <span id="dash-aas-filter-polygon-label">Polygon</span></label>
-            <label><input type="checkbox" id="dash-filter-distance" checked> <span style="color:#d97706">&#9679;</span> <span id="dash-aas-filter-distance-label">Distanz</span></label>
-            <label><input type="checkbox" id="dash-filter-country"> <span style="color:#9ca3af">&#9679;</span> <span id="dash-aas-filter-country-label">Land</span></label>
+          <label id="gdacs-matching-label">Matching-Parameter</label>
+          <div class="gdacs-matching-display">
+            <div class="gdacs-matching-paths" id="gdacs-matching-paths">
+              <span class="gdacs-aas-source-empty" id="gdacs-matching-text">Nicht konfiguriert</span>
+            </div>
+            <button id="gdacs-matching-btn" class="btn btn-sm cm-io-btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <span id="gdacs-matching-btn-label">Konfigurieren</span>
+            </button>
           </div>
         </div>
-        <div class="dash-settings-section">
-          <label id="dash-aas-cols-label">Spaltenauswahl</label>
-          <div class="gdacs-aas-source-row">
-            <div class="gdacs-aas-source-display" id="dash-aas-cols-display">
-              <span id="dash-aas-cols-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+        <div id="dash-aas-extra-sections" hidden>
+          <div class="dash-settings-section">
+            <label id="dash-aas-filter-label">Match-Qualit&auml;t anzeigen</label>
+            <div class="dash-aas-filter-checks">
+              <label><input type="checkbox" id="dash-filter-polygon" checked> <span style="color:#059669">&#9679;</span> <span id="dash-aas-filter-polygon-label">Polygon</span></label>
+              <label><input type="checkbox" id="dash-filter-distance" checked> <span style="color:#d97706">&#9679;</span> <span id="dash-aas-filter-distance-label">Distanz</span></label>
+              <label><input type="checkbox" id="dash-filter-country"> <span style="color:#9ca3af">&#9679;</span> <span id="dash-aas-filter-country-label">Land</span></label>
             </div>
-            <button id="dash-aas-cols-btn" class="btn btn-sm cm-io-btn" type="button">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              <span id="dash-aas-cols-btn-label">Spalten wählen</span>
-            </button>
+          </div>
+          <div class="dash-settings-section">
+            <label id="dash-aas-cols-label">Spaltenauswahl</label>
+            <div class="gdacs-aas-source-row">
+              <div class="gdacs-aas-source-display" id="dash-aas-cols-display">
+                <span id="dash-aas-cols-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+              </div>
+              <button id="dash-aas-cols-btn" class="btn btn-sm cm-io-btn" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                <span id="dash-aas-cols-btn-label">Spalten w&auml;hlen</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
       <div class="dash-aas-settings-footer">
         <button id="dash-aas-settings-save" class="btn btn-primary btn-sm" type="button">Speichern</button>
+        <button id="dash-aas-settings-delete" class="btn btn-sm btn-danger-outline" type="button" hidden>L&ouml;schen</button>
       </div>
     </div>
   </dialog>
@@ -1391,26 +1418,193 @@
             <span class="cd-sidebar-tooltip" id="cd-tab-location-tip"></span>
           </button>
           <button class="cd-sidebar-btn" data-cd-tab="alerts" type="button" id="cd-tab-alerts">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
-            <span class="cd-sidebar-badge" id="cd-tab-alerts-badge" hidden>0</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
             <span class="cd-sidebar-tooltip" id="cd-tab-alerts-tip"></span>
           </button>
-          <button class="cd-sidebar-btn" data-cd-tab="data" type="button" id="cd-tab-data">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-            <span class="cd-sidebar-tooltip" id="cd-tab-data-tip"></span>
+          <button class="cd-sidebar-btn" data-cd-tab="gdelt" type="button" id="cd-tab-gdelt">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            <span class="cd-sidebar-tooltip" id="cd-tab-gdelt-tip"></span>
           </button>
-          <button class="cd-sidebar-btn" data-cd-tab="submodels" type="button" id="cd-tab-submodels">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            <span class="cd-sidebar-badge" id="cd-tab-submodels-badge" hidden>0</span>
-            <span class="cd-sidebar-tooltip" id="cd-tab-submodels-tip"></span>
+          <button class="cd-sidebar-btn" data-cd-tab="worldbank" type="button" id="cd-tab-worldbank">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>
+            <span class="cd-sidebar-tooltip" id="cd-tab-worldbank-tip"></span>
+          </button>
+          <button class="cd-sidebar-btn" data-cd-tab="inform" type="button" id="cd-tab-inform">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="cd-sidebar-tooltip" id="cd-tab-inform-tip"></span>
           </button>
         </nav>
         <div class="cd-modal-body" id="cd-modal-body">
           <div class="cd-page" id="cd-page-location"></div>
           <div class="cd-page" id="cd-page-alerts" hidden></div>
-          <div class="cd-page" id="cd-page-data" hidden></div>
-          <div class="cd-page" id="cd-page-submodels" hidden></div>
+          <div class="cd-page" id="cd-page-gdelt" hidden></div>
+          <div class="cd-page" id="cd-page-worldbank" hidden></div>
+          <div class="cd-page" id="cd-page-inform" hidden></div>
         </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Indicator Dashboard Settings Modal -->
+  <dialog id="dash-ind-settings-modal" class="dash-aas-settings-modal">
+    <div class="dash-aas-settings-inner">
+      <div class="dash-aas-settings-header">
+        <h3 id="dash-ind-settings-title">Indikator-Kachel</h3>
+        <button id="dash-ind-settings-close" class="aas-cm-close-btn" type="button">&times;</button>
+      </div>
+      <div class="dash-aas-settings-body">
+        <div id="dash-ind-config-display" class="dash-ind-config-display">
+          <span class="gdacs-aas-source-empty" id="dash-ind-config-text">Nicht konfiguriert</span>
+        </div>
+        <div class="dash-settings-section" id="dash-ind-cols-section" hidden>
+          <label id="dash-ind-cols-label">Spaltenauswahl</label>
+          <div class="gdacs-aas-source-row">
+            <div class="gdacs-aas-source-display" id="dash-ind-cols-display">
+              <span id="dash-ind-cols-text" class="gdacs-aas-source-empty">Nicht konfiguriert</span>
+            </div>
+            <button id="dash-ind-cols-btn" class="btn btn-sm cm-io-btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <span id="dash-ind-cols-btn-label">Spalten w&auml;hlen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="dash-aas-settings-footer dash-ind-settings-footer">
+        <button id="dash-ind-configure-btn" class="btn btn-primary btn-sm" type="button">Konfigurieren</button>
+        <button id="dash-ind-delete-btn" class="btn btn-sm btn-danger-outline" type="button">Alle l&ouml;schen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Indicator Wizard Modal -->
+  <dialog id="ind-wizard-modal" class="aas-cm-modal">
+    <div class="aas-cm-inner">
+      <div class="aas-cm-header">
+        <h2 id="ind-wizard-title">Indikatoren konfigurieren</h2>
+        <div class="aas-cm-steps" id="ind-wizard-steps">
+          <span class="aas-cm-step active" data-step="1">1</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="2">2</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="3">3</span>
+          <span class="aas-cm-step-line"></span>
+          <span class="aas-cm-step" data-step="4">4</span>
+        </div>
+        <button id="ind-wizard-close" class="aas-cm-close-btn" type="button">&times;</button>
+      </div>
+      <!-- Step 1: Gruppe wählen -->
+      <div class="aas-cm-body" id="ind-wizard-step-1">
+        <p class="aas-cm-step-desc" id="ind-wizard-step1-desc">Wähle die AAS-Gruppe für die Auswertung</p>
+        <div id="ind-wizard-group-list" class="aas-cm-select-list"></div>
+        <div id="ind-wizard-group-empty" class="aas-cm-empty" hidden>Keine Gruppen vorhanden</div>
+      </div>
+      <!-- Step 2: Indikatoren wählen -->
+      <div class="aas-cm-body" id="ind-wizard-step-2" hidden>
+        <p class="aas-cm-step-desc" id="ind-wizard-step2-desc">Wähle die Indikatoren die ausgewertet werden sollen</p>
+        <div id="ind-wizard-indicator-list" class="ind-wizard-checkbox-list"></div>
+        <div id="ind-wizard-indicator-empty" class="aas-cm-empty" hidden>Keine Indikatoren definiert</div>
+      </div>
+      <!-- Step 3: Mapping pro Indikator -->
+      <div class="aas-cm-body" id="ind-wizard-step-3" hidden>
+        <div class="ind-wizard-mapping-header">
+          <span id="ind-wizard-mapping-name"></span>
+          <span id="ind-wizard-mapping-progress" class="ind-wizard-mapping-progress"></span>
+        </div>
+        <p class="aas-cm-step-desc" id="ind-wizard-step3-desc">Ordne jedem Input-Typ einen AAS-Pfad zu</p>
+        <!-- Sub-step 3a: AAS item selection -->
+        <div id="ind-wizard-aas-select" hidden>
+          <p class="aas-cm-step-desc" id="ind-wizard-step3a-desc">Wähle ein Referenz-AAS-Item</p>
+          <div id="ind-wizard-aas-list" class="aas-cm-select-list"></div>
+        </div>
+        <!-- Sub-step 3b: Input mapping via tree -->
+        <div id="ind-wizard-input-mapping" hidden>
+          <div id="ind-wizard-input-rows"></div>
+          <div id="ind-wizard-tree-area" hidden>
+            <p id="ind-wizard-tree-label" class="ind-wizard-tree-label"></p>
+            <div id="ind-wizard-tree-loading" class="aas-cm-loading" hidden></div>
+            <div id="ind-wizard-tree" class="aas-cm-tree"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Step 4: Zusammenfassung -->
+      <div class="aas-cm-body" id="ind-wizard-step-4" hidden>
+        <div id="ind-wizard-summary" class="ind-wizard-summary"></div>
+        <div id="ind-wizard-success" class="aas-cm-success" hidden>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11.5 14.5 16 9.5"/></svg>
+          <p id="ind-wizard-success-text">Konfiguration gespeichert</p>
+        </div>
+      </div>
+      <div class="aas-cm-footer">
+        <button id="ind-wizard-back-btn" class="btn btn-sm" type="button" hidden>Zur&uuml;ck</button>
+        <span class="aas-cm-footer-spacer"></span>
+        <button id="ind-wizard-cancel-btn" class="btn btn-sm" type="button">Abbrechen</button>
+        <button id="ind-wizard-next-btn" class="btn btn-primary btn-sm" type="button" hidden>Weiter</button>
+        <button id="ind-wizard-save-btn" class="btn btn-primary btn-sm" type="button" hidden>Speichern</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Indicator Confirm Dialog -->
+  <dialog id="ind-confirm-dialog" class="ind-confirm-dialog">
+    <div class="ind-confirm-inner">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <p id="ind-confirm-text">Alle Indikator-Konfigurationen l&ouml;schen?</p>
+      <div class="ind-confirm-actions">
+        <button id="ind-confirm-cancel" class="btn btn-sm" type="button">Abbrechen</button>
+        <button id="ind-confirm-ok" class="btn btn-sm btn-danger" type="button">L&ouml;schen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Indicator Detail Modal -->
+  <dialog id="ind-detail-modal" class="company-detail-modal ind-detail-modal">
+    <div class="cd-modal-inner">
+      <div class="cd-modal-header">
+        <div class="cd-header-info">
+          <h3 id="ind-detail-title" class="cd-modal-title"></h3>
+          <span id="ind-detail-aas-id" class="cd-modal-aas-id"></span>
+        </div>
+        <button id="ind-detail-close" class="map-modal-close-btn" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="ind-detail-body" id="ind-detail-body"></div>
+    </div>
+  </dialog>
+
+  <!-- Score Settings Modal -->
+  <dialog id="dash-score-settings-modal" class="dash-aas-settings-modal dash-score-settings-modal">
+    <div class="dash-aas-settings-inner">
+      <div class="dash-aas-settings-header">
+        <h3 id="dash-score-settings-title">Score-Kachel</h3>
+        <button id="dash-score-settings-close" class="aas-cm-close-btn" type="button">&times;</button>
+      </div>
+      <div class="dash-aas-settings-body" id="dash-score-settings-body">
+        <div id="score-cfg-display"></div>
+        <div id="score-step-1" hidden>
+          <p class="aas-cm-desc" id="score-step-1-desc">W&auml;hle eine AAS-Gruppe.</p>
+          <div id="score-group-list" class="aas-cm-select-list"></div>
+        </div>
+        <div id="score-step-2" hidden>
+          <p class="aas-cm-desc" id="score-step-2-desc">W&auml;hle AAS-Items aus.</p>
+          <div id="score-aas-list" class="score-checkbox-list"></div>
+        </div>
+        <div id="score-step-3" hidden>
+          <p class="aas-cm-desc" id="score-step-3-desc">W&auml;hle Pfade f&uuml;r Benennung und Vergleichswert.</p>
+          <div id="score-path-rows"></div>
+          <div id="score-tree-area" hidden>
+            <p class="aas-cm-desc" id="score-tree-label"></p>
+            <div id="score-tree-loading" class="aas-cm-loading" hidden>Laden&hellip;</div>
+            <div id="score-tree" class="aas-cm-tree"></div>
+          </div>
+        </div>
+      </div>
+      <div class="dash-aas-settings-footer score-settings-footer">
+        <button id="score-cfg-configure-btn" class="btn btn-primary btn-sm" type="button">Konfigurieren</button>
+        <button id="score-cfg-back-btn" class="btn btn-sm" type="button" hidden>Zur&uuml;ck</button>
+        <button id="score-cfg-next-btn" class="btn btn-primary btn-sm" type="button" hidden>Weiter</button>
+        <button id="score-cfg-save-btn" class="btn btn-primary btn-sm" type="button" hidden>&Uuml;bernehmen</button>
+        <button id="score-cfg-delete-btn" class="btn btn-sm btn-danger-outline" type="button" hidden>L&ouml;schen</button>
       </div>
     </div>
   </dialog>
@@ -1448,6 +1642,6 @@
     </div>
   </div>
 
-  <script src="/apps/resilience/app.js?v=18"></script>
+  <script src="/apps/resilience/app.js?v=26"></script>
 </body>
 </html>

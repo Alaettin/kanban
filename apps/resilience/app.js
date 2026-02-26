@@ -39,6 +39,10 @@ const settingsNavFeeds = document.getElementById("settings-nav-feeds");
 const settingsNavGdacs = document.getElementById("settings-nav-gdacs");
 const settingsNavAasImport = document.getElementById("settings-nav-aas-import");
 const settingsNavCC = document.getElementById("settings-nav-country-codes");
+const settingsNavGdeltBq = document.getElementById("settings-nav-gdelt-bq");
+const bqSaInput = document.getElementById("bq-sa-input");
+const bqSaSaveBtn = document.getElementById("bq-sa-save-btn");
+const bqSaStatus = document.getElementById("bq-sa-status");
 const cmSearchInput = document.getElementById("cm-search-input");
 const cmTbody = document.getElementById("cm-tbody");
 const cmEmpty = document.getElementById("cm-empty");
@@ -82,16 +86,21 @@ const cdModalClose = document.getElementById("cd-modal-close");
 const cdSidebar = document.getElementById("cd-sidebar");
 const cdPageLocation = document.getElementById("cd-page-location");
 const cdPageAlerts = document.getElementById("cd-page-alerts");
-const cdPageData = document.getElementById("cd-page-data");
-const cdPageSubmodels = document.getElementById("cd-page-submodels");
-const cdAlertsBadge = document.getElementById("cd-tab-alerts-badge");
-const cdSubmodelsBadge = document.getElementById("cd-tab-submodels-badge");
-const cdPages = { location: cdPageLocation, alerts: cdPageAlerts, data: cdPageData, submodels: cdPageSubmodels };
+const cdPageGdelt = document.getElementById("cd-page-gdelt");
+const cdPageWorldbank = document.getElementById("cd-page-worldbank");
+const cdPageInform = document.getElementById("cd-page-inform");
+const cdPages = { location: cdPageLocation, alerts: cdPageAlerts, gdelt: cdPageGdelt, worldbank: cdPageWorldbank, inform: cdPageInform };
 let cdMapInstance = null;
 let cdAlertLayerGroup = null;
 let cdAlertsVisible = true;
 let cdActivePage = "location";
 let cdNewsLoaded = false;
+let cdGdeltLoaded = false;
+let cdWorldbankLoaded = false;
+let cdInformLoaded = false;
+let cdCurrentAasId = null;
+let cdCompanyName = "";
+let cdCompanyAlias = "";
 
 // News DOM refs
 const newsListView = document.getElementById("news-list-view");
@@ -295,6 +304,7 @@ const I18N = {
     dashAasColsLabel: "Spaltenauswahl",
     dashAasColsBtn: "Spalten wählen",
     dashAasSettingsSave: "Speichern",
+    dashAasSettingsDelete: "Löschen",
     gdacsSettingsRetentionLabel: "Alerts aufbewahren für",
     gdacsSettingsRefreshLabel: "Abruf-Intervall",
     gdacsSettingsSave: "Speichern",
@@ -393,11 +403,14 @@ const I18N = {
     cdNoAlerts: "Keine Alerts zugeordnet.",
     cdSubmodelElements: "Elemente",
     cdTabLocation: "Standort",
-    cdTabAlerts: "Nachrichten",
-    cdTabData: "Daten",
-    cdTabSubmodels: "Submodels",
+    cdTabAlerts: "Google News",
+    cdTabGdelt: "GDELT",
+    cdTabWorldbank: "World Bank",
+    cdTabInform: "INFORM Risk",
+    cdGdeltPlaceholder: "GDELT-Integration wird hier verfügbar sein.",
     cdNewsTitle: "Nachrichten",
-    cdNewsEmpty: "Keine Nachrichten der letzten 7 Tage gefunden.",
+    cdNewsNoCompany: "Kein Unternehmensname vorhanden. Bitte zuerst Enrichment ausführen.",
+    cdNewsEmpty: "Keine Nachrichten der letzten 14 Tage gefunden.",
     cdNewsError: "Nachrichten konnten nicht geladen werden.",
     cdNewsNoContent: "Kein Inhalt verfügbar.",
     // Indicators
@@ -409,17 +422,73 @@ const I18N = {
     indEmptyText: "Noch keine Indikatoren definiert.",
     indThName: "Name",
     indThClass: "Klasse",
-    indThInput: "Input",
     indThRules: "Regeln",
     indBack: "Zurück",
     indNameLabel: "Name",
     indClassLabel: "Klasse",
-    indInputTypeLabel: "Input-Typ",
-    indInputLabelLabel: "Input-Bezeichnung",
-    indInputLabelPlaceholder: "z.B. Magnitude",
-    indInputTypeNumber: "Zahl",
-    indInputTypeText: "Text",
-    indInputTypeBoolean: "Boolean",
+    indOpEquals: "ist gleich",
+    indOpNotEquals: "ist ungleich",
+    indOpGreater: "ist größer als",
+    indOpLess: "ist kleiner als",
+    indOpGreaterEqual: "ist größer gleich",
+    indOpLessEqual: "ist kleiner gleich",
+    indInputNumber: "Zahl",
+    indInputText: "Text",
+    indInputBoolean: "Boolean",
+    indColorCustom: "Eigene Farbe…",
+    // Indicator Dashboard
+    indDashSettingsTitle: "Indikator-Kachel",
+    indDashConfigure: "Konfigurieren",
+    indDashDeleteAll: "Alle löschen",
+    indDashDeleteConfirm: "Alle Indikator-Konfigurationen löschen?",
+    indDashDeleteConfirmBtn: "Löschen",
+    indDashCancel: "Abbrechen",
+    indDashNoConfig: "Nicht konfiguriert",
+    indDashConfigured: "konfiguriert",
+    indWizardTitle: "Indikatoren konfigurieren",
+    indWizardStep1Desc: "Wähle die AAS-Gruppe für die Auswertung",
+    indWizardStep2Desc: "Wähle die Indikatoren die ausgewertet werden sollen",
+    indWizardStep3Desc: "Ordne jedem Input-Typ einen AAS-Pfad zu",
+    indWizardStep3aDesc: "Wähle ein Referenz-AAS-Item",
+    indWizardStep3bDesc: "Klicke auf einen Pfad um den Input zuzuordnen",
+    indWizardMappingFor: "Mapping für",
+    indWizardSelectPath: "Pfad wählen",
+    indWizardPathSet: "Zugeordnet",
+    indWizardDone: "Konfiguration gespeichert",
+    indWizardNext: "Weiter",
+    indWizardBack: "Zurück",
+    indWizardSave: "Speichern",
+    indWizardNoIndicators: "Keine Indikatoren definiert",
+    indWizardNoGroups: "Keine Gruppen vorhanden",
+    indWizardRefAas: "Referenz-AAS",
+    indWizardTreeLoading: "Lade Struktur…",
+    indWizardTypeMismatch: "Typ-Inkompatibel",
+    indDashPage: "Seite {page} / {pages}",
+    indDetailTitle: "Indikator-Detail",
+    indDetailColumns: "Eigenschaften",
+    indDetailScore: "Score: {score}",
+    indDetailClassScore: "\u00D8 Score: {score}",
+    indDetailNoClass: "Ohne Klasse",
+    dashScoreTitle: "Score",
+    dashScoreSettingsTitle: "Score-Kachel",
+    dashScoreEmpty: "Nicht konfiguriert.",
+    dashScoreClose: "Schließen",
+    dashScoreConfigure: "Konfigurieren",
+    dashScoreDelete: "Löschen",
+    dashScoreBack: "Zurück",
+    dashScoreNext: "Weiter",
+    dashScoreSave: "Übernehmen",
+    dashScoreStep1: "Wähle eine AAS-Gruppe.",
+    dashScoreStep2: "Wähle AAS-Items aus.",
+    dashScoreStep3: "Wähle Pfade für Benennung und Vergleichswert.",
+    dashScoreLabel: "Benennung",
+    dashScoreTarget: "Vergleichswert",
+    dashScoreConfigured: "konfiguriert",
+    indColsLabel: "Spaltenauswahl",
+    indColsBtn: "Spalten wählen",
+    indColsEmpty: "Keine Spalten",
+    indColsCount: "{n} Spalten gewählt",
+    indColsSaved: "Spalten gespeichert",
     indGroupsTitle: "Regelgruppen",
     indGroupsDesc: "ODER-verknüpft — erste zutreffende Gruppe bestimmt die Ausgabe.",
     indAddGroup: "ODER-Gruppe hinzufügen",
@@ -510,6 +579,48 @@ const I18N = {
     settingsNavGdacs: "GDACS",
     settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Ländercodes",
+    settingsNavGdelt: "GDELT",
+    gdeltSettingsTitle: "GDELT / BigQuery",
+    gdeltSettingsDesc: "Verbinde einen Google Cloud Service Account für GDELT-Abfragen über BigQuery.",
+    gdeltSaLabel: "Service Account JSON",
+    gdeltSaConfigured: "Service Account konfiguriert",
+    gdeltSettingsSaved: "GDELT-Einstellungen gespeichert.",
+    gdeltSettingsFailed: "Speichern fehlgeschlagen.",
+    gdeltNoCredentials: "Kein BigQuery Service Account konfiguriert.",
+    gdeltNoCompany: "Kein Unternehmensname vorhanden.",
+    gdeltNoData: "Keine GDELT-Daten gefunden.",
+    gdeltMentions: "Erwähnungen",
+    gdeltSentiment: "Sentiment",
+    gdeltArticles: "Artikel",
+    // World Bank
+    wbTitle: "Governance-Indikatoren",
+    wbLogistics: "Logistik-Performance",
+    wbNoCountry: "Kein Ländercode verfügbar.",
+    wbNoData: "Keine World-Bank-Daten verfügbar.",
+    wbCorruption: "Korruptionskontrolle",
+    wbEffectiveness: "Regierungseffektivität",
+    wbStability: "Politische Stabilität",
+    wbRegulatory: "Regulierungsqualität",
+    wbRuleOfLaw: "Rechtsstaatlichkeit",
+    wbVoice: "Mitsprache & Rechenschaft",
+    // INFORM Risk
+    informTitle: "INFORM Risiko-Index",
+    informHazard: "Gefahren & Exposition",
+    informVulnerability: "Vulnerabilität",
+    informCoping: "Bewältigungskapazität",
+    informNatural: "Naturgefahren",
+    informHuman: "Menschliche Gefahren",
+    informSocioEcon: "Sozioökonomisch",
+    informVulnGroups: "Vulnerable Gruppen",
+    informInfra: "Infrastruktur",
+    informInstitutional: "Institutionell",
+    informNoCountry: "Kein Ländercode verfügbar.",
+    informNoData: "Keine INFORM-Daten verfügbar.",
+    // Source badges
+    srcGoogleNews: "Quelle: Google News RSS — Nachrichtenartikel der letzten 14 Tage in Deutsch und Englisch",
+    srcGdelt: "Quelle: GDELT Project via Google BigQuery — Globale Medienanalyse mit Sentiment-Bewertung (30 Tage)",
+    srcWorldBank: "Quelle: World Bank — Worldwide Governance Indicators, jährlich aktualisierte Länder-Governance-Daten",
+    srcInform: "Quelle: INFORM Risk Index (EU JRC/DRMKC) — Globaler Risiko-Index für Naturgefahren, Vulnerabilität und Bewältigungskapazität",
     cmSearch: "Suchen…",
     cmThIso: "Alpha-2",
     cmThAlpha3: "Alpha-3",
@@ -760,6 +871,7 @@ const I18N = {
     dashAasColsLabel: "Column Selection",
     dashAasColsBtn: "Select Columns",
     dashAasSettingsSave: "Save",
+    dashAasSettingsDelete: "Delete",
     gdacsSettingsRetentionLabel: "Keep alerts for",
     gdacsSettingsRefreshLabel: "Refresh interval",
     gdacsSettingsSave: "Save",
@@ -858,11 +970,14 @@ const I18N = {
     cdNoAlerts: "No alerts matched.",
     cdSubmodelElements: "Elements",
     cdTabLocation: "Location",
-    cdTabAlerts: "News",
-    cdTabData: "Data",
-    cdTabSubmodels: "Submodels",
+    cdTabAlerts: "Google News",
+    cdTabGdelt: "GDELT",
+    cdTabWorldbank: "World Bank",
+    cdTabInform: "INFORM Risk",
+    cdGdeltPlaceholder: "GDELT integration will be available here.",
     cdNewsTitle: "News",
-    cdNewsEmpty: "No news from the last 7 days found.",
+    cdNewsNoCompany: "No company name available. Please run enrichment first.",
+    cdNewsEmpty: "No news from the last 14 days found.",
     cdNewsError: "Failed to load news.",
     cdNewsNoContent: "No content available.",
     // Indicators
@@ -874,17 +989,72 @@ const I18N = {
     indEmptyText: "No indicators defined yet.",
     indThName: "Name",
     indThClass: "Class",
-    indThInput: "Input",
     indThRules: "Rules",
     indBack: "Back",
     indNameLabel: "Name",
     indClassLabel: "Class",
-    indInputTypeLabel: "Input type",
-    indInputLabelLabel: "Input label",
-    indInputLabelPlaceholder: "e.g. Magnitude",
-    indInputTypeNumber: "Number",
-    indInputTypeText: "Text",
-    indInputTypeBoolean: "Boolean",
+    indOpEquals: "equals",
+    indOpNotEquals: "not equal",
+    indOpGreater: "greater than",
+    indOpLess: "less than",
+    indOpGreaterEqual: "greater or equal",
+    indOpLessEqual: "less or equal",
+    indInputNumber: "Number",
+    indInputText: "Text",
+    indInputBoolean: "Boolean",
+    indColorCustom: "Custom color…",
+    indDashSettingsTitle: "Indicator Tile",
+    indDashConfigure: "Configure",
+    indDashDeleteAll: "Delete All",
+    indDashDeleteConfirm: "Delete all indicator configurations?",
+    indDashDeleteConfirmBtn: "Delete",
+    indDashCancel: "Cancel",
+    indDashNoConfig: "Not configured",
+    indDashConfigured: "configured",
+    indWizardTitle: "Configure Indicators",
+    indWizardStep1Desc: "Select the AAS group for evaluation",
+    indWizardStep2Desc: "Select indicators to evaluate",
+    indWizardStep3Desc: "Map each input type to an AAS path",
+    indWizardStep3aDesc: "Select a reference AAS item",
+    indWizardStep3bDesc: "Click a path to assign the input",
+    indWizardMappingFor: "Mapping for",
+    indWizardSelectPath: "Select path",
+    indWizardPathSet: "Assigned",
+    indWizardDone: "Configuration saved",
+    indWizardNext: "Next",
+    indWizardBack: "Back",
+    indWizardSave: "Save",
+    indWizardNoIndicators: "No indicators defined",
+    indWizardNoGroups: "No groups available",
+    indWizardRefAas: "Reference AAS",
+    indWizardTreeLoading: "Loading structure…",
+    indWizardTypeMismatch: "Type incompatible",
+    indDashPage: "Page {page} / {pages}",
+    indDetailTitle: "Indicator Detail",
+    indDetailColumns: "Properties",
+    indDetailScore: "Score: {score}",
+    indDetailClassScore: "\u00D8 Score: {score}",
+    indDetailNoClass: "No class",
+    dashScoreTitle: "Score",
+    dashScoreSettingsTitle: "Score Tile",
+    dashScoreEmpty: "Not configured.",
+    dashScoreClose: "Close",
+    dashScoreConfigure: "Configure",
+    dashScoreDelete: "Delete",
+    dashScoreBack: "Back",
+    dashScoreNext: "Next",
+    dashScoreSave: "Apply",
+    dashScoreStep1: "Select an AAS group.",
+    dashScoreStep2: "Select AAS items.",
+    dashScoreStep3: "Select paths for label and target value.",
+    dashScoreLabel: "Label",
+    dashScoreTarget: "Target value",
+    dashScoreConfigured: "configured",
+    indColsLabel: "Column selection",
+    indColsBtn: "Select columns",
+    indColsEmpty: "No columns",
+    indColsCount: "{n} columns selected",
+    indColsSaved: "Columns saved",
     indGroupsTitle: "Rule groups",
     indGroupsDesc: "OR-linked — first matching group determines the output.",
     indAddGroup: "Add OR group",
@@ -975,6 +1145,48 @@ const I18N = {
     settingsNavGdacs: "GDACS",
     settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Country Codes",
+    settingsNavGdelt: "GDELT",
+    gdeltSettingsTitle: "GDELT / BigQuery",
+    gdeltSettingsDesc: "Connect a Google Cloud service account for GDELT queries via BigQuery.",
+    gdeltSaLabel: "Service Account JSON",
+    gdeltSaConfigured: "Service account configured",
+    gdeltSettingsSaved: "GDELT settings saved.",
+    gdeltSettingsFailed: "Failed to save.",
+    gdeltNoCredentials: "No BigQuery service account configured.",
+    gdeltNoCompany: "No company name available.",
+    gdeltNoData: "No GDELT data found.",
+    gdeltMentions: "Mentions",
+    gdeltSentiment: "Sentiment",
+    gdeltArticles: "Articles",
+    // World Bank
+    wbTitle: "Governance Indicators",
+    wbLogistics: "Logistics Performance",
+    wbNoCountry: "No country code available.",
+    wbNoData: "No World Bank data available.",
+    wbCorruption: "Control of Corruption",
+    wbEffectiveness: "Government Effectiveness",
+    wbStability: "Political Stability",
+    wbRegulatory: "Regulatory Quality",
+    wbRuleOfLaw: "Rule of Law",
+    wbVoice: "Voice & Accountability",
+    // INFORM Risk
+    informTitle: "INFORM Risk Index",
+    informHazard: "Hazard & Exposure",
+    informVulnerability: "Vulnerability",
+    informCoping: "Coping Capacity",
+    informNatural: "Natural Hazards",
+    informHuman: "Human Hazards",
+    informSocioEcon: "Socio-Economic",
+    informVulnGroups: "Vulnerable Groups",
+    informInfra: "Infrastructure",
+    informInstitutional: "Institutional",
+    informNoCountry: "No country code available.",
+    informNoData: "No INFORM data available.",
+    // Source badges
+    srcGoogleNews: "Source: Google News RSS — News articles from the last 14 days in German and English",
+    srcGdelt: "Source: GDELT Project via Google BigQuery — Global media analysis with sentiment scoring (30 days)",
+    srcWorldBank: "Source: World Bank — Worldwide Governance Indicators, annually updated country governance data",
+    srcInform: "Source: INFORM Risk Index (EU JRC/DRMKC) — Global risk index for natural hazards, vulnerability, and coping capacity",
     cmSearch: "Search…",
     cmThIso: "Alpha-2",
     cmThAlpha3: "Alpha-3",
@@ -1275,8 +1487,6 @@ function applyLocaleToUI() {
   gdacsCountryInput.placeholder = t("gdacsCountryInputPlaceholder");
   document.getElementById("gdacs-country-add-label").textContent = t("gdacsCountryAdd");
   document.getElementById("gdacs-country-empty-label").textContent = t("gdacsCountryEmpty");
-  document.getElementById("gdacs-matching-label").textContent = t("matchingLabel");
-  document.getElementById("gdacs-matching-btn-label").textContent = t("matchingBtn");
   // Single-AAS geocoding dialog
   document.getElementById("geo-single-title").textContent = t("geoSingleTitle");
   document.getElementById("geo-single-desc").textContent = t("geoSingleDesc");
@@ -1295,7 +1505,10 @@ function applyLocaleToUI() {
   document.getElementById("dash-aas-filter-country-label").textContent = t("dashAasFilterCountry");
   document.getElementById("dash-aas-cols-label").textContent = t("dashAasColsLabel");
   document.getElementById("dash-aas-cols-btn-label").textContent = t("dashAasColsBtn");
+  document.getElementById("gdacs-matching-label").textContent = t("matchingLabel");
+  document.getElementById("gdacs-matching-btn-label").textContent = t("matchingBtn");
   document.getElementById("dash-aas-settings-save").textContent = t("dashAasSettingsSave");
+  document.getElementById("dash-aas-settings-delete").textContent = t("dashAasSettingsDelete");
   document.getElementById("gdacs-retention-label").textContent = t("gdacsSettingsRetentionLabel");
   document.getElementById("gdacs-refresh-label").textContent = t("gdacsSettingsRefreshLabel");
   document.getElementById("gdacs-settings-save-label").textContent = t("gdacsSettingsSave");
@@ -1324,6 +1537,11 @@ function applyLocaleToUI() {
   document.getElementById("settings-nav-gdacs-btn").textContent = t("settingsNavGdacs");
   document.getElementById("settings-nav-aas-btn").textContent = t("settingsNavAasImport");
   document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
+  document.getElementById("settings-nav-gdelt-btn").textContent = t("settingsNavGdelt");
+  document.getElementById("gdelt-settings-title").textContent = t("gdeltSettingsTitle");
+  document.getElementById("gdelt-settings-desc").textContent = t("gdeltSettingsDesc");
+  document.getElementById("gdelt-sa-label").textContent = t("gdeltSaLabel");
+  document.getElementById("bq-sa-save-label").textContent = t("importSettingsSave");
   cmSearchInput.placeholder = t("cmSearch");
   document.getElementById("cm-th-iso").textContent = t("cmThIso");
   document.getElementById("cm-th-alpha3").textContent = t("cmThAlpha3");
@@ -1361,8 +1579,26 @@ function applyLocaleToUI() {
   document.getElementById("dash-alerts-link").textContent = t("dashAlertsLink");
   document.getElementById("dash-alerts-empty").textContent = t("dashAlertsEmpty");
   document.getElementById("dash-indicators-title").textContent = t("dashIndicatorsTitle");
-  document.getElementById("dash-indicators-link").textContent = t("dashIndicatorsLink");
   document.getElementById("dash-indicators-empty").textContent = t("dashIndicatorsEmpty");
+  // Indicator dashboard settings/wizard
+  document.getElementById("dash-ind-settings-title").textContent = t("indDashSettingsTitle");
+  document.getElementById("dash-ind-configure-btn").textContent = t("indDashConfigure");
+  document.getElementById("dash-ind-delete-btn").textContent = t("indDashDeleteAll");
+  document.getElementById("ind-confirm-text").textContent = t("indDashDeleteConfirm");
+  document.getElementById("ind-confirm-cancel").textContent = t("indDashCancel");
+  document.getElementById("ind-confirm-ok").textContent = t("indDashDeleteConfirmBtn");
+  document.getElementById("dash-ind-cols-label").textContent = t("indColsLabel");
+  document.getElementById("dash-ind-cols-btn-label").textContent = t("indColsBtn");
+  document.getElementById("ind-wizard-title").textContent = t("indWizardTitle");
+  document.getElementById("ind-wizard-step1-desc").textContent = t("indWizardStep1Desc");
+  document.getElementById("ind-wizard-step2-desc").textContent = t("indWizardStep2Desc");
+  document.getElementById("ind-wizard-step3-desc").textContent = t("indWizardStep3Desc");
+  document.getElementById("ind-wizard-step3a-desc").textContent = t("indWizardStep3aDesc");
+  document.getElementById("ind-wizard-back-btn").textContent = t("indWizardBack");
+  document.getElementById("ind-wizard-cancel-btn").textContent = t("indDashCancel");
+  document.getElementById("ind-wizard-next-btn").textContent = t("indWizardNext");
+  document.getElementById("ind-wizard-save-btn").textContent = t("indWizardSave");
+  document.getElementById("ind-wizard-success-text").textContent = t("indWizardDone");
   document.getElementById("dash-aas-title").textContent = t("dashAasTitle");
   document.getElementById("dash-aas-empty").textContent = t("dashAasEmpty");
 
@@ -1372,14 +1608,10 @@ function applyLocaleToUI() {
   document.getElementById("ind-empty-text").textContent = t("indEmptyText");
   document.getElementById("ind-th-name").textContent = t("indThName");
   document.getElementById("ind-th-class").textContent = t("indThClass");
-  document.getElementById("ind-th-input").textContent = t("indThInput");
   document.getElementById("ind-th-rules").textContent = t("indThRules");
   document.getElementById("ind-back-label").textContent = t("indBack");
   document.getElementById("ind-name-label").textContent = t("indNameLabel");
   document.getElementById("ind-class-label").textContent = t("indClassLabel");
-  document.getElementById("ind-input-type-label").textContent = t("indInputTypeLabel");
-  document.getElementById("ind-input-label-label").textContent = t("indInputLabelLabel");
-  document.getElementById("ind-input-label").placeholder = t("indInputLabelPlaceholder");
   document.getElementById("ind-groups-title").textContent = t("indGroupsTitle");
   document.getElementById("ind-groups-desc").textContent = t("indGroupsDesc");
   document.getElementById("ind-add-group-label").textContent = t("indAddGroup");
@@ -1390,14 +1622,6 @@ function applyLocaleToUI() {
   document.getElementById("ind-default-score-label").textContent = t("indDefaultScoreLabel");
   document.getElementById("ind-save-label").textContent = t("indSave");
   document.getElementById("ind-delete-label").textContent = t("indDelete");
-
-  // Input type dropdown options
-  const indInputTypeEl = document.getElementById("ind-input-type");
-  for (const opt of indInputTypeEl.options) {
-    if (opt.value === "number") opt.textContent = t("indInputTypeNumber");
-    if (opt.value === "text") opt.textContent = t("indInputTypeText");
-    if (opt.value === "boolean") opt.textContent = t("indInputTypeBoolean");
-  }
 
   // AAS Sources page labels
   document.getElementById("src-search").placeholder = t("srcSearch");
@@ -1582,11 +1806,12 @@ let cachedFeeds = [];
 let cachedGdacsCountries = [];
 let cachedDashMatchFilter = ["polygon", "distance"];
 
+
 async function loadSettings() {
   const result = await apiRequest("/apps/resilience/api/settings");
   if (!result.ok || !result.payload) return;
 
-  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter } = result.payload;
+  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter, bq_has_credentials, bq_project_id } = result.payload;
   cachedFeeds = feeds || [];
   cachedGdacsCountries = gdacs_countries || [];
   cachedDashMatchFilter = dash_aas_match_filter || ["polygon", "distance"];
@@ -1616,7 +1841,7 @@ async function loadSettings() {
   if (filterDistance) filterDistance.checked = cachedDashMatchFilter.includes("distance");
   if (filterCountry) filterCountry.checked = cachedDashMatchFilter.includes("country");
 
-  // GDACS distance thresholds
+  // GDACS distance thresholds → fill settings inputs
   if (gdacs_distance_thresholds) {
     try {
       const th = typeof gdacs_distance_thresholds === "string" ? JSON.parse(gdacs_distance_thresholds) : gdacs_distance_thresholds;
@@ -1625,6 +1850,14 @@ async function loadSettings() {
         if (inp) inp.value = String(km);
       }
     } catch (_) { /* ignore parse errors */ }
+  }
+
+  // GDELT BigQuery credentials
+  if (bq_has_credentials) {
+    bqSaInput.value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+    bqSaInput.placeholder = t("gdeltSaConfigured") + (bq_project_id ? ` (${bq_project_id})` : "");
+  } else {
+    bqSaInput.value = "";
   }
 
   renderFeedList();
@@ -1903,6 +2136,28 @@ importSettingsSaveBtn.addEventListener("click", async () => {
   }
 });
 
+// Save GDELT BigQuery credentials
+bqSaSaveBtn.addEventListener("click", async () => {
+  bqSaSaveBtn.disabled = true;
+  bqSaStatus.hidden = true;
+  const result = await apiRequest("/apps/resilience/api/settings", {
+    method: "PUT",
+    body: { bq_service_account: bqSaInput.value },
+  });
+  bqSaSaveBtn.disabled = false;
+  if (result.ok) {
+    bqSaStatus.textContent = t("gdeltSettingsSaved");
+    bqSaStatus.className = "settings-hint hint-success";
+    bqSaStatus.hidden = false;
+    setTimeout(() => { bqSaStatus.hidden = true; }, 3000);
+    loadSettings();
+  } else {
+    bqSaStatus.textContent = result.payload?.error === "INVALID_JSON" ? "Invalid JSON" : result.payload?.error === "INVALID_SERVICE_ACCOUNT" ? "Missing project_id, client_email or private_key" : t("gdeltSettingsFailed");
+    bqSaStatus.className = "settings-hint hint-error";
+    bqSaStatus.hidden = false;
+  }
+});
+
 // Purge all GDACS alerts
 document.getElementById("gdacs-purge-btn").addEventListener("click", async () => {
   if (!confirm(t("gdacsPurgeConfirm"))) return;
@@ -1947,11 +2202,11 @@ function updateGdacsColsDisplay(columns) {
 }
 
 // Matching-Parameter display
+let cachedMatchingConfigured = false;
 function updateMatchingDisplay(groupName, paths) {
   const el = document.getElementById("gdacs-matching-paths");
-  const delBtn = document.getElementById("gdacs-matching-delete-btn");
   const hasData = !!(groupName || paths.country || paths.city || paths.lat || paths.lon);
-  if (delBtn) delBtn.hidden = !hasData;
+  cachedMatchingConfigured = hasData;
   if (!hasData) {
     el.innerHTML = `<span class="gdacs-aas-source-empty">${t("matchingEmpty")}</span>`;
     return;
@@ -2015,8 +2270,9 @@ function switchSettingsNav(nav) {
   settingsNavGdacs.hidden = nav !== "gdacs";
   settingsNavAasImport.hidden = nav !== "aas-import";
   settingsNavCC.hidden = nav !== "country-codes";
+  settingsNavGdeltBq.hidden = nav !== "gdelt-bq";
 
-  if (nav === "feeds" || nav === "gdacs" || nav === "aas-import") {
+  if (nav === "feeds" || nav === "gdacs" || nav === "aas-import" || nav === "gdelt-bq") {
     loadSettings();
   } else if (nav === "country-codes") {
     loadCountryMappings();
@@ -2263,7 +2519,7 @@ function openAasCmModal(mode, aasId) {
   aasCmMatchingPaths = { country: "", city: "", lat: "", lon: "" };
   aasCmMatchingPhase = "country";
   aasCmSkipBtn.hidden = true;
-  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle"), "geo-single": t("geocodingTitle"), company: t("companyProcessTitle"), "company-single": t("companyProcessTitle") };
+  const titles = { picker: t("gdacsAasSourceLabel"), columns: t("gdacsColsLabel"), "ind-columns": t("indColsLabel"), geocoding: t("geocodingTitle"), matching: t("matchingLabel"), import: t("aasCmTitle"), "geo-single": t("geocodingTitle"), company: t("companyProcessTitle"), "company-single": t("companyProcessTitle") };
   document.getElementById("aas-cm-title").textContent = titles[mode] || titles.import;
   document.getElementById("aas-cm-step1-desc").textContent = t("aasCmStep1Desc");
   document.getElementById("aas-cm-selected-path").hidden = true;
@@ -2280,6 +2536,11 @@ function openAasCmModal(mode, aasId) {
     aasCmGeoSingleAasId = aasId;
     showAasCmStep(3);
     loadAasCmTree(aasId);
+  } else if (mode === "ind-columns" && aasId) {
+    // aasId is actually group_id here — skip step 1, go to step 2
+    aasCmSelectedGroup = { group_id: aasId };
+    showAasCmStep(2);
+    loadAasCmAas(aasId);
   } else {
     showAasCmStep(1);
     loadAasCmGroups();
@@ -2289,17 +2550,6 @@ function openAasCmModal(mode, aasId) {
 
 document.getElementById("cm-aas-import-btn").addEventListener("click", () => openAasCmModal("import"));
 document.getElementById("gdacs-matching-btn").addEventListener("click", () => openAasCmModal("matching"));
-document.getElementById("gdacs-matching-delete-btn").addEventListener("click", async () => {
-  const res = await apiRequest("/apps/resilience/api/settings", {
-    method: "PUT",
-    body: { matching_params: { group_id: "", country_path: "", city_path: "", lat_path: "", lon_path: "" } },
-  });
-  if (res.ok) {
-    updateMatchingDisplay("", { country: "", city: "", lat: "", lon: "" });
-    showGdacsCountryHint(t("matchingDeleted"), "success");
-    setTimeout(hideGdacsCountryHint, 3000);
-  }
-});
 document.getElementById("aas-ov-geocoding-btn").addEventListener("click", () => openAasCmModal("geocoding"));
 document.getElementById("aas-ov-process-btn").addEventListener("click", () => openAasCmModal("company"));
 
@@ -2531,7 +2781,7 @@ aasCmTree.addEventListener("click", (e) => {
       aasCmApplyBtn.hidden = false;
       aasCmApplyBtn.textContent = t("geocodingStart");
     }
-  } else if (aasCmMode === "columns") {
+  } else if (aasCmMode === "columns" || aasCmMode === "ind-columns") {
     // Multi-select: toggle {path, type} objects
     const valueType = propEl.dataset.valueType || "";
     const idx = aasCmSelectedPaths.findIndex(c => c.path === path);
@@ -2543,10 +2793,12 @@ aasCmTree.addEventListener("click", (e) => {
       propEl.classList.add("aas-cm-prop-selected");
     }
     if (aasCmSelectedPaths.length) {
-      pathDisplay.textContent = t("gdacsColsCount").replace("{n}", aasCmSelectedPaths.length);
+      const countKey = aasCmMode === "ind-columns" ? "indColsCount" : "gdacsColsCount";
+      const btnKey = aasCmMode === "ind-columns" ? "indColsBtn" : "gdacsColsBtn";
+      pathDisplay.textContent = t(countKey).replace("{n}", aasCmSelectedPaths.length);
       pathDisplay.hidden = false;
       aasCmApplyBtn.hidden = false;
-      aasCmApplyBtn.textContent = t("gdacsColsBtn");
+      aasCmApplyBtn.textContent = t(btnKey);
     } else {
       pathDisplay.hidden = true;
       aasCmApplyBtn.hidden = true;
@@ -2583,8 +2835,6 @@ aasCmApplyBtn.addEventListener("click", async () => {
     aasCmApplyBtn.disabled = false;
     if (res.ok) {
       updateMatchingDisplay(aasCmSelectedGroup.name, aasCmMatchingPaths);
-      showGdacsCountryHint(t("matchingSaved"), "success");
-      setTimeout(hideGdacsCountryHint, 3000);
       aasCmModal.close();
     }
     return;
@@ -2698,6 +2948,26 @@ aasCmApplyBtn.addEventListener("click", async () => {
       aasCmModal.close();
       // Refresh dashboard to apply new columns
       dashAasPage = 0;
+      loadDashboard();
+    }
+    return;
+  }
+  if (aasCmCurrentStep === 3 && aasCmSelectedPaths.length > 0 && aasCmMode === "ind-columns") {
+    // Indicator columns mode: merge columns into indicator dashboard config
+    aasCmApplyBtn.disabled = true;
+    const cfgRes = await apiRequest("/apps/resilience/api/indicators/dashboard-config");
+    const cfg = cfgRes.ok ? cfgRes.payload : {};
+    cfg.columns = aasCmSelectedPaths;
+    const saveRes = await apiRequest("/apps/resilience/api/indicators/dashboard-config", {
+      method: "PUT", body: { config: cfg },
+    });
+    aasCmApplyBtn.disabled = false;
+    if (saveRes.ok) {
+      updateIndColsDisplay(aasCmSelectedPaths);
+      showGdacsCountryHint(t("indColsSaved"), "success");
+      setTimeout(hideGdacsCountryHint, 3000);
+      aasCmModal.close();
+      dashIndPage = 0;
       loadDashboard();
     }
     return;
@@ -2958,8 +3228,6 @@ const indAddBtn = document.getElementById("ind-add-btn");
 const indBackBtn = document.getElementById("ind-back-btn");
 const indNameInput = document.getElementById("ind-name");
 const indClassSelect = document.getElementById("ind-class-select");
-const indInputType = document.getElementById("ind-input-type");
-const indInputLabel = document.getElementById("ind-input-label");
 const indGroupsContainer = document.getElementById("ind-groups-container");
 const indAddGroupBtn = document.getElementById("ind-add-group-btn");
 const indDefaultLabel = document.getElementById("ind-default-label");
@@ -2971,6 +3239,70 @@ const indDetailHint = document.getElementById("ind-detail-hint");
 
 let indicatorsData = [];
 let editingIndicatorId = null;
+
+// ── Color Swatch Picker ──
+const IND_COLOR_SWATCHES = [
+  "#ef4444", "#f97316", "#f59e0b", "#eab308",
+  "#84cc16", "#22c55e", "#14b8a6", "#06b6d4",
+  "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7",
+  "#ec4899", "#f43f5e", "#9ca3af", "#6b7280",
+];
+
+let activeSwatchBtn = null;
+
+function openColorPicker(btn) {
+  closeColorPicker();
+  activeSwatchBtn = btn;
+  const picker = document.createElement("div");
+  picker.className = "ind-color-picker-popover";
+  picker.innerHTML = IND_COLOR_SWATCHES.map((c) =>
+    `<button type="button" class="ind-color-picker-swatch" data-color="${c}" style="background:${c}" ${c === btn.dataset.color ? 'data-active="true"' : ""}></button>`
+  ).join("") + `<button type="button" class="ind-color-picker-custom">${t("indColorCustom")}</button>`;
+
+  picker.addEventListener("click", (e) => {
+    const swatch = e.target.closest(".ind-color-picker-swatch");
+    if (swatch) {
+      selectSwatchColor(btn, swatch.dataset.color);
+      closeColorPicker();
+      return;
+    }
+    if (e.target.closest(".ind-color-picker-custom")) {
+      const tmp = document.createElement("input");
+      tmp.type = "color";
+      tmp.value = btn.dataset.color;
+      tmp.addEventListener("input", () => selectSwatchColor(btn, tmp.value));
+      tmp.click();
+      closeColorPicker();
+    }
+  });
+
+  btn.appendChild(picker);
+  setTimeout(() => document.addEventListener("click", closePickerOutside, { once: true }), 0);
+}
+
+function closePickerOutside(e) {
+  if (activeSwatchBtn && !activeSwatchBtn.contains(e.target)) closeColorPicker();
+}
+
+function closeColorPicker() {
+  document.querySelectorAll(".ind-color-picker-popover").forEach((p) => p.remove());
+  activeSwatchBtn = null;
+}
+
+function selectSwatchColor(btn, color) {
+  btn.dataset.color = color;
+  btn.style.background = color;
+  const hidden = btn.nextElementSibling;
+  if (hidden && hidden.type === "hidden") hidden.value = color;
+}
+
+document.addEventListener("click", (e) => {
+  const swatchBtn = e.target.closest(".ind-color-swatch-btn");
+  if (swatchBtn && !swatchBtn.querySelector(".ind-color-picker-popover")) {
+    e.stopPropagation();
+    openColorPicker(swatchBtn);
+  }
+});
 
 function showIndHint(msg, type) {
   indDetailHint.textContent = msg;
@@ -3008,15 +3340,12 @@ function renderIndicators() {
   indEmpty.hidden = filtered.length > 0 || indicatorsData.length > 0;
   indCount.textContent = filtered.length + " " + (locale === "de" ? "Indikatoren" : "Indicators");
 
-  const inputTypeLabel = { number: locale === "de" ? "Zahl" : "Number", text: "Text", boolean: "Boolean" };
-
   for (const ind of filtered) {
     const tr = document.createElement("tr");
     tr.dataset.indicatorId = ind.indicator_id;
     tr.innerHTML = `
       <td>${escapeHtml(ind.name)}</td>
       <td>${escapeHtml(ind.class_name || "-")}</td>
-      <td>${inputTypeLabel[ind.input_type] || ind.input_type}</td>
       <td>${ind.group_count}</td>
       <td>
         <button class="ind-edit-btn" type="button" title="Edit">
@@ -3046,11 +3375,18 @@ indBackBtn.addEventListener("click", () => {
   loadIndicators();
 });
 
-// ── Operator options per input type ──
+// ── Operator options per input type (readable text) ──
 function getOperators(inputType) {
-  if (inputType === "text") return [["==", "="], ["!=", "\u2260"]];
-  if (inputType === "boolean") return [["==", "="]];
-  return [[">", ">"], ["<", "<"], [">=", "\u2265"], ["<=", "\u2264"], ["==", "="], ["!=", "\u2260"]];
+  if (inputType === "text") return [["==", t("indOpEquals")], ["!=", t("indOpNotEquals")]];
+  if (inputType === "boolean") return [["==", t("indOpEquals")]];
+  return [
+    ["==",  t("indOpEquals")],
+    ["!=",  t("indOpNotEquals")],
+    [">",   t("indOpGreater")],
+    ["<",   t("indOpLess")],
+    [">=",  t("indOpGreaterEqual")],
+    ["<=",  t("indOpLessEqual")],
+  ];
 }
 
 // ── Build group card HTML ──
@@ -3065,7 +3401,8 @@ function createGroupCard(groupData, groupIndex) {
     <span class="ind-group-num">#${groupIndex + 1}</span>
     <div class="ind-group-output">
       <input type="text" class="ind-input group-output-label" value="${escapeHtml(groupData.output_label || "")}" placeholder="Label" />
-      <input type="color" class="ind-color-input group-output-color" value="${groupData.output_color || "#9ca3af"}" />
+      <button type="button" class="ind-color-swatch-btn group-output-color" data-color="${groupData.output_color || "#9ca3af"}" style="background:${groupData.output_color || "#9ca3af"}"></button>
+      <input type="hidden" class="group-output-color-hidden" value="${groupData.output_color || "#9ca3af"}" />
       <input type="number" class="ind-input ind-score-input group-output-score" value="${groupData.output_score ?? 0}" placeholder="Score" />
     </div>
     <button class="ind-group-remove" type="button" title="Remove">&times;</button>
@@ -3085,7 +3422,7 @@ function createGroupCard(groupData, groupIndex) {
   addBtn.type = "button";
   addBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> <span>${t("indAddCondition")}</span>`;
   addBtn.addEventListener("click", () => {
-    body.insertBefore(createConditionRow({ operator: ">=", value: "" }), addBtn);
+    body.insertBefore(createConditionRow({ input: "number", operator: "==", value: "" }), addBtn);
   });
   body.appendChild(addBtn);
 
@@ -3099,27 +3436,48 @@ function createGroupCard(groupData, groupIndex) {
   return card;
 }
 
+function buildOperatorHtml(inputType, selected) {
+  return getOperators(inputType).map(([val, label]) =>
+    `<option value="${val}" ${val === selected ? "selected" : ""}>${escapeHtml(label)}</option>`
+  ).join("");
+}
+
+function buildValueHtml(inputType, value) {
+  if (inputType === "boolean") {
+    return `<select class="ind-input condition-value"><option value="true" ${value === "true" ? "selected" : ""}>true</option><option value="false" ${value === "false" ? "selected" : ""}>false</option></select>`;
+  }
+  const type = inputType === "number" ? "number" : "text";
+  return `<input type="${type}" class="ind-input condition-value" value="${escapeHtml(String(value ?? ""))}" placeholder="${t("indConditionValue")}" ${type === "number" ? 'step="any"' : ""} />`;
+}
+
 function createConditionRow(cond) {
   const row = document.createElement("div");
   row.className = "ind-condition-row";
-
-  const ops = getOperators(indInputType.value);
-  const selectHtml = ops.map(([val, label]) =>
-    `<option value="${val}" ${val === cond.operator ? "selected" : ""}>${escapeHtml(label)}</option>`
-  ).join("");
-
-  let valueInput;
-  if (indInputType.value === "boolean") {
-    valueInput = `<select class="condition-value"><option value="true" ${cond.value === "true" ? "selected" : ""}>true</option><option value="false" ${cond.value === "false" ? "selected" : ""}>false</option></select>`;
-  } else {
-    valueInput = `<input type="${indInputType.value === "number" ? "number" : "text"}" class="ind-input condition-value" value="${escapeHtml(String(cond.value ?? ""))}" placeholder="${t("indConditionValue")}" step="any" />`;
-  }
+  const inputType = cond.input || "number";
 
   row.innerHTML = `
-    <select class="condition-operator">${selectHtml}</select>
-    ${valueInput}
+    <select class="condition-input">
+      <option value="number" ${inputType === "number" ? "selected" : ""}>${t("indInputNumber")}</option>
+      <option value="text" ${inputType === "text" ? "selected" : ""}>${t("indInputText")}</option>
+      <option value="boolean" ${inputType === "boolean" ? "selected" : ""}>${t("indInputBoolean")}</option>
+    </select>
+    <select class="condition-operator">${buildOperatorHtml(inputType, cond.operator)}</select>
+    ${buildValueHtml(inputType, cond.value)}
     <button class="ind-condition-remove" type="button" title="Remove">&times;</button>
   `;
+
+  // Change input type → rebuild operator + value
+  row.querySelector(".condition-input").addEventListener("change", (e) => {
+    const newType = e.target.value;
+    const opSelect = row.querySelector(".condition-operator");
+    const currentOp = opSelect.value;
+    opSelect.innerHTML = buildOperatorHtml(newType, currentOp);
+    const oldVal = row.querySelector(".condition-value");
+    const curVal = oldVal.value;
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildValueHtml(newType, newType === "boolean" ? "true" : curVal);
+    oldVal.replaceWith(wrapper.firstElementChild);
+  });
 
   row.querySelector(".ind-condition-remove").addEventListener("click", () => row.remove());
   return row;
@@ -3134,49 +3492,8 @@ function renumberGroups() {
 
 indAddGroupBtn.addEventListener("click", () => {
   const idx = indGroupsContainer.children.length;
-  const card = createGroupCard({ output_label: "", output_color: "#9ca3af", output_score: 0, conditions: [{ operator: ">=", value: "" }] }, idx);
+  const card = createGroupCard({ output_label: "", output_color: "#9ca3af", output_score: 0, conditions: [{ input: "", operator: "==", value: "" }] }, idx);
   indGroupsContainer.appendChild(card);
-});
-
-// Update operator options when input type changes
-indInputType.addEventListener("change", () => {
-  // Rebuild all condition rows with new operators
-  const groups = indGroupsContainer.querySelectorAll(".ind-group-card");
-  for (const card of groups) {
-    const body = card.querySelector(".ind-group-body");
-    const condRows = body.querySelectorAll(".ind-condition-row");
-    for (const row of condRows) {
-      const ops = getOperators(indInputType.value);
-      const currentOp = row.querySelector(".condition-operator").value;
-      const currentVal = row.querySelector(".condition-value").value;
-
-      const select = row.querySelector(".condition-operator");
-      select.innerHTML = ops.map(([val, label]) =>
-        `<option value="${val}" ${val === currentOp ? "selected" : ""}>${escapeHtml(label)}</option>`
-      ).join("");
-
-      // Replace value input if type changed to/from boolean
-      const oldValue = row.querySelector(".condition-value");
-      if (indInputType.value === "boolean" && oldValue.tagName !== "SELECT") {
-        const sel = document.createElement("select");
-        sel.className = "condition-value";
-        sel.innerHTML = `<option value="true">true</option><option value="false">false</option>`;
-        oldValue.replaceWith(sel);
-      } else if (indInputType.value !== "boolean" && oldValue.tagName === "SELECT") {
-        const inp = document.createElement("input");
-        inp.type = indInputType.value === "number" ? "number" : "text";
-        inp.className = "ind-input condition-value";
-        inp.value = currentVal;
-        inp.step = "any";
-        oldValue.replaceWith(inp);
-      } else if (indInputType.value === "number" && oldValue.tagName === "INPUT") {
-        oldValue.type = "number";
-        oldValue.step = "any";
-      } else if (indInputType.value === "text" && oldValue.tagName === "INPUT") {
-        oldValue.type = "text";
-      }
-    }
-  }
 });
 
 // ── Populate class dropdown ──
@@ -3195,11 +3512,12 @@ function populateIndClassSelect(selectedId) {
 function resetIndForm() {
   indNameInput.value = "";
   indClassSelect.value = "";
-  indInputType.value = "number";
-  indInputLabel.value = "";
   indGroupsContainer.innerHTML = "";
   indDefaultLabel.value = "";
-  indDefaultColor.value = "#9ca3af";
+  const defColorBtn = document.getElementById("ind-default-color");
+  defColorBtn.dataset.color = "#9ca3af";
+  defColorBtn.style.background = "#9ca3af";
+  document.getElementById("ind-default-color-hidden").value = "#9ca3af";
   indDefaultScore.value = "0";
   indDeleteBtn.hidden = true;
   hideIndHint();
@@ -3216,10 +3534,12 @@ async function openIndicator(indicatorId) {
   const ind = result.payload;
 
   indNameInput.value = ind.name;
-  indInputType.value = ind.input_type;
-  indInputLabel.value = ind.input_label || "";
   indDefaultLabel.value = ind.default_label || "";
-  indDefaultColor.value = ind.default_color || "#9ca3af";
+  const defColor = ind.default_color || "#9ca3af";
+  const defColorBtn = document.getElementById("ind-default-color");
+  defColorBtn.dataset.color = defColor;
+  defColorBtn.style.background = defColor;
+  document.getElementById("ind-default-color-hidden").value = defColor;
   indDefaultScore.value = ind.default_score ?? 0;
   indDeleteBtn.hidden = false;
 
@@ -3243,11 +3563,12 @@ function collectIndicatorData() {
   const groups = [];
   indGroupsContainer.querySelectorAll(".ind-group-card").forEach((card) => {
     const outputLabel = card.querySelector(".group-output-label").value.trim();
-    const outputColor = card.querySelector(".group-output-color").value;
+    const outputColor = card.querySelector(".group-output-color-hidden").value;
     const outputScore = parseFloat(card.querySelector(".group-output-score").value) || 0;
     const conditions = [];
     card.querySelectorAll(".ind-condition-row").forEach((row) => {
       conditions.push({
+        input: row.querySelector(".condition-input").value.trim(),
         operator: row.querySelector(".condition-operator").value,
         value: row.querySelector(".condition-value").value,
       });
@@ -3258,10 +3579,8 @@ function collectIndicatorData() {
   return {
     name: indNameInput.value.trim(),
     class_id: indClassSelect.value || null,
-    input_type: indInputType.value,
-    input_label: indInputLabel.value.trim(),
     default_label: indDefaultLabel.value.trim(),
-    default_color: indDefaultColor.value,
+    default_color: document.getElementById("ind-default-color-hidden").value,
     default_score: parseFloat(indDefaultScore.value) || 0,
     groups,
   };
@@ -5211,18 +5530,23 @@ async function performGdacsSearch() {
 // ── Dashboard ─────────────────────────────────────────────────────
 async function loadDashboard() {
   dashAasPage = 0;
+  dashIndPage = 0;
+  dashIndSortBy = "";
+  dashIndSortDir = "asc";
   const dashNewsBody = document.getElementById("dash-news-body");
   const dashAlertsBody = document.getElementById("dash-alerts-body");
 
   const matchFilter = cachedDashMatchFilter.join(",");
-  const [newsResult, alertsResult, aasOverviewResult] = await Promise.all([
+  const [newsResult, alertsResult, aasOverviewResult, indEvalResult, scoreResult] = await Promise.all([
     apiRequest("/apps/resilience/api/news?limit=8"),
     apiRequest("/apps/resilience/api/gdacs/alerts?limit=8"),
     apiRequest(`/apps/resilience/api/gdacs/aas-overview?match_filter=${encodeURIComponent(matchFilter)}`),
+    apiRequest("/apps/resilience/api/indicators/dashboard-evaluate"),
+    apiRequest("/apps/resilience/api/score/dashboard-evaluate"),
   ]);
 
   // News tile
-  if (newsResult.ok && newsResult.payload && newsResult.payload.items.length > 0) {
+  if (newsResult.ok && newsResult.payload?.items?.length > 0) {
     dashNewsBody.innerHTML = newsResult.payload.items
       .map((item) => `
         <div class="dash-item" data-nav-page="news-feeds" data-item-id="${item.item_id}">
@@ -5236,7 +5560,7 @@ async function loadDashboard() {
   }
 
   // Alerts tile
-  if (alertsResult.ok && alertsResult.payload && alertsResult.payload.items.length > 0) {
+  if (alertsResult.ok && alertsResult.payload?.items?.length > 0) {
     dashAlertsBody.innerHTML = alertsResult.payload.items
       .map((a) => {
         const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
@@ -5255,6 +5579,9 @@ async function loadDashboard() {
   } else {
     dashAlertsBody.innerHTML = `<div class="dash-card-empty">${t("dashAlertsEmpty")}</div>`;
   }
+
+  // Score tile
+  renderDashScore(scoreResult);
 
   // AAS Country Overview tile
   const dashAasBody = document.getElementById("dash-aas-body");
@@ -5278,6 +5605,211 @@ async function loadDashboard() {
     dashAasBody.innerHTML = `<div class="dash-card-empty">${t("dashAasEmpty")}</div>`;
     dashAasFooter.hidden = true;
   }
+
+  // Indicator Dashboard tile
+  renderDashIndicators(indEvalResult);
+}
+
+function renderDashScore(result) {
+  const body = document.getElementById("dash-score-body");
+  const titleEl = document.getElementById("dash-score-title");
+  const items = result.ok ? result.payload?.items : [];
+  const title = result.ok ? result.payload?.title : null;
+  if (title) titleEl.textContent = title;
+  else titleEl.textContent = t("dashScoreTitle");
+  if (!items || !items.length) {
+    body.innerHTML = `<div class="dash-card-empty">${t("dashScoreEmpty")}</div>`;
+    return;
+  }
+  const maxTarget = Math.max(...items.map(it => it.target || 0), 1);
+  let html = `<div class="score-bar-list">`;
+  for (const it of items) {
+    const pct = Math.min((it.target / maxTarget) * 100, 100);
+    const showInside = pct >= 20;
+    html += `<div class="score-bar-row">`;
+    html += `<span class="score-bar-label" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</span>`;
+    html += `<div class="score-bar-track">`;
+    html += `<div class="score-bar-fill" style="width:${pct}%">`;
+    if (showInside) html += `<span class="score-bar-value">${it.target}</span>`;
+    html += `</div>`;
+    html += `</div>`;
+    if (!showInside) html += `<span class="score-bar-value-outside">${it.target}</span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  body.innerHTML = html;
+}
+
+let dashIndPage = 0;
+let dashIndColumns = [];
+let dashIndSortBy = "";
+let dashIndSortDir = "asc";
+
+function renderDashIndicators(result) {
+  const body = document.getElementById("dash-indicators-body");
+  const footer = document.getElementById("dash-ind-footer");
+  if (!result.ok || !result.payload?.items?.length) {
+    body.innerHTML = `<div class="dash-card-empty" id="dash-indicators-empty">${t("indDashNoConfig")}</div>`;
+    footer.hidden = true;
+    return;
+  }
+  const { items, indicator_names, columns, total } = result.payload;
+  dashIndColumns = columns || [];
+  const cols = dashIndColumns;
+  const ids = indicator_names.map(n => n.indicator_id);
+
+  // Helper for sortable header
+  const sortTh = (sortKey, label, title) => {
+    const active = dashIndSortBy === sortKey;
+    const arrow = active ? (dashIndSortDir === "asc" ? " \u25B2" : " \u25BC") : "";
+    const cls = `dash-ind-sortable${active ? " dash-ind-sort-active" : ""}`;
+    return `<th class="${cls}" data-sort-col="${escapeHtml(sortKey)}" title="${escapeHtml(title || label)}" style="cursor:pointer">${escapeHtml(label)}${arrow}</th>`;
+  };
+
+  let html = `<div class="dash-ind-table-wrap"><table class="dash-ind-table"><thead><tr>`;
+  // Column headers: custom columns or AAS ID
+  if (cols.length) {
+    for (const c of cols) {
+      const p = typeof c === "string" ? c : c.path;
+      const label = p.includes(".") ? p.split(".").pop() : p;
+      html += sortTh(p, label, p);
+    }
+  } else {
+    html += sortTh("_aas", "AAS", "AAS ID");
+  }
+  for (const n of indicator_names) html += sortTh(n.indicator_id, n.name, n.name);
+  html += `</tr></thead><tbody>`;
+  for (const item of items) {
+    html += `<tr class="dash-ind-row" data-aas-id="${escapeHtml(item.aas_id)}">`;
+    if (cols.length) {
+      for (const c of cols) {
+        const p = typeof c === "string" ? c : c.path;
+        const val = (item.columns_data && item.columns_data[p]) || "";
+        html += `<td title="${escapeHtml(p)}: ${escapeHtml(val)}" style="font-weight:500;white-space:nowrap">${escapeHtml(val) || "\u2014"}</td>`;
+      }
+    } else {
+      html += `<td style="font-weight:500;white-space:nowrap">${escapeHtml(item.aas_id)}</td>`;
+    }
+    for (const id of ids) {
+      const r = item.results?.[id];
+      if (r) {
+        const bg = r.color + "18";
+        html += `<td><span class="dash-ind-cell" style="background:${bg}"><span class="dash-ind-dot" style="background:${escapeHtml(r.color)}"></span>${escapeHtml(r.label || "–")}</span></td>`;
+      } else {
+        html += `<td>–</td>`;
+      }
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table></div>`;
+  body.innerHTML = html;
+
+  // Pagination
+  const pages = Math.ceil((total || items.length) / 20);
+  if (pages > 1) {
+    footer.hidden = false;
+    document.getElementById("dash-ind-page-info").textContent = t("indDashPage").replace("{page}", String(dashIndPage + 1)).replace("{pages}", String(pages));
+    document.getElementById("dash-ind-prev").disabled = dashIndPage <= 0;
+    document.getElementById("dash-ind-next").disabled = dashIndPage >= pages - 1;
+  } else {
+    footer.hidden = true;
+  }
+}
+
+async function loadDashIndPage(page) {
+  dashIndPage = page;
+  let url = `/apps/resilience/api/indicators/dashboard-evaluate?limit=20&offset=${page * 20}`;
+  if (dashIndSortBy) url += `&sort=${encodeURIComponent(dashIndSortBy)}&sort_dir=${dashIndSortDir}`;
+  const res = await apiRequest(url);
+  renderDashIndicators(res);
+}
+
+document.getElementById("dash-ind-prev").addEventListener("click", () => { if (dashIndPage > 0) loadDashIndPage(dashIndPage - 1); });
+document.getElementById("dash-ind-next").addEventListener("click", () => loadDashIndPage(dashIndPage + 1));
+
+// Sort + row click handler (delegated on table)
+document.getElementById("dash-indicators-body").addEventListener("click", (e) => {
+  const th = e.target.closest(".dash-ind-sortable");
+  if (th) {
+    const col = th.dataset.sortCol;
+    if (dashIndSortBy === col) {
+      dashIndSortDir = dashIndSortDir === "asc" ? "desc" : "asc";
+    } else {
+      dashIndSortBy = col;
+      dashIndSortDir = "asc";
+    }
+    dashIndPage = 0;
+    loadDashIndPage(0);
+    return;
+  }
+  const row = e.target.closest(".dash-ind-row");
+  if (row && row.dataset.aasId) openIndDetailModal(row.dataset.aasId);
+});
+
+// ── Indicator Detail Modal ─────────────────────────────────
+const indDetailModal = document.getElementById("ind-detail-modal");
+document.getElementById("ind-detail-close").addEventListener("click", () => indDetailModal.close());
+indDetailModal.addEventListener("click", (e) => { if (e.target === indDetailModal) indDetailModal.close(); });
+
+async function openIndDetailModal(aasId) {
+  const body = document.getElementById("ind-detail-body");
+  body.innerHTML = `<div class="cd-loading" style="padding:3rem;text-align:center"><div class="cd-loading-spinner"></div></div>`;
+  document.getElementById("ind-detail-title").textContent = t("indDetailTitle");
+  document.getElementById("ind-detail-aas-id").textContent = aasId;
+  indDetailModal.showModal();
+
+  const res = await apiRequest(`/apps/resilience/api/indicators/dashboard-detail/${encodeURIComponent(aasId)}`);
+  if (!res.ok || !res.payload) {
+    body.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">Error</div>`;
+    return;
+  }
+  const data = res.payload;
+  let html = "";
+
+  // 1. Columns (small boxes at top)
+  const colEntries = Object.entries(data.columns_data || {}).filter(([, v]) => v);
+  if (colEntries.length > 0) {
+    html += `<div class="cd-section"><h4 class="cd-section-title">${escapeHtml(t("indDetailColumns"))}</h4><div class="ind-detail-cols">`;
+    for (const [path, value] of colEntries) {
+      const label = path.includes(".") ? path.split(".").pop() : path;
+      html += `<div class="ind-detail-col-item"><span class="ind-detail-col-label">${escapeHtml(label)}</span><span class="ind-detail-col-value">${escapeHtml(String(value))}</span></div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  // 2. Group indicators by class
+  const byClass = new Map();
+  for (const ind of data.indicators) {
+    const cls = ind.class_name || "";
+    if (!byClass.has(cls)) byClass.set(cls, []);
+    byClass.get(cls).push(ind);
+  }
+
+  // 3. Render per class
+  for (const [className, indicators] of byClass) {
+    const totalScore = indicators.reduce((s, ind) => s + (Number(ind.result.score) || 0), 0);
+    const avgScore = indicators.length ? (totalScore / indicators.length) : 0;
+    html += `<div class="ind-detail-class-section">`;
+    html += `<h4 class="ind-detail-class-title">`;
+    html += `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+    html += `${escapeHtml(className || t("indDetailNoClass"))} <span class="cd-badge">${indicators.length}</span>`;
+    html += `<span class="ind-detail-class-score">${t("indDetailClassScore").replace("{score}", avgScore % 1 === 0 ? avgScore : avgScore.toFixed(1))}</span>`;
+    html += `</h4>`;
+    html += `<div class="ind-detail-list">`;
+    for (const ind of indicators) {
+      const r = ind.result;
+      const bg = r.color + "18";
+      html += `<div class="ind-detail-row">`;
+      html += `<span class="ind-detail-card-dot" style="background:${escapeHtml(r.color)}"></span>`;
+      html += `<span class="ind-detail-card-name">${escapeHtml(ind.name)}</span>`;
+      html += `<span class="ind-detail-card-badge" style="background:${bg};color:${escapeHtml(r.color)}">${escapeHtml(r.label || "–")}</span>`;
+      html += `<span class="ind-detail-card-score">${t("indDetailScore").replace("{score}", r.score ?? 0)}</span>`;
+      html += `</div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  body.innerHTML = html;
 }
 
 let dashAasPage = 0;
@@ -5382,8 +5914,6 @@ companyDetailModal.addEventListener("close", () => {
   if (cdMapInstance) { cdMapInstance.remove(); cdMapInstance = null; }
   cdAlertLayerGroup = null;
   Object.values(cdPages).forEach(p => p.innerHTML = "");
-  cdAlertsBadge.hidden = true;
-  cdSubmodelsBadge.hidden = true;
 });
 
 function switchCdPage(name) {
@@ -5393,13 +5923,17 @@ function switchCdPage(name) {
   Object.entries(cdPages).forEach(([key, el]) => { el.hidden = key !== name; });
   if (name === "location" && cdMapInstance) setTimeout(() => cdMapInstance.invalidateSize(), 50);
   if (name === "alerts" && !cdNewsLoaded) { cdNewsLoaded = true; loadCompanyNews(); }
+  if (name === "gdelt" && !cdGdeltLoaded) { cdGdeltLoaded = true; loadGdeltData(); }
+  if (name === "worldbank" && !cdWorldbankLoaded) { cdWorldbankLoaded = true; loadWorldBankData(); }
+  if (name === "inform" && !cdInformLoaded) { cdInformLoaded = true; loadInformData(); }
 }
 
 function updateCdTooltips() {
   document.getElementById("cd-tab-location-tip").textContent = t("cdTabLocation");
   document.getElementById("cd-tab-alerts-tip").textContent = t("cdTabAlerts");
-  document.getElementById("cd-tab-data-tip").textContent = t("cdTabData");
-  document.getElementById("cd-tab-submodels-tip").textContent = t("cdTabSubmodels");
+  document.getElementById("cd-tab-gdelt-tip").textContent = t("cdTabGdelt");
+  document.getElementById("cd-tab-worldbank-tip").textContent = t("cdTabWorldbank");
+  document.getElementById("cd-tab-inform-tip").textContent = t("cdTabInform");
 }
 
 cdSidebar.addEventListener("click", (e) => {
@@ -5410,9 +5944,13 @@ cdSidebar.addEventListener("click", (e) => {
 async function openCompanyDetailModal(aasId) {
   // Reset
   Object.values(cdPages).forEach(p => p.innerHTML = "");
-  cdAlertsBadge.hidden = true;
-  cdSubmodelsBadge.hidden = true;
   cdNewsLoaded = false;
+  cdGdeltLoaded = false;
+  cdWorldbankLoaded = false;
+  cdInformLoaded = false;
+  cdCurrentAasId = aasId;
+  cdCompanyName = "";
+  cdCompanyAlias = "";
   switchCdPage("location");
   updateCdTooltips();
 
@@ -5435,11 +5973,6 @@ async function openCompanyDetailModal(aasId) {
   html += renderDataTab(cached?.columns_data || {});
   html += `<div id="cd-sm-area"><div class="cd-sm-loading"><div class="cd-loading-spinner"></div></div></div>`;
   cdPageLocation.innerHTML = html;
-
-  if (alerts.length > 0) {
-    cdAlertsBadge.textContent = alerts.length;
-    cdAlertsBadge.hidden = false;
-  }
 
   companyDetailModal.showModal();
 
@@ -5501,12 +6034,12 @@ async function openCompanyDetailModal(aasId) {
   const metaArea = document.getElementById("cd-aas-meta-area");
   if (metaArea) metaArea.innerHTML = renderAasMetaCard(d.shell, aasId);
 
-  const smCount = d.submodels?.length || 0;
+  // Extract Company name + alias from submodels
+  const companySm = d.submodels?.find(sm => sm.idShort === "Company");
+  cdCompanyName = companySm?.properties?.find(p => p.idShort === "Name")?.value || "";
+  cdCompanyAlias = companySm?.properties?.find(p => p.idShort === "Alias")?.value || "";
+
   if (smContainer) smContainer.innerHTML = renderSubmodelCards(d.submodels);
-  if (smCount > 0) {
-    cdSubmodelsBadge.textContent = smCount;
-    cdSubmodelsBadge.hidden = false;
-  }
 
   // Expand/collapse handlers
   cdPageLocation.querySelectorAll("[data-toggle='cd-sm']").forEach(hdr => {
@@ -5520,8 +6053,21 @@ async function openCompanyDetailModal(aasId) {
 }
 
 async function loadCompanyNews() {
-  const query = "Pepperl+Fuchs";
   cdPageAlerts.innerHTML = `<div class="cd-loading"><div class="cd-loading-spinner"></div></div>`;
+
+  // Build query from Company submodel: name + aliases via OR
+  if (!cdCompanyName) {
+    cdPageAlerts.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("cdNewsNoCompany"))}</div>`;
+    return;
+  }
+  const parts = [`"${cdCompanyName}"`];
+  if (cdCompanyAlias) {
+    for (const a of cdCompanyAlias.split(",")) {
+      const trimmed = a.trim();
+      if (trimmed && trimmed.toLowerCase() !== cdCompanyName.toLowerCase()) parts.push(`"${trimmed}"`);
+    }
+  }
+  const query = parts.join(" OR ");
 
   const res = await apiRequest(`/apps/resilience/api/company-news?q=${encodeURIComponent(query)}`);
   if (!res.ok || !res.payload?.items) {
@@ -5534,7 +6080,8 @@ async function loadCompanyNews() {
     return;
   }
 
-  let html = `<div class="cd-section">
+  let html = `<div class="cd-source-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/></svg><span>${escapeHtml(t("srcGoogleNews"))}</span></div>`;
+  html += `<div class="cd-section">
     <h4 class="cd-section-title">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
       ${escapeHtml(t("cdNewsTitle"))} <span class="cd-badge">${items.length}</span>
@@ -5580,6 +6127,303 @@ async function loadCompanyNews() {
   }
   html += `</div></div>`;
   cdPageAlerts.innerHTML = html;
+}
+
+async function loadGdeltData() {
+  cdPageGdelt.innerHTML = `<div class="cd-loading"><div class="cd-loading-spinner"></div></div>`;
+
+  if (!cdCompanyName) {
+    cdPageGdelt.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("gdeltNoCompany"))}</div>`;
+    return;
+  }
+
+  // Build query from Company + Geocoding data
+  const params = new URLSearchParams({ name: cdCompanyName });
+  if (cdCompanyAlias) params.set("alias", cdCompanyAlias);
+  const cached = cdCurrentAasId ? dashAasCache.get(cdCurrentAasId) : null;
+  if (cached?.country_value) params.set("country", cached.country_value);
+
+  const res = await apiRequest(`/apps/resilience/api/gdelt/company?${params.toString()}`);
+  if (!res.ok) {
+    const errKey = res.payload?.error === "NO_CREDENTIALS" ? "gdeltNoCredentials"
+                 : res.payload?.error === "NO_COMPANY" ? "gdeltNoCompany" : "gdeltNoData";
+    cdPageGdelt.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t(errKey))}</div>`;
+    return;
+  }
+
+  const { chart, mentions, total } = res.payload;
+  if (!mentions || mentions.length === 0) {
+    cdPageGdelt.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("gdeltNoData"))}</div>`;
+    return;
+  }
+
+  let html = `<div class="cd-source-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg><span>${escapeHtml(t("srcGdelt"))}</span></div>`;
+  // Chart section
+  html += `<div class="cd-section gdelt-chart-section">
+    <h4 class="cd-section-title">${escapeHtml(t("gdeltMentions"))} <span class="cd-badge">${total}</span></h4>
+    <div class="gdelt-legend">
+      <span><span class="gdelt-legend-dot" style="background:#6366f1"></span>${escapeHtml(t("gdeltMentions"))}</span>
+      <span><span class="gdelt-legend-dot" style="background:#f59e0b"></span>${escapeHtml(t("gdeltSentiment"))}</span>
+    </div>
+    <canvas id="gdelt-chart-canvas" class="gdelt-chart-canvas" height="200"></canvas>
+  </div>`;
+
+  // Articles section
+  html += `<div class="cd-section">
+    <h4 class="cd-section-title">${escapeHtml(t("gdeltArticles"))} <span class="cd-badge">${mentions.length}</span></h4>
+    <div class="cd-news-list">`;
+  for (const m of mentions) {
+    const dayStr = m.day ? `${m.day.slice(6, 8)}.${m.day.slice(4, 6)}.${m.day.slice(0, 4)}` : "";
+    const toneCls = m.tone > 1 ? "gdelt-tone-positive" : m.tone < -1 ? "gdelt-tone-negative" : "gdelt-tone-neutral";
+    const domain = m.url ? (() => { try { return new URL(m.url).hostname.replace(/^www\\./, ""); } catch { return ""; } })() : "";
+    const faviconUrl = domain ? `https://www.google.com/s2/favicons?sz=32&domain=${encodeURIComponent(domain)}` : "";
+    html += `<div class="cd-news-item" data-news-expanded="false">
+      <div class="cd-news-item-header" onclick="this.parentElement.dataset.newsExpanded = this.parentElement.dataset.newsExpanded === 'true' ? 'false' : 'true'">
+        ${faviconUrl ? `<img class="cd-news-favicon" src="${escapeHtml(faviconUrl)}" width="20" height="20" alt="" loading="lazy">` : `<div class="cd-news-favicon-placeholder"></div>`}
+        <div class="cd-news-item-body">
+          <span class="cd-news-item-title">${escapeHtml(m.source || domain || "—")}</span>
+          <div class="cd-news-item-meta">
+            <span class="cd-news-date">${escapeHtml(dayStr)}</span>
+            <span class="gdelt-tone ${toneCls}">${m.tone > 0 ? "+" : ""}${m.tone}</span>
+          </div>
+        </div>
+        <svg class="cd-news-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="cd-news-detail">
+        <a class="cd-news-link" href="${escapeHtml(m.url)}" target="_blank" rel="noopener">
+          ${escapeHtml(domain || m.url)}
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  cdPageGdelt.innerHTML = html;
+
+  // Draw chart on canvas
+  if (chart && chart.length > 0) {
+    setTimeout(() => drawGdeltChart(chart), 50);
+  }
+}
+
+function drawGdeltChart(chartData) {
+  const canvas = document.getElementById("gdelt-chart-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width;
+  const H = rect.height;
+
+  const pad = { top: 20, right: 50, bottom: 30, left: 40 };
+  const cw = W - pad.left - pad.right;
+  const ch = H - pad.top - pad.bottom;
+
+  if (chartData.length === 0) return;
+
+  const maxCount = Math.max(...chartData.map(d => d.count), 1);
+  const tones = chartData.map(d => d.avgTone);
+  const minTone = Math.min(...tones, -2);
+  const maxTone = Math.max(...tones, 2);
+  const toneRange = Math.max(maxTone - minTone, 1);
+
+  const barW = Math.max(Math.floor(cw / chartData.length) - 2, 4);
+
+  // Grid lines
+  ctx.strokeStyle = "rgba(128,128,128,0.15)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + cw, y);
+    ctx.stroke();
+  }
+
+  // Bars
+  for (let i = 0; i < chartData.length; i++) {
+    const d = chartData[i];
+    const x = pad.left + (i / chartData.length) * cw + 1;
+    const barH = (d.count / maxCount) * ch;
+    ctx.fillStyle = "rgba(99,102,241,0.6)";
+    ctx.fillRect(x, pad.top + ch - barH, barW, barH);
+  }
+
+  // Tone line
+  ctx.beginPath();
+  ctx.strokeStyle = "#f59e0b";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < chartData.length; i++) {
+    const d = chartData[i];
+    const x = pad.left + (i / chartData.length) * cw + barW / 2;
+    const y = pad.top + ch - ((d.avgTone - minTone) / toneRange) * ch;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Zero line for tone
+  if (minTone < 0 && maxTone > 0) {
+    const zeroY = pad.top + ch - ((0 - minTone) / toneRange) * ch;
+    ctx.strokeStyle = "rgba(220,38,38,0.3)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, zeroY);
+    ctx.lineTo(pad.left + cw, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // X-axis labels (every few days)
+  ctx.fillStyle = "var(--text-2, #6b7280)";
+  ctx.font = "10px sans-serif";
+  ctx.textAlign = "center";
+  const step = Math.max(1, Math.floor(chartData.length / 7));
+  for (let i = 0; i < chartData.length; i += step) {
+    const d = chartData[i];
+    const x = pad.left + (i / chartData.length) * cw + barW / 2;
+    const label = d.day.slice(6, 8) + "." + d.day.slice(4, 6);
+    ctx.fillText(label, x, H - 5);
+  }
+
+  // Y-axis labels (left: count)
+  ctx.textAlign = "right";
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    const val = Math.round(maxCount * (1 - i / 4));
+    ctx.fillText(String(val), pad.left - 5, y + 4);
+  }
+
+  // Y-axis labels (right: tone)
+  ctx.textAlign = "left";
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    const val = (maxTone - (i / 4) * toneRange).toFixed(1);
+    ctx.fillText(val, W - pad.right + 5, y + 4);
+  }
+}
+
+// ── Shared Score Bar Helper ───────────────────────────────────
+function scoreColor(value, min, max, invert) {
+  // invert=true: higher=worse (INFORM), invert=false: higher=better (World Bank governance)
+  const pct = (value - min) / (max - min);
+  if (invert) {
+    if (pct <= 0.35) return "score-green";
+    if (pct <= 0.65) return "score-yellow";
+    return "score-red";
+  }
+  if (pct >= 0.6) return "score-green";
+  if (pct >= 0.4) return "score-yellow";
+  return "score-red";
+}
+
+function renderScoreBar(label, value, min, max, invert, suffix) {
+  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  const color = scoreColor(value, min, max, invert);
+  return `<div class="cd-score-row">
+    <span class="cd-score-label">${escapeHtml(label)}</span>
+    <div class="cd-score-track"><div class="cd-score-fill ${color}" style="width:${pct}%"></div></div>
+    <span class="cd-score-value">${value.toFixed(2)}${suffix ? " " + escapeHtml(suffix) : ""}</span>
+  </div>`;
+}
+
+// ── World Bank Tab ────────────────────────────────────────────
+async function loadWorldBankData() {
+  cdPageWorldbank.innerHTML = `<div class="cd-loading"><div class="cd-loading-spinner"></div></div>`;
+  const cached = cdCurrentAasId ? dashAasCache.get(cdCurrentAasId) : null;
+  const iso = cached?.iso_code || "";
+  if (!iso) {
+    cdPageWorldbank.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("wbNoCountry"))}</div>`;
+    return;
+  }
+  const res = await apiRequest(`/apps/resilience/api/world-bank?iso=${encodeURIComponent(iso)}`);
+  if (!res.ok || !res.payload) {
+    cdPageWorldbank.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("wbNoData"))}</div>`;
+    return;
+  }
+  const { country, governance, logistics } = res.payload;
+
+  const WB_LABELS = {
+    "CC.EST": t("wbCorruption"), "GE.EST": t("wbEffectiveness"), "PV.EST": t("wbStability"),
+    "RQ.EST": t("wbRegulatory"), "RL.EST": t("wbRuleOfLaw"), "VA.EST": t("wbVoice"),
+  };
+
+  let html = `<div class="cd-source-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg><span>${escapeHtml(t("srcWorldBank"))}</span></div>`;
+  html += `<div class="cd-risk-section">`;
+  html += `<h4>${escapeHtml(t("wbTitle"))}${country ? ` — ${escapeHtml(country)}` : ""}</h4>`;
+  for (const g of governance) {
+    const label = WB_LABELS[g.id] || g.id;
+    html += renderScoreBar(`${label} (${g.year})`, g.value, -2.5, 2.5, false, "");
+  }
+  html += `</div>`;
+
+  if (logistics) {
+    html += `<div class="cd-risk-section">`;
+    html += `<h4>${escapeHtml(t("wbLogistics"))} (${logistics.year})</h4>`;
+    html += renderScoreBar(t("wbLogistics"), logistics.value, 1, 5, false, "");
+    html += `</div>`;
+  }
+
+  cdPageWorldbank.innerHTML = html;
+}
+
+// ── INFORM Risk Tab ───────────────────────────────────────────
+async function loadInformData() {
+  cdPageInform.innerHTML = `<div class="cd-loading"><div class="cd-loading-spinner"></div></div>`;
+  const cached = cdCurrentAasId ? dashAasCache.get(cdCurrentAasId) : null;
+  const iso = cached?.iso_code || "";
+  if (!iso) {
+    cdPageInform.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("informNoCountry"))}</div>`;
+    return;
+  }
+  const res = await apiRequest(`/apps/resilience/api/inform-risk?iso=${encodeURIComponent(iso)}`);
+  if (!res.ok || !res.payload) {
+    cdPageInform.innerHTML = `<div style="color:var(--muted);padding:2rem;text-align:center">${escapeHtml(t("informNoData"))}</div>`;
+    return;
+  }
+  const { overall, dimensions, details, workflowName } = res.payload;
+
+  const INFORM_LABELS = {
+    HA: t("informHazard"), VU: t("informVulnerability"), CC: t("informCoping"),
+    "HA.NAT": t("informNatural"), "HA.HUM": t("informHuman"),
+    "VU.SEV": t("informSocioEcon"), "VU.VGR": t("informVulnGroups"),
+    "CC.INF": t("informInfra"), "CC.INS": t("informInstitutional"),
+  };
+
+  // Score color for overall badge
+  const oc = overall <= 3.5 ? "score-green" : overall <= 6.5 ? "score-yellow" : "score-red";
+
+  let html = `<div class="cd-source-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>${escapeHtml(t("srcInform"))}</span></div>`;
+
+  // Overall score
+  html += `<div class="inform-overall">`;
+  html += `<span class="inform-overall-score ${oc}">${overall.toFixed(1)}</span>`;
+  html += `<span class="inform-overall-label">${escapeHtml(t("informTitle"))}<br><small style="opacity:0.6">${escapeHtml(workflowName)} &middot; 0-10</small></span>`;
+  html += `</div>`;
+
+  // Dimensions
+  html += `<div class="cd-risk-section"><h4>${escapeHtml(t("informTitle"))}</h4>`;
+  for (const dim of dimensions) {
+    html += renderScoreBar(INFORM_LABELS[dim.id] || dim.name, dim.score, 0, 10, true, "");
+  }
+  html += `</div>`;
+
+  // Details grouped by parent
+  for (const dim of dimensions) {
+    const children = details.filter(d => d.parent === dim.id);
+    if (children.length === 0) continue;
+    html += `<div class="cd-risk-section"><h4>${escapeHtml(INFORM_LABELS[dim.id] || dim.name)}</h4>`;
+    for (const child of children) {
+      html += renderScoreBar(INFORM_LABELS[child.id] || child.name, child.score, 0, 10, true, "");
+    }
+    html += `</div>`;
+  }
+
+  cdPageInform.innerHTML = html;
 }
 
 function renderLocationTab(geo) {
@@ -5739,6 +6583,9 @@ document.getElementById("dash-aas-settings-btn").addEventListener("click", () =>
   document.getElementById("dash-filter-distance").checked = cachedDashMatchFilter.includes("distance");
   document.getElementById("dash-filter-country").checked = cachedDashMatchFilter.includes("country");
   updateGdacsColsDisplay(cachedGdacsColumns);
+  // Show extra sections + delete only when matching is configured
+  document.getElementById("dash-aas-extra-sections").hidden = !cachedMatchingConfigured;
+  document.getElementById("dash-aas-settings-delete").hidden = !cachedMatchingConfigured;
   dashAasSettingsModal.showModal();
 });
 document.getElementById("dash-aas-settings-close").addEventListener("click", () => dashAasSettingsModal.close());
@@ -5763,6 +6610,701 @@ document.getElementById("dash-aas-settings-save").addEventListener("click", asyn
   dashAasPage = 0;
   loadDashboard();
 });
+
+// Delete all GDACS tile config
+document.getElementById("dash-aas-settings-delete").addEventListener("click", async () => {
+  const btn = document.getElementById("dash-aas-settings-delete");
+  btn.disabled = true;
+  await apiRequest("/apps/resilience/api/settings", {
+    method: "PUT",
+    body: {
+      matching_params: { group_id: "", country_path: "", city_path: "", lat_path: "", lon_path: "" },
+      gdacs_aas_columns: [],
+      dash_aas_match_filter: ["polygon", "distance"],
+    },
+  });
+  btn.disabled = false;
+  updateMatchingDisplay("", { country: "", city: "", lat: "", lon: "" });
+  cachedGdacsColumns = [];
+  updateGdacsColsDisplay([]);
+  cachedDashMatchFilter = ["polygon", "distance"];
+  dashAasSettingsModal.close();
+  dashAasPage = 0;
+  loadDashboard();
+});
+
+// ── Indicator Dashboard Settings + Wizard ─────────────────────────────────
+const dashIndSettingsModal = document.getElementById("dash-ind-settings-modal");
+const indWizardModal = document.getElementById("ind-wizard-modal");
+const indConfirmDialog = document.getElementById("ind-confirm-dialog");
+let cachedIndDashConfig = {};
+
+function updateIndColsDisplay(columns) {
+  const textEl = document.getElementById("dash-ind-cols-text");
+  if (!textEl) return;
+  if (!columns || !columns.length) {
+    textEl.className = "gdacs-aas-source-empty";
+    textEl.textContent = t("indColsEmpty");
+  } else {
+    textEl.className = "gdacs-aas-source-filled";
+    textEl.innerHTML = columns.map(c => {
+      const p = typeof c === "string" ? c : c.path;
+      const tp = typeof c === "string" ? "" : c.type;
+      const typeHtml = tp ? ` <span class="gdacs-src-type">[${escapeHtml(tp)}]</span>` : "";
+      return `<span class="gdacs-src-path">${escapeHtml(p)}${typeHtml}</span>`;
+    }).join("");
+  }
+}
+
+// Wizard state
+let indWizardStep = 1;
+let indWizardGroupId = null;
+let indWizardGroupName = "";
+let indWizardSelectedIndicators = []; // [{indicator_id, name, conditions: [{key, input, operator, value}]}]
+let indWizardCurrentIndIdx = 0;
+let indWizardMappings = {}; // { indicator_id: { ref_aas_id, condition_mappings: {"g0_c0": path} } }
+let indWizardCurrentCondKey = null; // which condition key is being mapped (e.g. "g0_c0")
+let indWizardCurrentCondType = null; // input type for type-compat filtering
+let indWizardLoadedTree = null; // cached submodels for current ref AAS
+
+// Operator labels for wizard summary
+const IND_OP_LABELS = { "==": "=", "!=": "≠", ">": ">", "<": "<", ">=": "≥", "<=": "≤" };
+
+// Compatible AAS valueTypes per indicator input type
+const IND_NUMBER_TYPES = new Set(["xs:int", "xs:integer", "xs:double", "xs:float", "xs:decimal", "xs:long", "xs:short", "xs:byte", "xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte", "xs:nonNegativeInteger", "xs:positiveInteger"]);
+const IND_BOOL_TYPES = new Set(["xs:boolean"]);
+
+function indTypeCompatible(indicatorInputType, aasValueType) {
+  if (indicatorInputType === "text") return true;
+  if (indicatorInputType === "number") return IND_NUMBER_TYPES.has(aasValueType);
+  if (indicatorInputType === "boolean") return IND_BOOL_TYPES.has(aasValueType);
+  return true;
+}
+
+// Open settings modal
+document.getElementById("dash-ind-settings-btn").addEventListener("click", async () => {
+  const res = await apiRequest("/apps/resilience/api/indicators/dashboard-config");
+  const display = document.getElementById("dash-ind-config-display");
+  const config = res.ok ? res.payload : {};
+  cachedIndDashConfig = config;
+  const colsSection = document.getElementById("dash-ind-cols-section");
+  if (config.group_id && Array.isArray(config.indicators) && config.indicators.length) {
+    // Resolve group name
+    const grpRes = await apiRequest(`/apps/resilience/api/asset-groups/${config.group_id}`);
+    const gName = grpRes.ok ? grpRes.payload.name : config.group_id;
+    // Resolve indicator names
+    const indRes = await apiRequest("/apps/resilience/api/indicators");
+    const indMap = new Map();
+    if (indRes.ok) for (const i of indRes.payload.indicators) indMap.set(i.indicator_id, i.name);
+    let html = `<div class="dash-ind-config-group">${escapeHtml(gName)} — ${config.indicators.length} ${t("indDashConfigured")}</div>`;
+    html += `<div class="dash-ind-config-list">`;
+    for (const ic of config.indicators) {
+      html += `<div class="dash-ind-config-item"><span class="ind-cfg-dot" style="background:var(--accent)"></span>${escapeHtml(indMap.get(ic.indicator_id) || ic.indicator_id)}</div>`;
+    }
+    html += `</div>`;
+    display.innerHTML = html;
+    document.getElementById("dash-ind-delete-btn").hidden = false;
+    // Show column selection section
+    colsSection.hidden = false;
+    updateIndColsDisplay(config.columns || []);
+  } else {
+    display.innerHTML = `<span class="gdacs-aas-source-empty">${t("indDashNoConfig")}</span>`;
+    document.getElementById("dash-ind-delete-btn").hidden = true;
+    colsSection.hidden = true;
+  }
+  dashIndSettingsModal.showModal();
+});
+document.getElementById("dash-ind-settings-close").addEventListener("click", () => dashIndSettingsModal.close());
+
+// Column selection button → open AAS CM modal in ind-columns mode
+document.getElementById("dash-ind-cols-btn").addEventListener("click", () => {
+  dashIndSettingsModal.close();
+  openAasCmModal("ind-columns", cachedIndDashConfig.group_id);
+});
+
+// Configure button → open wizard
+document.getElementById("dash-ind-configure-btn").addEventListener("click", () => {
+  dashIndSettingsModal.close();
+  openIndWizard();
+});
+
+// Delete all → confirm dialog
+document.getElementById("dash-ind-delete-btn").addEventListener("click", () => {
+  indConfirmDialog.showModal();
+});
+document.getElementById("ind-confirm-cancel").addEventListener("click", () => indConfirmDialog.close());
+document.getElementById("ind-confirm-ok").addEventListener("click", async () => {
+  indConfirmDialog.close();
+  dashIndSettingsModal.close();
+  await apiRequest("/apps/resilience/api/indicators/dashboard-config", {
+    method: "PUT", body: { config: {} },
+  });
+  loadDashboard();
+});
+
+// ── Score Tile Settings Modal ───────────────────────────────────
+const dashScoreSettingsModal = document.getElementById("dash-score-settings-modal");
+let scoreCfgStep = 0;
+let scoreCfgGroupId = null;
+let scoreCfgGroupName = "";
+let scoreCfgSelectedAas = [];
+let scoreCfgLabelPath = "";
+let scoreCfgTargetPath = "";
+let scoreCfgActiveField = ""; // "label" or "target"
+let scoreCfgTreeCache = null;
+
+function showScoreCfgStep(step) {
+  scoreCfgStep = step;
+  document.getElementById("score-cfg-display").hidden = step !== 0;
+  document.getElementById("score-step-1").hidden = step !== 1;
+  document.getElementById("score-step-2").hidden = step !== 2;
+  document.getElementById("score-step-3").hidden = step !== 3;
+  document.getElementById("score-cfg-configure-btn").hidden = step !== 0;
+  document.getElementById("score-cfg-delete-btn").hidden = step !== 0;
+  document.getElementById("score-cfg-back-btn").hidden = step === 0;
+  document.getElementById("score-cfg-next-btn").hidden = step !== 2;
+  document.getElementById("score-cfg-save-btn").hidden = step !== 3 || !scoreCfgLabelPath || !scoreCfgTargetPath;
+}
+
+function updateScorePathRows() {
+  const rows = document.getElementById("score-path-rows");
+  rows.innerHTML = `
+    <div class="score-path-row">
+      <span class="score-path-label">${t("dashScoreLabel")}</span>
+      <span class="score-path-value${scoreCfgLabelPath ? " score-path-set" : ""}">${scoreCfgLabelPath ? escapeHtml(scoreCfgLabelPath) : "–"}</span>
+      <button class="score-path-btn" data-field="label" type="button">${t("indWizardSelectPath")}</button>
+    </div>
+    <div class="score-path-row">
+      <span class="score-path-label">${t("dashScoreTarget")}</span>
+      <span class="score-path-value${scoreCfgTargetPath ? " score-path-set" : ""}">${scoreCfgTargetPath ? escapeHtml(scoreCfgTargetPath) : "–"}</span>
+      <button class="score-path-btn" data-field="target" type="button">${t("indWizardSelectPath")}</button>
+    </div>`;
+  document.getElementById("score-cfg-save-btn").hidden = !scoreCfgLabelPath || !scoreCfgTargetPath;
+}
+
+async function loadScoreTree(aasId) {
+  const treeArea = document.getElementById("score-tree-area");
+  const treeEl = document.getElementById("score-tree");
+  const loading = document.getElementById("score-tree-loading");
+  treeArea.hidden = false;
+  treeEl.innerHTML = "";
+  loading.hidden = false;
+
+  if (!scoreCfgTreeCache || scoreCfgTreeCache.aasId !== aasId) {
+    const res = await apiRequest(`/apps/resilience/api/aas-import/${encodeURIComponent(aasId)}`);
+    loading.hidden = true;
+    if (!res.ok || !res.payload) {
+      treeEl.innerHTML = `<p class="aas-cm-error">${t("aasCmTreeError")}</p>`;
+      return;
+    }
+    scoreCfgTreeCache = { aasId, submodels: res.payload.submodels || [] };
+  } else {
+    loading.hidden = true;
+  }
+
+  for (const sm of scoreCfgTreeCache.submodels) {
+    const card = document.createElement("div");
+    card.className = "aas-cm-sm-card";
+    card.innerHTML = `<h4 class="aas-cm-sm-title">${escapeHtml(sm.idShort || sm.id)}</h4>`;
+    const elHtml = renderSelectableEls(sm.submodelElements || [], 0, sm.idShort || "");
+    card.insertAdjacentHTML("beforeend", elHtml);
+    treeEl.appendChild(card);
+  }
+}
+
+// Open modal: load config, show display
+document.getElementById("dash-score-settings-btn").addEventListener("click", async () => {
+  const res = await apiRequest("/apps/resilience/api/score/dashboard-config");
+  const config = res.ok ? res.payload : {};
+  const display = document.getElementById("score-cfg-display");
+  const deleteBtn = document.getElementById("score-cfg-delete-btn");
+
+  if (config.group_id && Array.isArray(config.aas_ids) && config.aas_ids.length && config.label_path && config.target_path) {
+    const grpRes = await apiRequest(`/apps/resilience/api/asset-groups/${config.group_id}`);
+    const gName = grpRes.ok ? grpRes.payload.name : config.group_id;
+    let html = `<div class="score-cfg-group">${escapeHtml(gName)} — ${config.aas_ids.length} AAS ${t("dashScoreConfigured")}</div>`;
+    html += `<div class="score-cfg-list">`;
+    html += `<div class="score-cfg-item"><span class="score-cfg-dot"></span>${t("dashScoreLabel")}: <strong>${escapeHtml(config.label_path)}</strong></div>`;
+    html += `<div class="score-cfg-item"><span class="score-cfg-dot"></span>${t("dashScoreTarget")}: <strong>${escapeHtml(config.target_path)}</strong></div>`;
+    html += `</div>`;
+    display.innerHTML = html;
+    deleteBtn.hidden = false;
+  } else {
+    display.innerHTML = `<span class="gdacs-aas-source-empty">${t("dashScoreEmpty")}</span>`;
+    deleteBtn.hidden = true;
+  }
+  showScoreCfgStep(0);
+  dashScoreSettingsModal.showModal();
+});
+
+document.getElementById("dash-score-settings-close").addEventListener("click", () => dashScoreSettingsModal.close());
+dashScoreSettingsModal.addEventListener("click", (e) => { if (e.target === dashScoreSettingsModal) dashScoreSettingsModal.close(); });
+
+// Configure → step 1
+document.getElementById("score-cfg-configure-btn").addEventListener("click", async () => {
+  scoreCfgGroupId = null;
+  scoreCfgGroupName = "";
+  scoreCfgSelectedAas = [];
+  scoreCfgLabelPath = "";
+  scoreCfgTargetPath = "";
+  scoreCfgTreeCache = null;
+  showScoreCfgStep(1);
+  const res = await apiRequest("/apps/resilience/api/asset-groups");
+  const list = document.getElementById("score-group-list");
+  list.innerHTML = "";
+  const groups = res.ok ? (res.payload.groups || []) : [];
+  if (!groups.length) {
+    list.innerHTML = `<span class="gdacs-aas-source-empty">${t("indWizardNoGroups")}</span>`;
+    return;
+  }
+  for (const g of groups) {
+    const btn = document.createElement("button");
+    btn.className = "aas-cm-select-item";
+    btn.textContent = `${g.name} (${g.member_count} AAS)`;
+    btn.addEventListener("click", async () => {
+      scoreCfgGroupId = g.group_id;
+      scoreCfgGroupName = g.name;
+      showScoreCfgStep(2);
+      const mRes = await apiRequest(`/apps/resilience/api/asset-groups/${g.group_id}`);
+      const members = mRes.ok ? (mRes.payload.members || []) : [];
+      const aasList = document.getElementById("score-aas-list");
+      aasList.innerHTML = "";
+      for (const m of members) {
+        const label = document.createElement("label");
+        label.className = "score-checkbox-item";
+        label.innerHTML = `<input type="checkbox" value="${escapeHtml(m.aas_id)}"><span>${escapeHtml(m.aas_id)}</span>`;
+        aasList.appendChild(label);
+      }
+    });
+    list.appendChild(btn);
+  }
+});
+
+// Back button
+document.getElementById("score-cfg-back-btn").addEventListener("click", () => {
+  if (scoreCfgStep === 2) showScoreCfgStep(1);
+  else if (scoreCfgStep === 3) showScoreCfgStep(2);
+  else showScoreCfgStep(0);
+});
+
+// Next (step 2 → 3): show path selectors + load tree from first selected AAS
+document.getElementById("score-cfg-next-btn").addEventListener("click", async () => {
+  const checked = [...document.querySelectorAll("#score-aas-list input:checked")].map(cb => cb.value);
+  if (!checked.length) return;
+  scoreCfgSelectedAas = checked;
+  scoreCfgLabelPath = "";
+  scoreCfgTargetPath = "";
+  showScoreCfgStep(3);
+  updateScorePathRows();
+  await loadScoreTree(checked[0]);
+});
+
+// Path button click (delegated)
+document.getElementById("score-path-rows").addEventListener("click", (e) => {
+  const btn = e.target.closest(".score-path-btn");
+  if (!btn) return;
+  scoreCfgActiveField = btn.dataset.field;
+  const fieldLabel = scoreCfgActiveField === "label" ? t("dashScoreLabel") : t("dashScoreTarget");
+  document.getElementById("score-tree-label").innerHTML = `<strong>${fieldLabel}</strong> — ${t("indWizardStep3bDesc")}`;
+  document.getElementById("score-tree-area").hidden = false;
+  // Highlight currently selected path
+  document.getElementById("score-tree").querySelectorAll(".aas-cm-prop-selected").forEach(el => el.classList.remove("aas-cm-prop-selected"));
+  const currentPath = scoreCfgActiveField === "label" ? scoreCfgLabelPath : scoreCfgTargetPath;
+  if (currentPath) {
+    const el = document.getElementById("score-tree").querySelector(`[data-idshort-path="${CSS.escape(currentPath)}"]`);
+    if (el) el.classList.add("aas-cm-prop-selected");
+  }
+});
+
+// Tree click handler
+document.getElementById("score-tree").addEventListener("click", (e) => {
+  const propEl = e.target.closest("[data-idshort-path]");
+  if (!propEl || !scoreCfgActiveField) return;
+  const path = propEl.dataset.idshortPath;
+
+  // Update path
+  if (scoreCfgActiveField === "label") scoreCfgLabelPath = path;
+  else scoreCfgTargetPath = path;
+
+  // Visual feedback
+  document.getElementById("score-tree").querySelectorAll(".aas-cm-prop-selected").forEach(el => el.classList.remove("aas-cm-prop-selected"));
+  propEl.classList.add("aas-cm-prop-selected");
+
+  updateScorePathRows();
+  scoreCfgActiveField = "";
+  document.getElementById("score-tree-area").hidden = true;
+});
+
+// Save (step 3 → PUT config)
+document.getElementById("score-cfg-save-btn").addEventListener("click", async () => {
+  if (!scoreCfgLabelPath || !scoreCfgTargetPath) return;
+  await apiRequest("/apps/resilience/api/score/dashboard-config", {
+    method: "PUT",
+    body: { config: { group_id: scoreCfgGroupId, aas_ids: scoreCfgSelectedAas, label_path: scoreCfgLabelPath, target_path: scoreCfgTargetPath } },
+  });
+  dashScoreSettingsModal.close();
+  loadDashboard();
+});
+
+// Delete
+document.getElementById("score-cfg-delete-btn").addEventListener("click", async () => {
+  await apiRequest("/apps/resilience/api/score/dashboard-config", {
+    method: "PUT", body: { config: {} },
+  });
+  dashScoreSettingsModal.close();
+  loadDashboard();
+});
+
+// ── Wizard Logic ────────────────────────────────────────────────
+function openIndWizard() {
+  indWizardStep = 1;
+  indWizardGroupId = null;
+  indWizardGroupName = "";
+  indWizardSelectedIndicators = [];
+  indWizardCurrentIndIdx = 0;
+  indWizardMappings = {};
+  indWizardCurrentCondKey = null;
+  indWizardCurrentCondType = null;
+  indWizardLoadedTree = null;
+  showIndWizardStep(1);
+  loadIndWizardGroups();
+  indWizardModal.showModal();
+}
+
+function showIndWizardStep(step) {
+  indWizardStep = step;
+  for (let s = 1; s <= 4; s++) {
+    const el = document.getElementById(`ind-wizard-step-${s}`);
+    if (el) el.hidden = s !== step;
+  }
+  // Step indicators
+  document.querySelectorAll("#ind-wizard-steps .aas-cm-step").forEach(sp => {
+    const s = parseInt(sp.dataset.step);
+    sp.classList.toggle("active", s === step);
+    sp.classList.toggle("done", s < step);
+  });
+  // Buttons
+  const backBtn = document.getElementById("ind-wizard-back-btn");
+  const nextBtn = document.getElementById("ind-wizard-next-btn");
+  const saveBtn = document.getElementById("ind-wizard-save-btn");
+  const cancelBtn = document.getElementById("ind-wizard-cancel-btn");
+  backBtn.hidden = step <= 1;
+  nextBtn.hidden = !(step === 2 || step === 3);
+  saveBtn.hidden = step !== 4;
+  cancelBtn.hidden = step === 4;
+}
+
+// Step 1: Groups
+async function loadIndWizardGroups() {
+  const res = await apiRequest("/apps/resilience/api/asset-groups");
+  const list = document.getElementById("ind-wizard-group-list");
+  const empty = document.getElementById("ind-wizard-group-empty");
+  list.innerHTML = "";
+  const groups = res.ok ? (res.payload.groups || []) : [];
+  empty.hidden = groups.length > 0;
+  for (const g of groups) {
+    const btn = document.createElement("button");
+    btn.className = "aas-cm-select-item";
+    btn.textContent = `${g.name} (${g.member_count} AAS)`;
+    btn.addEventListener("click", () => {
+      indWizardGroupId = g.group_id;
+      indWizardGroupName = g.name;
+      showIndWizardStep(2);
+      loadIndWizardIndicators();
+    });
+    list.appendChild(btn);
+  }
+}
+
+// Step 2: Indicators (checkboxes)
+async function loadIndWizardIndicators() {
+  const res = await apiRequest("/apps/resilience/api/indicators");
+  const list = document.getElementById("ind-wizard-indicator-list");
+  const empty = document.getElementById("ind-wizard-indicator-empty");
+  list.innerHTML = "";
+  const indicators = res.ok ? (res.payload.indicators || []) : [];
+  empty.hidden = indicators.length > 0;
+  for (const ind of indicators) {
+    const label = document.createElement("label");
+    label.className = "ind-wizard-checkbox-item";
+    label.innerHTML = `<input type="checkbox" value="${escapeHtml(ind.indicator_id)}"><span class="ind-wiz-name">${escapeHtml(ind.name)}</span><span class="ind-wiz-meta">${ind.group_count} ${ind.group_count === 1 ? "Gruppe" : "Gruppen"}</span>`;
+    list.appendChild(label);
+  }
+}
+
+// Next button (Step 2 → Step 3, Step 3 → advance mapping)
+document.getElementById("ind-wizard-next-btn").addEventListener("click", async () => {
+  if (indWizardStep === 3) {
+    advanceIndWizardMapping();
+    return;
+  }
+  if (indWizardStep === 2) {
+    const checkboxes = document.querySelectorAll("#ind-wizard-indicator-list input[type=checkbox]:checked");
+    if (!checkboxes.length) return;
+    indWizardSelectedIndicators = [];
+    for (const cb of checkboxes) {
+      const id = cb.value;
+      const res = await apiRequest(`/apps/resilience/api/indicators/${id}`);
+      if (!res.ok) continue;
+      const ind = res.payload;
+      // Build flat list of all conditions with keys
+      const conditions = [];
+      for (let gi = 0; gi < (ind.groups || []).length; gi++) {
+        const g = ind.groups[gi];
+        for (let ci = 0; ci < (g.conditions || []).length; ci++) {
+          const c = g.conditions[ci];
+          conditions.push({
+            key: `g${gi}_c${ci}`,
+            input: c.input || "number",
+            operator: c.operator || "==",
+            value: c.value ?? "",
+            groupLabel: g.output_label || `Gruppe ${gi + 1}`,
+            groupColor: g.output_color || "#9ca3af",
+          });
+        }
+      }
+      indWizardSelectedIndicators.push({ indicator_id: id, name: ind.name, conditions });
+      indWizardMappings[id] = { ref_aas_id: "", condition_mappings: {} };
+    }
+    indWizardCurrentIndIdx = 0;
+    showIndWizardStep(3);
+    showIndWizardMapping();
+  }
+});
+
+// Show mapping for current indicator
+function showIndWizardMapping() {
+  const ind = indWizardSelectedIndicators[indWizardCurrentIndIdx];
+  document.getElementById("ind-wizard-mapping-name").textContent = `${t("indWizardMappingFor")} ${ind.name}`;
+  document.getElementById("ind-wizard-mapping-progress").textContent = `${indWizardCurrentIndIdx + 1} / ${indWizardSelectedIndicators.length}`;
+  // Show AAS selection sub-step
+  const aasSelect = document.getElementById("ind-wizard-aas-select");
+  const inputMapping = document.getElementById("ind-wizard-input-mapping");
+  aasSelect.hidden = false;
+  inputMapping.hidden = true;
+  loadIndWizardAasList();
+}
+
+// Step 3a: Load AAS items in group
+async function loadIndWizardAasList() {
+  const res = await apiRequest(`/apps/resilience/api/asset-groups/${indWizardGroupId}`);
+  const list = document.getElementById("ind-wizard-aas-list");
+  list.innerHTML = "";
+  const members = res.ok ? (res.payload.members || []) : [];
+  for (const m of members) {
+    const btn = document.createElement("button");
+    btn.className = "aas-cm-select-item";
+    btn.textContent = m.aas_id;
+    btn.addEventListener("click", () => {
+      const ind = indWizardSelectedIndicators[indWizardCurrentIndIdx];
+      indWizardMappings[ind.indicator_id].ref_aas_id = m.aas_id;
+      // Move to input mapping
+      document.getElementById("ind-wizard-aas-select").hidden = true;
+      document.getElementById("ind-wizard-input-mapping").hidden = false;
+      showIndWizardInputRows(m.aas_id);
+    });
+    list.appendChild(btn);
+  }
+}
+
+// Step 3b: Condition mapping rows + tree
+async function showIndWizardInputRows(aasId) {
+  const ind = indWizardSelectedIndicators[indWizardCurrentIndIdx];
+  const rowsContainer = document.getElementById("ind-wizard-input-rows");
+  const treeArea = document.getElementById("ind-wizard-tree-area");
+  treeArea.hidden = true;
+  rowsContainer.innerHTML = "";
+
+  // Build a row for each condition
+  for (const cond of ind.conditions) {
+    const row = document.createElement("div");
+    row.className = "ind-wizard-input-row";
+    row.dataset.condKey = cond.key;
+    const existingPath = indWizardMappings[ind.indicator_id].condition_mappings[cond.key] || "";
+    const opLabel = IND_OP_LABELS[cond.operator] || cond.operator;
+    row.innerHTML =
+      `<span class="iw-type-label">${escapeHtml(cond.input)}</span>` +
+      `<span class="iw-cond-desc">${escapeHtml(opLabel)} ${escapeHtml(cond.value)}</span>` +
+      `<span class="iw-path ${existingPath ? "iw-path-set" : ""}" data-cond-key="${escapeHtml(cond.key)}">${existingPath || t("indWizardSelectPath")}</span>` +
+      `<button class="iw-select-btn" type="button" data-cond-key="${escapeHtml(cond.key)}" data-input-type="${escapeHtml(cond.input)}">${existingPath ? t("indWizardPathSet") : t("indWizardSelectPath")}</button>`;
+    row.querySelector(".iw-select-btn").addEventListener("click", () => {
+      indWizardCurrentCondKey = cond.key;
+      indWizardCurrentCondType = cond.input;
+      showIndWizardTree(aasId, cond.input);
+    });
+    rowsContainer.appendChild(row);
+  }
+
+  // If no conditions, auto-advance
+  if (!ind.conditions.length) {
+    advanceIndWizardMapping();
+  }
+}
+
+async function showIndWizardTree(aasId, inputType) {
+  const treeArea = document.getElementById("ind-wizard-tree-area");
+  const treeEl = document.getElementById("ind-wizard-tree");
+  const loading = document.getElementById("ind-wizard-tree-loading");
+  const label = document.getElementById("ind-wizard-tree-label");
+  treeArea.hidden = false;
+  label.innerHTML = `<strong>${escapeHtml(inputType)}</strong> — ${t("indWizardStep3bDesc")}`;
+  treeEl.innerHTML = "";
+  loading.hidden = false;
+  loading.textContent = t("indWizardTreeLoading");
+
+  // Load tree (cache it)
+  if (!indWizardLoadedTree || indWizardLoadedTree.aasId !== aasId) {
+    const res = await apiRequest(`/apps/resilience/api/aas-import/${encodeURIComponent(aasId)}`);
+    loading.hidden = true;
+    if (!res.ok || !res.payload) {
+      treeEl.innerHTML = `<p class="aas-cm-error">${t("indWizardTreeLoading")}</p>`;
+      return;
+    }
+    indWizardLoadedTree = { aasId, submodels: res.payload.submodels || [] };
+  } else {
+    loading.hidden = true;
+  }
+
+  // Render tree with type filtering
+  const submodels = indWizardLoadedTree.submodels;
+  for (const sm of submodels) {
+    const card = document.createElement("div");
+    card.className = "aas-cm-sm-card";
+    card.innerHTML = `<h4 class="aas-cm-sm-title">${escapeHtml(sm.idShort || sm.id)}</h4>`;
+    const elHtml = renderSelectableEls(sm.submodelElements || [], 0, sm.idShort || "");
+    card.insertAdjacentHTML("beforeend", elHtml);
+    treeEl.appendChild(card);
+  }
+
+  // Mark incompatible items
+  treeEl.querySelectorAll(".aas-cm-prop-item").forEach(item => {
+    const vt = item.dataset.valueType || "";
+    if (!indTypeCompatible(inputType, vt)) {
+      item.classList.add("iw-disabled");
+      item.title = t("indWizardTypeMismatch");
+    }
+  });
+}
+
+// Tree click handler for wizard
+document.getElementById("ind-wizard-tree").addEventListener("click", (e) => {
+  const propEl = e.target.closest("[data-idshort-path]");
+  if (!propEl || propEl.classList.contains("iw-disabled")) return;
+  const path = propEl.dataset.idshortPath;
+  const condKey = indWizardCurrentCondKey;
+  if (!condKey) return;
+
+  const ind = indWizardSelectedIndicators[indWizardCurrentIndIdx];
+  indWizardMappings[ind.indicator_id].condition_mappings[condKey] = path;
+
+  // Update the row display
+  const pathEl = document.querySelector(`.iw-path[data-cond-key="${condKey}"]`);
+  if (pathEl) {
+    pathEl.textContent = path;
+    pathEl.classList.add("iw-path-set");
+  }
+  const selectBtn = document.querySelector(`.iw-select-btn[data-cond-key="${condKey}"]`);
+  if (selectBtn) selectBtn.textContent = t("indWizardPathSet");
+
+  // Hide tree
+  document.getElementById("ind-wizard-tree-area").hidden = true;
+  indWizardCurrentCondKey = null;
+  indWizardCurrentCondType = null;
+
+  // Check if all conditions mapped → auto-advance
+  const allMapped = ind.conditions.every(c => indWizardMappings[ind.indicator_id].condition_mappings[c.key]);
+  if (allMapped) {
+    setTimeout(() => advanceIndWizardMapping(), 300);
+  }
+});
+
+function advanceIndWizardMapping() {
+  indWizardCurrentIndIdx++;
+  indWizardLoadedTree = null;
+  if (indWizardCurrentIndIdx < indWizardSelectedIndicators.length) {
+    showIndWizardMapping();
+  } else {
+    // All mapped → Step 4
+    showIndWizardStep(4);
+    renderIndWizardSummary();
+  }
+}
+
+// Step 4: Summary
+function renderIndWizardSummary() {
+  const container = document.getElementById("ind-wizard-summary");
+  const successEl = document.getElementById("ind-wizard-success");
+  successEl.hidden = true;
+  container.hidden = false;
+  let html = `<div class="dash-ind-config-group">${escapeHtml(indWizardGroupName)}</div>`;
+  for (const ind of indWizardSelectedIndicators) {
+    const m = indWizardMappings[ind.indicator_id];
+    html += `<div class="ind-wizard-summary-card">`;
+    html += `<h4>${escapeHtml(ind.name)}</h4>`;
+    html += `<div class="iws-aas">${t("indWizardRefAas")}: ${escapeHtml(m.ref_aas_id)}</div>`;
+    html += `<div class="iws-mapping">`;
+    for (const cond of ind.conditions) {
+      const path = m.condition_mappings[cond.key] || "–";
+      const opLabel = IND_OP_LABELS[cond.operator] || cond.operator;
+      html += `<span>${escapeHtml(cond.input)} ${escapeHtml(opLabel)} ${escapeHtml(cond.value)} → ${escapeHtml(path)}</span>`;
+    }
+    html += `</div></div>`;
+  }
+  container.innerHTML = html;
+}
+
+// Save button
+document.getElementById("ind-wizard-save-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("ind-wizard-save-btn");
+  btn.disabled = true;
+  const config = {
+    group_id: indWizardGroupId,
+    indicators: indWizardSelectedIndicators.map(ind => ({
+      indicator_id: ind.indicator_id,
+      ref_aas_id: indWizardMappings[ind.indicator_id].ref_aas_id,
+      condition_mappings: indWizardMappings[ind.indicator_id].condition_mappings,
+    })),
+  };
+  const saveRes = await apiRequest("/apps/resilience/api/indicators/dashboard-config", {
+    method: "PUT", body: { config },
+  });
+  btn.disabled = false;
+  if (!saveRes.ok) {
+    console.error("Indicator config save failed:", saveRes);
+    return;
+  }
+  // Show success
+  document.getElementById("ind-wizard-summary").hidden = true;
+  document.getElementById("ind-wizard-success").hidden = false;
+  document.getElementById("ind-wizard-save-btn").hidden = true;
+  setTimeout(() => {
+    indWizardModal.close();
+    loadDashboard();
+  }, 1200);
+});
+
+// Back button
+document.getElementById("ind-wizard-back-btn").addEventListener("click", () => {
+  if (indWizardStep === 2) {
+    showIndWizardStep(1);
+  } else if (indWizardStep === 3) {
+    if (indWizardCurrentIndIdx > 0) {
+      indWizardCurrentIndIdx--;
+      indWizardLoadedTree = null;
+      showIndWizardMapping();
+    } else {
+      showIndWizardStep(2);
+    }
+  } else if (indWizardStep === 4) {
+    indWizardCurrentIndIdx = indWizardSelectedIndicators.length - 1;
+    showIndWizardStep(3);
+    showIndWizardMapping();
+  }
+});
+
+// Cancel / Close
+document.getElementById("ind-wizard-cancel-btn").addEventListener("click", () => indWizardModal.close());
+document.getElementById("ind-wizard-close").addEventListener("click", () => indWizardModal.close());
 
 // Dashboard click handlers
 document.getElementById("dashboard-grid").addEventListener("click", (e) => {
