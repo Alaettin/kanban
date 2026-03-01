@@ -66,7 +66,7 @@ async function getStatus() {
 }
 
 async function startContainers() {
-  await execAsync(composeCmd("up -d"));
+  await execAsync(composeCmd("up -d --build"), { timeout: 600000 });
   return getStatus();
 }
 
