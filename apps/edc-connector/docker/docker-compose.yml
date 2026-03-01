@@ -13,14 +13,14 @@ services:
       dockerfile: Dockerfile
     image: edc-connector:local
     container_name: edc-provider
+    environment:
+      - EDC_ROLE=provider
     ports:
       - "19191:19191"   # Default API
       - "19192:19192"   # Control API
       - "19193:19193"   # Management API
       - "19194:19194"   # Protocol / DSP
       - "19291:19291"   # Public API (Data Plane)
-    volumes:
-      - ./provider.properties:/app/config.properties:ro
     networks:
       - edc-network
     restart: unless-stopped
@@ -32,14 +32,14 @@ services:
       dockerfile: Dockerfile
     image: edc-connector:local
     container_name: edc-consumer
+    environment:
+      - EDC_ROLE=consumer
     ports:
       - "29191:29191"   # Default API
       - "29192:29192"   # Control API
       - "29193:29193"   # Management API
       - "29194:29194"   # Protocol / DSP
       - "29291:29291"   # Public API (Data Plane)
-    volumes:
-      - ./consumer.properties:/app/config.properties:ro
     networks:
       - edc-network
     restart: unless-stopped

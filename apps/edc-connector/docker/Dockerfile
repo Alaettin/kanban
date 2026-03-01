@@ -21,7 +21,12 @@ FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 COPY --from=builder /build/Samples/transfer/transfer-03-consumer-pull/provider-proxy-data-plane/build/libs/connector.jar /app/connector.jar
+COPY provider.properties /app/provider.properties
+COPY consumer.properties /app/consumer.properties
+
+# EDC_ROLE env var selects which config to use (provider or consumer)
+ENV EDC_ROLE=provider
 
 EXPOSE 8080 8081 8082 8083 8084
 
-ENTRYPOINT ["java", "-Dedc.fs.config=/app/config.properties", "-jar", "connector.jar"]
+ENTRYPOINT ["sh", "-c", "java -Dedc.fs.config=/app/${EDC_ROLE}.properties -jar connector.jar"]
