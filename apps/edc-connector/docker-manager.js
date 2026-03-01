@@ -1,26 +1,32 @@
 const { exec } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
 const COMPOSE_DIR = path.join(__dirname, "docker");
 const COMPOSE_FILE = path.join(COMPOSE_DIR, "docker-compose.yml");
 const PROJECT_NAME = "edc";
 
-// Fixed EDC configuration (shared by all users)
-// managementUrl = Kanban-Container → EDC-Container (same Docker network)
-// protocolUrl   = EDC-Container → EDC-Container (DSP Kommunikation)
+// Detect if running inside Docker container
+const IN_DOCKER = fs.existsSync("/.dockerenv");
+
+// When in Docker: use container names (same network)
+// When local: use localhost (ports mapped to host)
+const PROVIDER_HOST = IN_DOCKER ? "edc-provider" : "localhost";
+const CONSUMER_HOST = IN_DOCKER ? "edc-consumer" : "localhost";
+
 const EDC_CONFIG = {
   provider: {
     participantId: "provider",
-    managementUrl: "http://edc-provider:19193/management",
+    managementUrl: `http://${PROVIDER_HOST}:19193/management`,
     protocolUrl:   "http://provider:19194/protocol",
-    publicUrl:     "http://edc-provider:19291/public",
+    publicUrl:     `http://${PROVIDER_HOST}:19291/public`,
     apiKey:        "",
   },
   consumer: {
     participantId: "consumer",
-    managementUrl: "http://edc-consumer:29193/management",
+    managementUrl: `http://${CONSUMER_HOST}:29193/management`,
     protocolUrl:   "http://consumer:29194/protocol",
-    publicUrl:     "http://edc-consumer:29291/public",
+    publicUrl:     `http://${CONSUMER_HOST}:29291/public`,
     apiKey:        "",
   },
 };

@@ -164,10 +164,12 @@ function mountRoutes(router) {
     const { endpoint, authorization } = req.body;
     if (!endpoint) return res.status(400).json({ error: "MISSING_ENDPOINT" });
     try {
-      // Rewrite EDC-internal hostnames to Docker container names
+      // Rewrite EDC-internal hostnames to reachable addresses
+      const pHost = dockerManager.EDC_CONFIG.provider.publicUrl.replace("/public", "");
+      const cHost = dockerManager.EDC_CONFIG.consumer.publicUrl.replace("/public", "");
       const resolvedEndpoint = endpoint
-        .replace("http://provider:19291", "http://edc-provider:19291")
-        .replace("http://consumer:29291", "http://edc-consumer:29291");
+        .replace(/http:\/\/provider:19291/, pHost)
+        .replace(/http:\/\/consumer:29291/, cHost);
       const headers = { "Accept": "application/json" };
       if (authorization) headers["Authorization"] = authorization;
       const startTime = Date.now();
