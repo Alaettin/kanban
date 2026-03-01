@@ -6,21 +6,21 @@ const COMPOSE_FILE = path.join(COMPOSE_DIR, "docker-compose.yml");
 const PROJECT_NAME = "edc";
 
 // Fixed EDC configuration (shared by all users)
-// managementUrl = Host → Container (fuer Node.js Proxy)
-// protocolUrl   = Container → Container (fuer EDC DSP Kommunikation)
+// managementUrl = Kanban-Container → EDC-Container (same Docker network)
+// protocolUrl   = EDC-Container → EDC-Container (DSP Kommunikation)
 const EDC_CONFIG = {
   provider: {
     participantId: "provider",
-    managementUrl: "http://localhost:19193/management",
+    managementUrl: "http://edc-provider:19193/management",
     protocolUrl:   "http://provider:19194/protocol",
-    publicUrl:     "http://localhost:19291/public",
+    publicUrl:     "http://edc-provider:19291/public",
     apiKey:        "",
   },
   consumer: {
     participantId: "consumer",
-    managementUrl: "http://localhost:29193/management",
+    managementUrl: "http://edc-consumer:29193/management",
     protocolUrl:   "http://consumer:29194/protocol",
-    publicUrl:     "http://localhost:29291/public",
+    publicUrl:     "http://edc-consumer:29291/public",
     apiKey:        "",
   },
 };
