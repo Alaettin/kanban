@@ -20,6 +20,8 @@ const APP_ICONS = {
   "knowledge-base": '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
   resilience: '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
   "use-case-checker": '<svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  "aas-repo-proxy": '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4.5M10.5 13.5L6.5 17M13.5 13.5L17.5 17"/></svg>',
+  "edc-connector": '<svg viewBox="0 0 24 24"><path d="M2 6h7M2 12h7M2 18h7"/><path d="M15 6h7M15 12h7M15 18h7"/><path d="M9 6l3 3-3 3"/><path d="M15 12l-3 3 3 3"/></svg>',
 };
 
 const I18N = {
@@ -38,6 +40,8 @@ const I18N = {
     "app.knowledge-base": "Dokumente hochladen und als Wissensquelle nutzen",
     "app.resilience": "Resilienz-Tools für die Lieferkette",
     "app.use-case-checker": "Prüfe ob AAS Use Cases erfüllt werden",
+    "app.aas-repo-proxy": "Proxy für AAS Repository APIs",
+    "app.edc-connector": "Dataspace Connector verwalten",
   },
   en: {
     subtitle: "Choose an app to get started.",
@@ -54,6 +58,8 @@ const I18N = {
     "app.knowledge-base": "Upload documents and use as knowledge source",
     "app.resilience": "Supply chain resilience tools",
     "app.use-case-checker": "Check if AAS use cases are fulfilled",
+    "app.aas-repo-proxy": "Proxy for AAS repository APIs",
+    "app.edc-connector": "Manage dataspace connectors",
   },
 };
 

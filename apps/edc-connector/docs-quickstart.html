@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick-Start — EDC Connector</title>
+  <style>
+    :root {
+      --bg: #0A0E17;
+      --surface: #111827;
+      --surface-2: #1F2937;
+      --text: #E5E7EB;
+      --text-2: #9CA3AF;
+      --muted: #6B7280;
+      --provider: #38BDF8;
+      --consumer: #FB923C;
+      --border: #1E293B;
+      --border-2: #334155;
+      --success: #34D399;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'SF Mono', SFMono-Regular, Consolas, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Sticky header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+    }
+
+    .header-inner {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border-2);
+      color: var(--text-2);
+      text-decoration: none;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .back-btn:hover {
+      background: var(--border-2);
+      color: var(--text);
+    }
+
+    .back-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px 16px;
+    }
+
+    .progress-inner {
+      max-width: 880px;
+      margin: 0 auto;
+    }
+
+    .progress-track {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      position: relative;
+    }
+
+    .progress-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      position: relative;
+    }
+
+    .progress-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      border: 2px solid var(--border-2);
+      background: var(--surface-2);
+      color: var(--muted);
+      position: relative;
+      z-index: 2;
+      transition: all 0.2s;
+    }
+
+    .progress-step.provider .progress-dot {
+      border-color: var(--provider);
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--provider);
+    }
+
+    .progress-step.consumer .progress-dot {
+      border-color: var(--consumer);
+      background: rgba(251, 146, 60, 0.12);
+      color: var(--consumer);
+    }
+
+    .progress-label {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 90px;
+    }
+
+    .progress-step.provider .progress-label { color: var(--provider); }
+    .progress-step.consumer .progress-label { color: var(--consumer); }
+
+    .progress-line {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      right: -50%;
+      height: 2px;
+      background: var(--border-2);
+      z-index: 1;
+    }
+
+    .progress-step:last-child .progress-line { display: none; }
+
+    .progress-step.provider .progress-line { background: var(--provider); opacity: 0.3; }
+    .progress-step.consumer .progress-line { background: var(--consumer); opacity: 0.3; }
+
+    /* provider-to-consumer transition line */
+    .progress-step:nth-child(4) .progress-line {
+      background: linear-gradient(90deg, rgba(56,189,248,0.3), rgba(251,146,60,0.3));
+    }
+
+    /* ── Content ── */
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* ── Intro ── */
+    .intro {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 48px;
+      font-size: 15px;
+      color: var(--text-2);
+      line-height: 1.8;
+    }
+
+    /* ── Step card ── */
+    .step-card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px 32px 28px;
+      margin-bottom: 28px;
+      transition: border-color 0.2s;
+    }
+
+    .step-card:hover {
+      border-color: var(--border-2);
+    }
+
+    .step-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 14px 14px 0 0;
+    }
+
+    .step-card.provider::before { background: linear-gradient(90deg, var(--provider), transparent); }
+    .step-card.consumer::before { background: linear-gradient(90deg, var(--consumer), transparent); }
+
+    .step-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .step-number {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-card.provider .step-number {
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--provider);
+      border: 2px solid rgba(56, 189, 248, 0.25);
+    }
+
+    .step-card.consumer .step-number {
+      background: rgba(251, 146, 60, 0.12);
+      color: var(--consumer);
+      border: 2px solid rgba(251, 146, 60, 0.25);
+    }
+
+    .step-title-group { flex: 1; min-width: 0; }
+
+    .step-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .step-location {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .step-card.provider .step-location { color: var(--provider); }
+    .step-card.consumer .step-location { color: var(--consumer); }
+
+    .step-body {
+      color: var(--text-2);
+      font-size: 14.5px;
+      line-height: 1.75;
+    }
+
+    .step-body p { margin-bottom: 14px; }
+
+    .step-body strong { color: var(--text); font-weight: 600; }
+
+    .step-body ul {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 16px;
+    }
+
+    .step-body ul li {
+      position: relative;
+      padding-left: 20px;
+      margin-bottom: 6px;
+    }
+
+    .step-body ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 10px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .step-card.provider .step-body ul li::before { background: var(--provider); opacity: 0.5; }
+    .step-card.consumer .step-body ul li::before { background: var(--consumer); opacity: 0.5; }
+
+    /* ── Field list ── */
+    .field-list {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 14px 0 18px;
+    }
+
+    .field-item {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 5px 0;
+      font-size: 14px;
+    }
+
+    .field-item + .field-item {
+      border-top: 1px solid var(--border);
+    }
+
+    .field-key {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      min-width: 160px;
+    }
+
+    .field-val {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--provider);
+    }
+
+    .step-card.consumer .field-val { color: var(--consumer); }
+
+    .field-val.muted { color: var(--muted); font-style: italic; }
+
+    /* ── Code block ── */
+    .code-block {
+      position: relative;
+      background: #080C14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin: 18px 0;
+      overflow: hidden;
+    }
+
+    .code-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .code-block pre {
+      padding: 18px 20px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--text-2);
+    }
+
+    .code-block .key { color: var(--provider); }
+    .code-block .str { color: var(--success); }
+    .code-block .brace { color: var(--muted); }
+
+    /* ── Tip box ── */
+    .tip-box {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: rgba(56, 189, 248, 0.04);
+      border: 1px solid rgba(56, 189, 248, 0.15);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-top: 18px;
+      font-size: 13.5px;
+      color: var(--text-2);
+      line-height: 1.65;
+    }
+
+    .step-card.consumer .tip-box {
+      background: rgba(251, 146, 60, 0.04);
+      border-color: rgba(251, 146, 60, 0.15);
+    }
+
+    .tip-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      margin-top: 1px;
+    }
+
+    .step-card.provider .tip-icon { color: var(--provider); }
+    .step-card.consumer .tip-icon { color: var(--consumer); }
+
+    .tip-label {
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+
+    .step-card.provider .tip-label { color: var(--provider); }
+    .step-card.consumer .tip-label { color: var(--consumer); }
+
+    /* ── Status dots ── */
+    .status-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: var(--text-2);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+    }
+
+    /* ── Status flow ── */
+    .status-flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+
+    .status-badge {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .status-badge.final {
+      background: rgba(52, 211, 153, 0.1);
+      border-color: rgba(52, 211, 153, 0.25);
+      color: var(--success);
+    }
+
+    .status-arrow {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 0 6px;
+    }
+
+    /* ── Success box ── */
+    .success-card {
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.06), rgba(52, 211, 153, 0.02));
+      border: 1px solid rgba(52, 211, 153, 0.2);
+      border-radius: 14px;
+      padding: 32px;
+      margin-top: 48px;
+      text-align: center;
+    }
+
+    .success-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(52, 211, 153, 0.1);
+      border: 2px solid rgba(52, 211, 153, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 18px;
+    }
+
+    .success-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--success);
+    }
+
+    .success-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--success);
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .success-text {
+      font-size: 15px;
+      color: var(--text-2);
+      line-height: 1.75;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ── Connector line between steps ── */
+    .step-connector {
+      display: flex;
+      justify-content: center;
+      padding: 0 0 0 53px;
+      margin: -12px 0;
+    }
+
+    .step-connector-line {
+      width: 2px;
+      height: 28px;
+      border-radius: 1px;
+    }
+
+    .step-connector.provider .step-connector-line {
+      background: linear-gradient(180deg, rgba(56,189,248,0.3), rgba(56,189,248,0.08));
+    }
+
+    .step-connector.consumer .step-connector-line {
+      background: linear-gradient(180deg, rgba(251,146,60,0.3), rgba(251,146,60,0.08));
+    }
+
+    .step-connector.transition .step-connector-line {
+      height: 40px;
+      background: linear-gradient(180deg, rgba(56,189,248,0.25), var(--border), rgba(251,146,60,0.25));
+    }
+
+    /* ── Section divider ── */
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 40px 0 28px;
+    }
+
+    .section-divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .section-divider-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid;
+    }
+
+    .section-divider.provider .section-divider-label {
+      color: var(--provider);
+      border-color: rgba(56, 189, 248, 0.2);
+      background: rgba(56, 189, 248, 0.06);
+    }
+
+    .section-divider.consumer .section-divider-label {
+      color: var(--consumer);
+      border-color: rgba(251, 146, 60, 0.2);
+      background: rgba(251, 146, 60, 0.06);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .content { padding: 24px 16px 60px; }
+      .step-card { padding: 24px 20px 22px; }
+      .intro { padding: 20px 22px; }
+      .step-title { font-size: 17px; }
+      .step-number { width: 36px; height: 36px; font-size: 16px; }
+      .field-key { min-width: 120px; }
+      .progress-label { font-size: 9px; max-width: 60px; }
+      .progress-dot { width: 24px; height: 24px; font-size: 11px; }
+      .status-flow { gap: 4px; }
+      .status-badge { font-size: 11px; padding: 3px 8px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <a href="/apps/edc-connector" class="back-btn" title="Zurueck">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </a>
+      <h1 class="header-title">Quick-Start</h1>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-bar">
+      <div class="progress-inner">
+        <div class="progress-track">
+          <div class="progress-step provider">
+            <div class="progress-dot">1</div>
+            <span class="progress-label">Docker</span>
+            <div class="progress-line"></div>
+          </div>
+          <div class="progress-step provider">
+            <div class="progress-dot">2</div>
+            <span class="progress-label">Asset</span>
+            <div class="progress-line"></div>
+          </div>
+          <div class="progress-step provider">
+            <div class="progress-dot">3</div>
+            <span class="progress-label">Policy</span>
+            <div class="progress-line"></div>
+          </div>
+          <div class="progress-step provider">
+            <div class="progress-dot">4</div>
+            <span class="progress-label">Contract Def</span>
+            <div class="progress-line"></div>
+          </div>
+          <div class="progress-step consumer">
+            <div class="progress-dot">5</div>
+            <span class="progress-label">Katalog</span>
+            <div class="progress-line"></div>
+          </div>
+          <div class="progress-step consumer">
+            <div class="progress-dot">6</div>
+            <span class="progress-label">Verhandlung</span>
+            <div class="progress-line"></div>
+          </div>
+          <div class="progress-step consumer">
+            <div class="progress-dot">7</div>
+            <span class="progress-label">Transfer</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- Intro -->
+    <div class="intro">
+      Diese Anleitung fuehrt Sie Schritt fuer Schritt durch den kompletten Datenaustausch-Prozess:
+      vom Erstellen eines Assets bis zum Abrufen der Daten. Alle Schritte koennen direkt in der
+      EDC Connector App ausgefuehrt werden.
+    </div>
+
+    <!-- ── Provider Section ── -->
+    <div class="section-divider provider">
+      <div class="section-divider-line"></div>
+      <span class="section-divider-label">Provider</span>
+      <div class="section-divider-line"></div>
+    </div>
+
+    <!-- Step 1 -->
+    <div class="step-card provider">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <div class="step-title-group">
+          <div class="step-title">Docker Container starten</div>
+          <div class="step-location">Landing-Menue</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Klicken Sie auf <strong>"Both"</strong> um den Split-Screen zu oeffnen,
+          dann auf den gruenen <strong>Start</strong>-Button in der Status-Bar.
+        </p>
+        <p>
+          Warten Sie, bis beide Status-Punkte gruen werden:
+        </p>
+        <div class="status-dots">
+          <span class="dot"></span> Provider aktiv
+          &nbsp;&nbsp;
+          <span class="dot"></span> Consumer aktiv
+        </div>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            Der erste Start kann 1-2 Minuten dauern, da das Docker Image gebaut wird.
+            Bei nachfolgenden Starts geht es deutlich schneller.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-connector provider"><div class="step-connector-line"></div></div>
+
+    <!-- Step 2 -->
+    <div class="step-card provider">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <div class="step-title-group">
+          <div class="step-title">Asset erstellen</div>
+          <div class="step-location">Provider &rarr; Assets Tab</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Klicken Sie <strong>"Asset erstellen"</strong> und fuellen Sie die Felder aus:
+        </p>
+
+        <div class="field-list">
+          <div class="field-item">
+            <span class="field-key">Asset ID</span>
+            <span class="field-val">product-data-1</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Name</span>
+            <span class="field-val">Produktdaten API</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Content Type</span>
+            <span class="field-val">application/json</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Base URL</span>
+            <span class="field-val">https://jsonplaceholder.typicode.com/todos/1</span>
+          </div>
+        </div>
+
+        <p>
+          Klicken Sie <strong>"Erstellen"</strong> &mdash; das Asset erscheint in der Liste.
+        </p>
+
+        <div class="code-block">
+          <div class="code-label"><span>JSON</span></div>
+<pre><span class="brace">{</span>
+  <span class="key">"@context"</span>: <span class="brace">{</span><span class="key">"@vocab"</span>: <span class="str">"https://w3id.org/edc/v0.0.1/ns/"</span><span class="brace">}</span>,
+  <span class="key">"@id"</span>: <span class="str">"product-data-1"</span>,
+  <span class="key">"properties"</span>: <span class="brace">{</span>
+    <span class="key">"name"</span>: <span class="str">"Produktdaten API"</span>,
+    <span class="key">"contenttype"</span>: <span class="str">"application/json"</span>
+  <span class="brace">}</span>,
+  <span class="key">"dataAddress"</span>: <span class="brace">{</span>
+    <span class="key">"type"</span>: <span class="str">"HttpData"</span>,
+    <span class="key">"baseUrl"</span>: <span class="str">"https://jsonplaceholder.typicode.com/todos/1"</span>
+  <span class="brace">}</span>
+<span class="brace">}</span></pre>
+        </div>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            Die Base URL kann jede beliebige HTTP(S)-Datenquelle sein &mdash; z.B. eine REST API,
+            eine statische JSON-Datei oder ein interner Microservice.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-connector provider"><div class="step-connector-line"></div></div>
+
+    <!-- Step 3 -->
+    <div class="step-card provider">
+      <div class="step-header">
+        <div class="step-number">3</div>
+        <div class="step-title-group">
+          <div class="step-title">Policy erstellen</div>
+          <div class="step-location">Provider &rarr; Policies Tab</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Klicken Sie <strong>"Policy erstellen"</strong> und konfigurieren Sie:
+        </p>
+
+        <div class="field-list">
+          <div class="field-item">
+            <span class="field-key">Policy ID</span>
+            <span class="field-val">open-policy-1</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Typ</span>
+            <span class="field-val">Open</span>
+          </div>
+        </div>
+
+        <p>
+          Der Typ <strong>Open</strong> bedeutet: keine Einschraenkungen &mdash; jeder Consumer darf zugreifen.
+          Klicken Sie <strong>"Erstellen"</strong>.
+        </p>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            In einer produktiven Umgebung wuerden Sie hier Zugriffsregeln definieren,
+            z.B. bestimmte Business-Partner-IDs oder Zeitbeschraenkungen.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-connector provider"><div class="step-connector-line"></div></div>
+
+    <!-- Step 4 -->
+    <div class="step-card provider">
+      <div class="step-header">
+        <div class="step-number">4</div>
+        <div class="step-title-group">
+          <div class="step-title">Contract Definition erstellen</div>
+          <div class="step-location">Provider &rarr; Contract Defs Tab</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Klicken Sie <strong>"Contract Def erstellen"</strong> und fuellen Sie die Felder aus:
+        </p>
+
+        <div class="field-list">
+          <div class="field-item">
+            <span class="field-key">Contract Def ID</span>
+            <span class="field-val">contract-def-1</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Access Policy ID</span>
+            <span class="field-val">open-policy-1</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Contract Policy ID</span>
+            <span class="field-val">open-policy-1</span>
+          </div>
+          <div class="field-item">
+            <span class="field-key">Asset ID Filter</span>
+            <span class="field-val muted">(leer lassen fuer alle Assets)</span>
+          </div>
+        </div>
+
+        <p>
+          Klicken Sie <strong>"Erstellen"</strong>. Die Contract Definition verknuepft Asset(s) mit
+          den Zugriffs- und Vertragsregeln.
+        </p>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            Ohne Asset ID Filter gilt die Contract Definition fuer alle vorhandenen Assets.
+            Fuer gezielte Zuordnung tragen Sie eine spezifische Asset ID ein.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transition divider -->
+    <div class="step-connector transition"><div class="step-connector-line"></div></div>
+
+    <!-- ── Consumer Section ── -->
+    <div class="section-divider consumer">
+      <div class="section-divider-line"></div>
+      <span class="section-divider-label">Consumer</span>
+      <div class="section-divider-line"></div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step-card consumer">
+      <div class="step-header">
+        <div class="step-number">5</div>
+        <div class="step-title-group">
+          <div class="step-title">Katalog abfragen</div>
+          <div class="step-location">Consumer &rarr; Catalog Tab</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Die <strong>Counter Party Address</strong> sollte bereits vorausgefuellt sein:
+        </p>
+
+        <div class="field-list">
+          <div class="field-item">
+            <span class="field-key">Counter Party Address</span>
+            <span class="field-val">http://provider:19194/protocol</span>
+          </div>
+        </div>
+
+        <p>
+          Klicken Sie <strong>"Katalog abfragen"</strong>. Das Asset
+          <strong>product-data-1</strong> erscheint mit der zugehoerigen Policy.
+        </p>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            Der Katalog zeigt nur Assets, fuer die eine passende Contract Definition existiert.
+            Wenn nichts angezeigt wird, pruefen Sie die Schritte 2-4.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-connector consumer"><div class="step-connector-line"></div></div>
+
+    <!-- Step 6 -->
+    <div class="step-card consumer">
+      <div class="step-header">
+        <div class="step-number">6</div>
+        <div class="step-title-group">
+          <div class="step-title">Vertrag verhandeln</div>
+          <div class="step-location">Consumer &rarr; Negotiations Tab</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Klicken Sie <strong>"Verhandeln"</strong> auf dem Katalog-Eintrag.
+          Die Felder werden automatisch ausgefuellt.
+        </p>
+        <p>
+          Klicken Sie <strong>"Starten"</strong> und wechseln Sie zum <strong>Negotiations Tab</strong>.
+          Der Status durchlaeuft folgende Phasen:
+        </p>
+
+        <div class="status-flow">
+          <span class="status-badge">REQUESTED</span>
+          <span class="status-arrow">&rarr;</span>
+          <span class="status-badge">AGREED</span>
+          <span class="status-arrow">&rarr;</span>
+          <span class="status-badge">VERIFIED</span>
+          <span class="status-arrow">&rarr;</span>
+          <span class="status-badge final">FINALIZED</span>
+        </div>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            Die Verhandlung laeuft automatisch ab. Aktualisieren Sie die Ansicht, falls der
+            Status nicht sofort wechselt &mdash; der Prozess dauert in der Regel wenige Sekunden.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-connector consumer"><div class="step-connector-line"></div></div>
+
+    <!-- Step 7 -->
+    <div class="step-card consumer">
+      <div class="step-header">
+        <div class="step-number">7</div>
+        <div class="step-title-group">
+          <div class="step-title">Transfer starten</div>
+          <div class="step-location">Consumer &rarr; Transfers Tab</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>
+          Bei einer <strong>FINALIZED</strong> Verhandlung: Klicken Sie <strong>"Transfer starten"</strong>.
+          Die Felder werden automatisch ausgefuellt.
+        </p>
+        <p>
+          Klicken Sie <strong>"Starten"</strong> und wechseln Sie zum <strong>Transfers Tab</strong>.
+        </p>
+
+        <div class="status-flow">
+          <span class="status-badge">REQUESTED</span>
+          <span class="status-arrow">&rarr;</span>
+          <span class="status-badge final">STARTED</span>
+        </div>
+
+        <p>
+          Klicken Sie <strong>"Daten abrufen"</strong> &mdash; Sie erhalten einen
+          EDR-Endpunkt mit Authorization-Token, ueber den die Daten abgerufen werden koennen.
+        </p>
+
+        <div class="tip-box">
+          <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <div>
+            <div class="tip-label">Tipp</div>
+            Der EDR (Endpoint Data Reference) enthaelt die URL und den Authorization-Token.
+            Dieser Token ist zeitlich begrenzt &mdash; starten Sie bei Bedarf einen neuen Transfer.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success -->
+    <div class="success-card">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="success-title">Geschafft!</div>
+      <div class="success-text">
+        Sie haben erfolgreich Daten ueber den Eclipse Dataspace Connector ausgetauscht!
+        Der Provider hat ein Asset bereitgestellt, und der Consumer hat es ueber das
+        Dataspace Protocol verhandelt und abgerufen.
+      </div>
+    </div>
+
+  </main>
+
+</body>
+</html>

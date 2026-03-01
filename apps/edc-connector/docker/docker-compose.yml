@@ -1,0 +1,49 @@
+# EDC Connector – Provider + Consumer (iam-mock, in-memory)
+# Eigenes Image aus Eclipse EDC Samples – keine Auth noetig
+# Erster Start: Image wird gebaut (~5 Min), danach gecacht
+# Start: docker compose -p edc -f docker-compose.yml up -d
+# Stop:  docker compose -p edc -f docker-compose.yml down
+
+services:
+
+  # ── Provider ──────────────────────────────────────────────────
+  provider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: edc-connector:local
+    container_name: edc-provider
+    ports:
+      - "19191:19191"   # Default API
+      - "19192:19192"   # Control API
+      - "19193:19193"   # Management API
+      - "19194:19194"   # Protocol / DSP
+      - "19291:19291"   # Public API (Data Plane)
+    volumes:
+      - ./provider.properties:/app/config.properties:ro
+    networks:
+      - edc-network
+    restart: unless-stopped
+
+  # ── Consumer ──────────────────────────────────────────────────
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: edc-connector:local
+    container_name: edc-consumer
+    ports:
+      - "29191:29191"   # Default API
+      - "29192:29192"   # Control API
+      - "29193:29193"   # Management API
+      - "29194:29194"   # Protocol / DSP
+      - "29291:29291"   # Public API (Data Plane)
+    volumes:
+      - ./consumer.properties:/app/config.properties:ro
+    networks:
+      - edc-network
+    restart: unless-stopped
+
+networks:
+  edc-network:
+    driver: bridge

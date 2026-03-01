@@ -26,6 +26,8 @@ const AVAILABLE_APPS = [
   { id: "knowledge-base", name: "Knowledge Base" },
   { id: "resilience", name: "Resilience" },
   { id: "use-case-checker", name: "Use Case Checker" },
+  { id: "aas-repo-proxy", name: "AAS Repository Proxy" },
+  { id: "edc-connector", name: "EDC Connector" },
 ];
 
 const I18N = {

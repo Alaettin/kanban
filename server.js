@@ -26,6 +26,8 @@ const aasChatRoutes = require("./apps/aas-chat/routes");
 const kbRoutes = require("./apps/knowledge-base/routes");
 const resilienceRoutes = require("./apps/resilience/routes");
 const uccRoutes = require("./apps/use-case-checker/routes");
+const aasWrapperRoutes = require("./apps/aas-wrapper/routes");
+const edcRoutes = require("./apps/edc-connector/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
@@ -34,6 +36,8 @@ const aasChatDir = path.join(__dirname, "apps", "aas-chat");
 const kbDir = path.join(__dirname, "apps", "knowledge-base");
 const resilienceDir = path.join(__dirname, "apps", "resilience");
 const uccDir = path.join(__dirname, "apps", "use-case-checker");
+const aasWrapperDir = path.join(__dirname, "apps", "aas-wrapper");
+const edcDir = path.join(__dirname, "apps", "edc-connector");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -104,6 +108,24 @@ registry.register({
   icon: "use-case-checker",
   path: "/apps/use-case-checker",
   color: "#0ea5e9",
+});
+
+registry.register({
+  id: "aas-repo-proxy",
+  name: "AAS Repository Proxy",
+  description: "Proxy für AAS Repository APIs",
+  icon: "aas-repo-proxy",
+  path: "/apps/aas-repo-proxy",
+  color: "#0d9488",
+});
+
+registry.register({
+  id: "edc-connector",
+  name: "EDC Connector",
+  description: "Dataspace Connector verwalten",
+  icon: "edc-connector",
+  path: "/apps/edc-connector",
+  color: "#E11D48",
 });
 
 // --- Middleware ---
@@ -316,6 +338,26 @@ const uccRouter = express.Router();
 uccRoutes.mountRoutes(uccRouter);
 app.use("/apps/use-case-checker", uccRouter);
 
+// --- AAS Repository Proxy App ---
+app.get("/apps/aas-repo-proxy/styles.css", (req, res) => res.sendFile(path.join(aasWrapperDir, "styles.css")));
+app.get("/apps/aas-repo-proxy/app.js", (req, res) => res.sendFile(path.join(aasWrapperDir, "app.js")));
+app.get("/apps/aas-repo-proxy/docs", auth.requireAuthPage, requireAppAccess("aas-repo-proxy"), (req, res) => res.sendFile(path.join(aasWrapperDir, "docs.html")));
+app.get("/apps/aas-repo-proxy", auth.requireAuthPage, requireAppAccess("aas-repo-proxy"), (req, res) => res.sendFile(path.join(aasWrapperDir, "index.html")));
+const aasWrapperRouter = express.Router();
+aasWrapperRoutes.mountRoutes(aasWrapperRouter);
+app.use("/apps/aas-repo-proxy", aasWrapperRouter);
+
+// --- EDC Connector App ---
+app.get("/apps/edc-connector/styles.css", (req, res) => res.sendFile(path.join(edcDir, "styles.css")));
+app.get("/apps/edc-connector/app.js", (req, res) => res.sendFile(path.join(edcDir, "app.js")));
+app.get("/apps/edc-connector/docs-grundlagen", auth.requireAuthPage, requireAppAccess("edc-connector"), (req, res) => res.sendFile(path.join(edcDir, "docs-grundlagen.html")));
+app.get("/apps/edc-connector/docs-api", auth.requireAuthPage, requireAppAccess("edc-connector"), (req, res) => res.sendFile(path.join(edcDir, "docs-api.html")));
+app.get("/apps/edc-connector/docs-quickstart", auth.requireAuthPage, requireAppAccess("edc-connector"), (req, res) => res.sendFile(path.join(edcDir, "docs-quickstart.html")));
+app.get("/apps/edc-connector", auth.requireAuthPage, requireAppAccess("edc-connector"), (req, res) => res.sendFile(path.join(edcDir, "index.html")));
+const edcRouter = express.Router();
+edcRoutes.mountRoutes(edcRouter);
+app.use("/apps/edc-connector", edcRouter);
+
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
 
@@ -465,7 +507,10 @@ app.delete("/api/admin/users/:userId", auth.requireAdmin, async (req, res) => {
     }
     // 2. Delete DTI connectors (CASCADE handles all data tables)
     await db.run("DELETE FROM dti_connectors WHERE user_id = ?", [userId]);
-    // 2b. Delete KB documents
+    // 2b. Delete EDC data
+    await db.run("DELETE FROM edc_comm_log WHERE user_id = ?", [userId]);
+    await db.run("DELETE FROM edc_saved_objects WHERE user_id = ?", [userId]);
+    // 2c. Delete KB documents
     await db.run("DELETE FROM kb_documents WHERE user_id = ?", [userId]);
     await db.run("DELETE FROM kb_settings WHERE user_id = ?", [userId]);
     // 2c. Delete login history
@@ -497,6 +542,8 @@ async function start() {
   await kbRoutes.initKnowledgeBaseTables();
   await resilienceRoutes.initResilienceTables();
   await uccRoutes.initUccTables();
+  await aasWrapperRoutes.initAasWrapperTables();
+  await edcRoutes.initEdcTables();
   resilienceRoutes.scheduleImports();
   auth.startMaintenanceJobs();
 

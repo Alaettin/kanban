@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>EDC Connector</title>
+  <link rel="stylesheet" href="/apps/edc-connector/styles.css?v=2" />
+</head>
+<body>
+
+  <!-- ═══ Header ═══ -->
+  <header class="app-header">
+    <a id="back-btn" href="/dashboard" class="header-back-btn" title="Back">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <path d="M2 6h7M2 12h7M2 18h7"/><path d="M15 6h7M15 12h7M15 18h7"/>
+        <path d="M9 6l3 3-3 3"/><path d="M15 12l-3 3 3 3"/>
+      </svg>
+      <span id="brand-text">EDC Connector</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ Main ═══ -->
+  <div id="main-container" class="main-container">
+
+    <!-- ═══ Landing View ═══ -->
+    <div class="edc-landing" id="edc-landing-view">
+      <div>
+        <div class="edc-landing-title" id="landing-title">EDC Connector</div>
+        <div class="edc-landing-sub" id="landing-sub">Modus auswaehlen</div>
+      </div>
+      <div class="mode-cards">
+        <!-- Provider Only (disabled) -->
+        <div class="mode-card disabled" id="mode-provider">
+          <span class="mode-badge mode-badge-tbd">TBD</span>
+          <div class="mode-icon">
+            <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" stroke="#38BDF8" fill="none" stroke-dasharray="82 82" stroke-dashoffset="0"/></svg>
+          </div>
+          <div class="mode-label">Provider</div>
+          <div class="mode-sub">Coming soon</div>
+        </div>
+        <!-- Consumer Only (disabled) -->
+        <div class="mode-card disabled" id="mode-consumer">
+          <span class="mode-badge mode-badge-tbd">TBD</span>
+          <div class="mode-icon">
+            <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" stroke="#FB923C" fill="none" stroke-dasharray="82 82" stroke-dashoffset="-82"/></svg>
+          </div>
+          <div class="mode-label">Consumer</div>
+          <div class="mode-sub">Coming soon</div>
+        </div>
+        <!-- Both (active) -->
+        <div class="mode-card active" id="mode-both">
+          <span class="mode-badge mode-badge-active">Aktiv</span>
+          <div class="mode-icon">
+            <svg viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="26" stroke="#38BDF8" fill="none" stroke-dasharray="82 82" stroke-dashoffset="0"/>
+              <circle cx="32" cy="32" r="26" stroke="#FB923C" fill="none" stroke-dasharray="82 82" stroke-dashoffset="-82"/>
+            </svg>
+          </div>
+          <div class="mode-label">Both</div>
+          <div class="mode-sub">Provider &amp; Consumer</div>
+        </div>
+      </div>
+      <div class="info-cards">
+        <a class="info-card" href="/apps/edc-connector/docs-grundlagen" id="info-grundlagen">
+          <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span class="info-card-text" id="info-grundlagen-text">EDC Grundlagen</span>
+        </a>
+        <a class="info-card" href="/apps/edc-connector/docs-api" id="info-api">
+          <svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
+          <span class="info-card-text" id="info-api-text">API-Referenz</span>
+        </a>
+        <a class="info-card" href="/apps/edc-connector/docs-quickstart" id="info-quickstart">
+          <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span class="info-card-text" id="info-quickstart-text">Quick-Start</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ═══ Split-Screen View ═══ -->
+    <div id="edc-split-view" hidden>
+
+    <!-- EDC Status Bar -->
+    <div class="edc-status-bar" id="edc-status-bar">
+      <div class="status-bar-left">
+        <div class="status-bar-group">
+          <div class="status-bar-item">
+            <span class="status-dot" id="provider-dot"></span>
+            <span class="status-bar-text"><span class="status-bar-label" style="color:var(--provider)">Provider</span>: <span id="provider-status-text">--</span></span>
+          </div>
+        </div>
+        <div class="status-bar-sep"></div>
+        <div class="status-bar-group">
+          <div class="status-bar-item">
+            <span class="status-dot" id="consumer-dot"></span>
+            <span class="status-bar-text"><span class="status-bar-label" style="color:var(--consumer)">Consumer</span>: <span id="consumer-status-text">--</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="status-bar-right">
+        <button class="status-btn status-btn-start" id="edc-start-btn" type="button">
+          <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span id="edc-start-label">Start</span>
+        </button>
+        <button class="status-btn status-btn-stop" id="edc-stop-btn" type="button">
+          <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          <span id="edc-stop-label">Stop</span>
+        </button>
+        <button class="status-btn status-btn-restart" id="edc-restart-btn" type="button">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span id="edc-restart-label">Restart</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Split Panels -->
+    <div class="split-container">
+
+      <!-- Provider Panel -->
+      <div class="edc-panel provider-panel">
+        <div class="panel-header provider-header">
+          <span class="panel-dot provider-dot"></span>
+          <span class="panel-title provider-title">PROVIDER</span>
+          <span class="panel-participant-id" id="provider-participant-id"></span>
+          <span class="panel-status" id="provider-status"></span>
+        </div>
+        <div class="panel-tabs" id="provider-tabs">
+          <button class="panel-tab active" data-tab="p-assets" id="tab-p-assets">Assets</button>
+          <button class="panel-tab" data-tab="p-policies" id="tab-p-policies">Policies</button>
+          <button class="panel-tab" data-tab="p-contractdefs" id="tab-p-contractdefs">Contract Defs</button>
+          <button class="panel-tab" data-tab="p-settings" id="tab-p-settings">Settings</button>
+        </div>
+        <div class="panel-content" id="provider-content">
+
+          <!-- Provider: Assets -->
+          <section class="tab-section active" id="p-assets">
+            <div class="tab-toolbar">
+              <h3 id="p-assets-title">Assets</h3>
+              <div class="tab-toolbar-actions">
+                <button class="btn btn-sm btn-secondary" id="p-assets-refresh-btn" type="button">
+                  <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button class="btn btn-sm btn-accent-provider" id="p-assets-add-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                  <span id="p-assets-add-label">Asset erstellen</span>
+                </button>
+              </div>
+            </div>
+            <div id="p-assets-form" class="create-form" hidden>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:.68rem;font-weight:600;color:var(--text-2)">Asset erstellen</span>
+                <button class="example-load-btn" id="example-load-assets" type="button">Beispiel laden</button>
+              </div>
+              <div class="form-row">
+                <label>EDC Asset ID <span class="info-icon" data-info="Eindeutige ID fuer das Asset im EDC. Wird bei Katalog-Abfragen und Verhandlungen referenziert." data-example="product-data-1">i</span></label>
+                <input id="p-asset-id" type="text" placeholder="product-data-1" />
+              </div>
+              <div class="form-row">
+                <label>Name <span class="info-icon" data-info="Anzeigename des Assets" data-example="Produktdaten API">i</span></label>
+                <input id="p-asset-name" type="text" placeholder="Produktdaten API" />
+              </div>
+              <div class="form-row">
+                <label>Content Type <span class="info-icon" data-info="MIME-Type der Datenquelle" data-example="application/json">i</span></label>
+                <input id="p-asset-contenttype" type="text" value="application/json" />
+              </div>
+              <div class="form-row">
+                <label>Data Address: Base URL <span class="info-icon" data-info="HTTP-Endpunkt der Datenquelle, auf die das Asset verweist" data-example="https://jsonplaceholder.typicode.com/todos/1">i</span></label>
+                <input id="p-asset-baseurl" type="url" placeholder="https://jsonplaceholder.typicode.com/todos/1" />
+              </div>
+              <div class="form-row">
+                <label>Data Address: Proxy-Optionen <span class="info-icon" data-info="Bestimmt, was der Consumer beim Datenabruf durchreichen darf. Fuer APIs mit mehreren Endpunkten (z.B. AAS) alle aktivieren." data-example="Alle 4 aktiv fuer REST-APIs">i</span></label>
+                <div class="proxy-checkboxes">
+                  <label class="proxy-check" title="Consumer kann Sub-Pfade anhaengen (z.B. /shells/{id})"><input id="p-asset-proxypath" type="checkbox" /> Path</label>
+                  <label class="proxy-check" title="Consumer kann HTTP-Methode waehlen (GET, POST, PUT, DELETE)"><input id="p-asset-proxymethod" type="checkbox" /> Method</label>
+                  <label class="proxy-check" title="Consumer kann einen Request-Body mitschicken"><input id="p-asset-proxybody" type="checkbox" /> Body</label>
+                  <label class="proxy-check" title="Consumer kann Query-Parameter anhaengen (z.B. ?limit=10)"><input id="p-asset-proxyquery" type="checkbox" /> Query</label>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-secondary" id="p-assets-cancel-btn" type="button">Abbrechen</button>
+                <button class="btn btn-sm btn-accent-provider" id="p-assets-create-btn" type="button">Erstellen</button>
+              </div>
+            </div>
+            <div id="p-assets-list" class="object-list"></div>
+          </section>
+
+          <!-- Provider: Policies -->
+          <section class="tab-section" id="p-policies">
+            <div class="tab-toolbar">
+              <h3 id="p-policies-title">Policies</h3>
+              <div class="tab-toolbar-actions">
+                <button class="btn btn-sm btn-secondary" id="p-policies-refresh-btn" type="button">
+                  <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button class="btn btn-sm btn-accent-provider" id="p-policies-add-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                  <span id="p-policies-add-label">Policy erstellen</span>
+                </button>
+              </div>
+            </div>
+            <div id="p-policies-form" class="create-form" hidden>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:.68rem;font-weight:600;color:var(--text-2)">Policy erstellen</span>
+                <button class="example-load-btn" id="example-load-policies" type="button">Beispiel laden</button>
+              </div>
+              <div class="form-row">
+                <label>Policy ID <span class="info-icon" data-info="Eindeutige ID fuer die Policy" data-example="open-policy-1">i</span></label>
+                <input id="p-policy-id" type="text" placeholder="open-policy-1" />
+              </div>
+              <div class="form-row">
+                <label id="p-policy-type-label">Typ</label>
+                <select id="p-policy-type">
+                  <option value="open">Open (keine Einschr&auml;nkungen)</option>
+                  <option value="constrained">Mit Constraint</option>
+                </select>
+              </div>
+              <div id="p-policy-constraint-fields" hidden>
+                <div class="form-row">
+                  <label>Left Operand <span class="info-icon" data-info="Attribut fuer die Einschraenkung" data-example="BusinessPartnerNumber">i</span></label>
+                  <input id="p-policy-left" type="text" placeholder="BusinessPartnerNumber" />
+                </div>
+                <div class="form-row">
+                  <label>Operator</label>
+                  <select id="p-policy-operator">
+                    <option value="eq">eq (=)</option>
+                    <option value="neq">neq (!=)</option>
+                    <option value="in">in</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label>Right Operand <span class="info-icon" data-info="Wert fuer den Vergleich" data-example="BPN000001">i</span></label>
+                  <input id="p-policy-right" type="text" placeholder="BPN000001" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-secondary" id="p-policies-cancel-btn" type="button">Abbrechen</button>
+                <button class="btn btn-sm btn-accent-provider" id="p-policies-create-btn" type="button">Erstellen</button>
+              </div>
+            </div>
+            <div id="p-policies-list" class="object-list"></div>
+          </section>
+
+          <!-- Provider: Contract Definitions -->
+          <section class="tab-section" id="p-contractdefs">
+            <div class="tab-toolbar">
+              <h3 id="p-contractdefs-title">Contract Definitions</h3>
+              <div class="tab-toolbar-actions">
+                <button class="btn btn-sm btn-secondary" id="p-contractdefs-refresh-btn" type="button">
+                  <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button class="btn btn-sm btn-accent-provider" id="p-contractdefs-add-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                  <span id="p-contractdefs-add-label">Contract Def erstellen</span>
+                </button>
+              </div>
+            </div>
+            <div id="p-contractdefs-form" class="create-form" hidden>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:.68rem;font-weight:600;color:var(--text-2)">Contract Def erstellen</span>
+                <button class="example-load-btn" id="example-load-contractdefs" type="button">Beispiel laden</button>
+              </div>
+              <div class="form-row">
+                <label>Contract Definition ID <span class="info-icon" data-info="Eindeutige ID fuer die Contract Definition" data-example="contract-def-1">i</span></label>
+                <input id="p-cdef-id" type="text" placeholder="contract-def-1" />
+              </div>
+              <div class="form-row">
+                <label>Access Policy ID <span class="info-icon" data-info="ID einer existierenden Policy fuer den Zugriff" data-example="open-policy-1">i</span></label>
+                <input id="p-cdef-access-policy" type="text" placeholder="open-policy-1" />
+              </div>
+              <div class="form-row">
+                <label>Contract Policy ID <span class="info-icon" data-info="ID einer existierenden Policy fuer den Vertrag" data-example="open-policy-1">i</span></label>
+                <input id="p-cdef-contract-policy" type="text" placeholder="open-policy-1" />
+              </div>
+              <div class="form-row">
+                <label>EDC Asset ID Filter (leer = alle) <span class="info-icon" data-info="Auf bestimmtes Asset einschraenken. Leer lassen fuer alle Assets." data-example="product-data-1">i</span></label>
+                <input id="p-cdef-asset-filter" type="text" placeholder="product-data-1" />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-secondary" id="p-contractdefs-cancel-btn" type="button">Abbrechen</button>
+                <button class="btn btn-sm btn-accent-provider" id="p-contractdefs-create-btn" type="button">Erstellen</button>
+              </div>
+            </div>
+            <div id="p-contractdefs-list" class="object-list"></div>
+          </section>
+
+          <!-- Provider: Settings -->
+          <section class="tab-section" id="p-settings">
+            <div class="settings-section">
+              <h3 id="p-settings-title">Provider Settings</h3>
+              <div class="form-row">
+                <label id="lbl-p-url">Management API URL</label>
+                <input id="f-provider-url" type="url" readonly />
+              </div>
+              <div class="form-row">
+                <label id="lbl-p-protocol">Protocol URL</label>
+                <input id="f-provider-protocol" type="url" readonly />
+              </div>
+              <div class="form-row">
+                <label id="lbl-p-key">API Key</label>
+                <input id="f-provider-key" type="text" readonly />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-accent-provider" id="provider-test-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span id="provider-test-label">Verbindung testen</span>
+                </button>
+                <span id="provider-test-status" class="connection-status"></span>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="split-divider"></div>
+
+      <!-- Consumer Panel -->
+      <div class="edc-panel consumer-panel">
+        <div class="panel-header consumer-header">
+          <span class="panel-dot consumer-dot"></span>
+          <span class="panel-title consumer-title">CONSUMER</span>
+          <span class="panel-participant-id" id="consumer-participant-id"></span>
+          <span class="panel-status" id="consumer-status"></span>
+        </div>
+        <div class="panel-tabs" id="consumer-tabs">
+          <button class="panel-tab active" data-tab="c-catalog" id="tab-c-catalog">Catalog</button>
+          <button class="panel-tab" data-tab="c-negotiations" id="tab-c-negotiations">Negotiations</button>
+          <button class="panel-tab" data-tab="c-transfers" id="tab-c-transfers">Transfers</button>
+          <button class="panel-tab" data-tab="c-settings" id="tab-c-settings">Settings</button>
+        </div>
+        <div class="panel-content" id="consumer-content">
+
+          <!-- Consumer: Catalog -->
+          <section class="tab-section active" id="c-catalog">
+            <div class="tab-toolbar">
+              <h3 id="c-catalog-title">Catalog</h3>
+            </div>
+            <div class="catalog-query-form">
+              <div class="form-row">
+                <label id="lbl-counter-party">Counter Party Address (Provider Protocol URL) <span class="info-icon" data-info="DSP Protocol URL des Providers (Docker-intern)" data-example="http://provider:19194/protocol">i</span></label>
+                <input id="c-catalog-address" type="url" placeholder="http://provider:19194/protocol" />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-accent-consumer" id="c-catalog-query-btn" type="button">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span id="c-catalog-query-label">Katalog abfragen</span>
+                </button>
+              </div>
+            </div>
+            <div id="c-catalog-results" class="object-list"></div>
+          </section>
+
+          <!-- Consumer: Negotiations -->
+          <section class="tab-section" id="c-negotiations">
+            <div class="tab-toolbar">
+              <h3 id="c-negotiations-title">Negotiations</h3>
+              <div class="tab-toolbar-actions">
+                <button class="btn btn-sm btn-secondary" id="c-negotiations-refresh-btn" type="button">
+                  <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button class="btn btn-sm btn-accent-consumer" id="c-negotiate-add-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                  <span id="c-negotiate-add-label">Verhandlung starten</span>
+                </button>
+              </div>
+            </div>
+            <div id="c-negotiate-form" class="create-form" hidden>
+              <div class="form-row">
+                <label>Counter Party Address</label>
+                <input id="c-neg-address" type="url" placeholder="http://localhost:19194/protocol" />
+              </div>
+              <div class="form-row">
+                <label>Offer ID (aus Catalog)</label>
+                <input id="c-neg-offer-id" type="text" placeholder="Offer-ID from catalog response" />
+              </div>
+              <div class="form-row">
+                <label>EDC Asset ID</label>
+                <input id="c-neg-asset-id" type="text" placeholder="product-data-1" />
+              </div>
+              <div class="form-row">
+                <label>Provider ID</label>
+                <input id="c-neg-provider-id" type="text" placeholder="provider" />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-secondary" id="c-negotiate-cancel-btn" type="button">Abbrechen</button>
+                <button class="btn btn-sm btn-accent-consumer" id="c-negotiate-start-btn" type="button">Starten</button>
+              </div>
+            </div>
+            <div id="c-negotiations-list" class="object-list"></div>
+          </section>
+
+          <!-- Consumer: Transfers -->
+          <section class="tab-section" id="c-transfers">
+            <div class="tab-toolbar">
+              <h3 id="c-transfers-title">Transfers</h3>
+              <div class="tab-toolbar-actions">
+                <button class="btn btn-sm btn-secondary" id="c-transfers-refresh-btn" type="button">
+                  <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+                <button class="btn btn-sm btn-accent-consumer" id="c-transfer-add-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                  <span id="c-transfer-add-label">Transfer starten</span>
+                </button>
+              </div>
+            </div>
+            <div id="c-transfer-form" class="create-form" hidden>
+              <div class="form-row">
+                <label>Counter Party Address</label>
+                <input id="c-tf-address" type="url" placeholder="http://localhost:19194/protocol" />
+              </div>
+              <div class="form-row">
+                <label>Contract Agreement ID</label>
+                <input id="c-tf-agreement-id" type="text" placeholder="agreement-uuid" />
+              </div>
+              <div class="form-row">
+                <label>EDC Asset ID</label>
+                <input id="c-tf-asset-id" type="text" placeholder="product-data-1" />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-secondary" id="c-transfer-cancel-btn" type="button">Abbrechen</button>
+                <button class="btn btn-sm btn-accent-consumer" id="c-transfer-start-btn" type="button">Starten</button>
+              </div>
+            </div>
+            <div id="c-transfers-list" class="object-list"></div>
+          </section>
+
+          <!-- Consumer: Settings -->
+          <section class="tab-section" id="c-settings">
+            <div class="settings-section">
+              <h3 id="c-settings-title">Consumer Settings</h3>
+              <div class="form-row">
+                <label id="lbl-c-url">Management API URL</label>
+                <input id="f-consumer-url" type="url" readonly />
+              </div>
+              <div class="form-row">
+                <label id="lbl-c-protocol">Protocol URL</label>
+                <input id="f-consumer-protocol" type="url" readonly />
+              </div>
+              <div class="form-row">
+                <label id="lbl-c-key">API Key</label>
+                <input id="f-consumer-key" type="text" readonly />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-sm btn-accent-consumer" id="consumer-test-btn" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <span id="consumer-test-label">Verbindung testen</span>
+                </button>
+                <span id="consumer-test-status" class="connection-status"></span>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Communication Log -->
+    <div class="comm-log" id="comm-log">
+      <div class="comm-log-resize-handle" id="comm-log-resize-handle"></div>
+      <div class="comm-log-header" id="comm-log-header">
+        <div class="comm-log-title-area">
+          <span class="comm-log-title" id="comm-log-title">Kommunikationsprotokoll</span>
+          <span class="comm-log-count" id="comm-log-count">0</span>
+        </div>
+        <div class="comm-log-actions">
+          <button class="btn btn-sm btn-secondary comm-log-debug-toggle" id="comm-log-debug-toggle" type="button" title="Debug-Log">
+            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span style="font-size:.6rem">Debug</span>
+          </button>
+          <div class="comm-log-filter" id="comm-log-filter">
+            <button class="filter-btn active" data-filter="all">Alle</button>
+            <button class="filter-btn" data-filter="provider">Provider</button>
+            <button class="filter-btn" data-filter="consumer">Consumer</button>
+          </div>
+          <button class="btn btn-sm btn-secondary" id="comm-log-clear-btn" type="button" title="Log leeren">
+            <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+          <button class="comm-log-toggle" id="comm-log-toggle" type="button" title="Ein-/Ausklappen">
+            <svg viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="comm-log-body" id="comm-log-body">
+        <div class="protocol-progress" id="protocol-progress"></div>
+        <div class="phase-groups" id="phase-groups"></div>
+        <div class="comm-log-placeholder" id="comm-log-placeholder">
+          <svg viewBox="0 0 24 24"><path d="M2 6h7M2 12h7M2 18h7"/><path d="M15 6h7M15 12h7M15 18h7"/><path d="M9 6l3 3-3 3"/><path d="M15 12l-3 3 3 3"/></svg>
+          <p id="comm-log-placeholder-text">EDC-Kommunikation wird hier protokolliert</p>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- /edc-split-view -->
+
+  </div><!-- /main-container -->
+
+  <!-- JSON Detail Modal -->
+  <div class="json-modal-overlay" id="json-modal-overlay" hidden>
+    <div class="json-modal">
+      <div class="json-modal-header">
+        <span class="json-modal-title" id="json-modal-title">Request Details</span>
+        <button class="json-modal-close" id="json-modal-close" type="button">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="json-modal-meta" id="json-modal-meta"></div>
+      <div class="json-modal-body" id="json-modal-body"></div>
+      <div class="json-modal-actions">
+        <button class="btn btn-sm btn-secondary" id="json-modal-copy" type="button">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Kopieren</span>
+        </button>
+        <button class="btn btn-sm btn-secondary" id="json-modal-close-btn" type="button">Schliessen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="edc-toast" class="edc-toast" hidden></div>
+
+  <script src="/apps/edc-connector/app.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EDC Grundlagen</title>
+  <style>
+    /* ── Reset & Variables ─────────────────────────────── */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0A0E17;
+      --surface:#111827;
+      --surface-2:#1F2937;
+      --surface-3:#374151;
+      --text:#E5E7EB;
+      --text-2:#9CA3AF;
+      --muted:#6B7280;
+      --provider:#38BDF8;
+      --provider-dim:rgba(56,189,248,.10);
+      --consumer:#FB923C;
+      --consumer-dim:rgba(251,146,60,.10);
+      --accent:#38BDF8;
+      --border:#1E293B;
+      --border-2:#334155;
+      --radius:10px;
+      --radius-sm:6px;
+      --transition:.18s cubic-bezier(.4,0,.2,1);
+      --shadow-sm:0 2px 8px rgba(0,0,0,.3);
+      --shadow-md:0 4px 16px rgba(0,0,0,.4);
+      --mono:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
+    }
+
+    html{height:100%;scroll-behavior:smooth}
+    body{
+      min-height:100%;
+      background:var(--bg);
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      font-size:15px;
+      line-height:1.7;
+    }
+    ::-webkit-scrollbar{width:6px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+    /* ── Sticky Header ─────────────────────────────────── */
+    .header{
+      position:sticky;top:0;z-index:100;
+      display:flex;align-items:center;gap:.75rem;
+      padding:0 1.25rem;height:50px;
+      background:#080D15;
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(12px);
+    }
+    .header-back{
+      display:flex;align-items:center;justify-content:center;
+      width:32px;height:32px;border-radius:var(--radius-sm);
+      color:var(--text-2);text-decoration:none;
+      transition:all var(--transition);
+    }
+    .header-back:hover{background:var(--surface-2);color:var(--text)}
+    .header-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .header-title{font-weight:700;font-size:.95rem;color:var(--text);letter-spacing:.3px}
+
+    /* ── Content Container ─────────────────────────────── */
+    .content{
+      max-width:800px;
+      margin:0 auto;
+      padding:2.5rem 1.5rem 4rem;
+    }
+
+    /* ── Section Styling ───────────────────────────────── */
+    .section{margin-bottom:3rem}
+    .section:last-child{margin-bottom:0}
+
+    h2{
+      font-size:1.4rem;
+      font-weight:700;
+      color:var(--text);
+      margin-bottom:1rem;
+      padding-bottom:.5rem;
+      border-bottom:1px solid var(--border);
+    }
+    h3{
+      font-size:1.1rem;
+      font-weight:600;
+      color:var(--text);
+      margin-bottom:.75rem;
+      margin-top:1.75rem;
+    }
+    h3:first-child{margin-top:0}
+
+    p{
+      color:var(--text-2);
+      margin-bottom:.75rem;
+    }
+    p:last-child{margin-bottom:0}
+
+    ul{
+      list-style:none;
+      padding:0;
+      margin-bottom:.75rem;
+    }
+    ul li{
+      position:relative;
+      padding-left:1.25rem;
+      color:var(--text-2);
+      margin-bottom:.4rem;
+    }
+    ul li::before{
+      content:'';
+      position:absolute;
+      left:0;top:.6em;
+      width:6px;height:6px;
+      border-radius:50%;
+      background:var(--accent);
+      opacity:.6;
+    }
+
+    /* ── Inline Code ───────────────────────────────────── */
+    code{
+      font-family:var(--mono);
+      font-size:.85em;
+      background:var(--surface-2);
+      color:var(--accent);
+      padding:.15em .4em;
+      border-radius:4px;
+      border:1px solid var(--border);
+    }
+
+    /* ── Concept Cards ─────────────────────────────────── */
+    .concept{
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:1.25rem 1.5rem;
+      margin-bottom:1rem;
+      transition:border-color var(--transition);
+    }
+    .concept:hover{border-color:var(--border-2)}
+    .concept-title{
+      font-size:.95rem;
+      font-weight:700;
+      color:var(--text);
+      margin-bottom:.4rem;
+      display:flex;
+      align-items:center;
+      gap:.5rem;
+    }
+    .concept-title .badge{
+      font-size:.65rem;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      padding:.15em .5em;
+      border-radius:4px;
+    }
+    .badge-core{background:rgba(56,189,248,.12);color:var(--provider)}
+    .badge-flow{background:rgba(52,211,153,.12);color:#34D399}
+    .concept p{color:var(--text-2);font-size:.9rem;margin:0}
+
+    /* ── Flow Diagram ──────────────────────────────────── */
+    .flow-diagram{
+      display:flex;
+      gap:1.5rem;
+      align-items:stretch;
+      margin:1.5rem 0;
+      overflow-x:auto;
+      padding:.5rem 0;
+    }
+    @media(max-width:680px){
+      .flow-diagram{flex-direction:column;align-items:center}
+      .flow-arrows{flex-direction:row !important;min-height:auto !important;padding:1rem 0 !important}
+      .flow-arrow{flex-direction:row !important}
+      .flow-arrow svg{transform:rotate(90deg)}
+    }
+
+    .flow-side{
+      flex:1;
+      min-width:220px;
+      border-radius:var(--radius);
+      overflow:hidden;
+    }
+    .flow-side-header{
+      padding:.65rem 1rem;
+      font-size:.8rem;
+      font-weight:700;
+      text-transform:uppercase;
+      letter-spacing:.8px;
+      text-align:center;
+    }
+    .flow-provider .flow-side-header{background:var(--provider-dim);color:var(--provider);border-bottom:1px solid rgba(56,189,248,.2)}
+    .flow-consumer .flow-side-header{background:var(--consumer-dim);color:var(--consumer);border-bottom:1px solid rgba(251,146,60,.2)}
+    .flow-provider{border:1px solid rgba(56,189,248,.2);background:var(--surface)}
+    .flow-consumer{border:1px solid rgba(251,146,60,.2);background:var(--surface)}
+
+    .flow-step{
+      display:flex;
+      align-items:center;
+      gap:.65rem;
+      padding:.75rem 1rem;
+      border-bottom:1px solid var(--border);
+      font-size:.85rem;
+      color:var(--text-2);
+    }
+    .flow-step:last-child{border-bottom:none}
+    .flow-step-num{
+      width:24px;height:24px;
+      border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:.7rem;font-weight:700;
+      flex-shrink:0;
+    }
+    .flow-provider .flow-step-num{background:var(--provider-dim);color:var(--provider)}
+    .flow-consumer .flow-step-num{background:var(--consumer-dim);color:var(--consumer)}
+
+    .flow-arrows{
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      gap:.75rem;
+      min-height:200px;
+      padding:0 .25rem;
+      flex-shrink:0;
+    }
+    .flow-arrow{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:.25rem;
+    }
+    .flow-arrow-label{
+      font-size:.6rem;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .flow-arrow svg{
+      width:40px;height:16px;
+      stroke:var(--muted);
+      stroke-width:1.5;
+      fill:none;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+
+    /* ── Comparison Table ──────────────────────────────── */
+    .table-wrap{
+      overflow-x:auto;
+      border-radius:var(--radius);
+      border:1px solid var(--border);
+      margin:1.5rem 0;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:.85rem;
+    }
+    thead th{
+      background:var(--surface-2);
+      color:var(--text);
+      font-weight:600;
+      text-align:left;
+      padding:.75rem 1rem;
+      border-bottom:1px solid var(--border);
+      white-space:nowrap;
+    }
+    thead th:first-child{
+      color:var(--muted);
+      width:160px;
+    }
+    thead th:nth-child(2){color:var(--provider)}
+    thead th:nth-child(3){color:var(--consumer)}
+    tbody td{
+      padding:.65rem 1rem;
+      border-bottom:1px solid var(--border);
+      color:var(--text-2);
+      vertical-align:top;
+    }
+    tbody tr:last-child td{border-bottom:none}
+    tbody tr{transition:background var(--transition)}
+    tbody tr:hover{background:var(--surface-2)}
+    tbody td:first-child{
+      font-weight:600;
+      color:var(--text);
+    }
+
+    /* ── Info Box ───────────────────────────────────────── */
+    .info-box{
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-left:3px solid var(--accent);
+      border-radius:var(--radius-sm);
+      padding:1rem 1.25rem;
+      margin:1.25rem 0;
+    }
+    .info-box.warning{border-left-color:var(--consumer)}
+    .info-box-title{
+      font-size:.8rem;
+      font-weight:700;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--accent);
+      margin-bottom:.4rem;
+    }
+    .info-box.warning .info-box-title{color:var(--consumer)}
+    .info-box p{font-size:.88rem;color:var(--text-2);margin:0}
+  </style>
+</head>
+<body>
+
+  <!-- ═══ Sticky Header ═══ -->
+  <header class="header">
+    <a href="/apps/edc-connector" class="header-back" title="Zurueck">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <span class="header-title">EDC Grundlagen</span>
+  </header>
+
+  <!-- ═══ Content ═══ -->
+  <div class="content">
+
+    <!-- ── Was ist der EDC? ──────────────────────────── -->
+    <section class="section">
+      <h2>Was ist der Eclipse Dataspace Connector?</h2>
+      <p>
+        Der <strong>Eclipse Dataspace Connector (EDC)</strong> ist ein Open-Source-Connector
+        fuer den sicheren, souveraenen Datenaustausch zwischen Organisationen. Er ermoeglicht
+        es Unternehmen, Daten kontrolliert mit Partnern zu teilen, ohne die Hoheit ueber
+        ihre Daten zu verlieren.
+      </p>
+      <ul>
+        <li>Teil des <strong>Eclipse Dataspace Components</strong> Projekts der Eclipse Foundation</li>
+        <li>Implementiert den <strong>Dataspace Protocol (DSP)</strong> Standard fuer interoperablen Datenaustausch</li>
+        <li>Der <strong>Daten-Provider behalt die volle Kontrolle</strong> darueber, wer auf seine Daten zugreifen darf und unter welchen Bedingungen</li>
+        <li>Unterstuetzt verschiedene Transportprotokolle &mdash; z.B. <code>HttpData-PULL</code> fuer REST-basierte Datenuebertragung</li>
+      </ul>
+    </section>
+
+    <!-- ── Kernkonzepte ──────────────────────────────── -->
+    <section class="section">
+      <h2>Kernkonzepte</h2>
+
+      <div class="concept">
+        <div class="concept-title">
+          Assets
+          <span class="badge badge-core">Kern</span>
+        </div>
+        <p>
+          Datenressourcen, die ein Provider anderen Teilnehmern anbieten kann &mdash;
+          z.B. eine REST API, eine Datei oder ein Datenbank-Endpunkt.
+          Jedes Asset hat eine eindeutige <code>id</code> und eine
+          <code>dataAddress</code>, die beschreibt, wo die Daten tatsaechlich liegen.
+        </p>
+      </div>
+
+      <div class="concept">
+        <div class="concept-title">
+          Policies
+          <span class="badge badge-core">Kern</span>
+        </div>
+        <p>
+          Regeln, unter denen ein Asset geteilt werden darf. Eine
+          <code>Open Policy</code> erlaubt den Zugriff ohne Einschraenkungen.
+          Eine <code>Constrained Policy</code> beschraenkt den Zugriff &mdash;
+          z.B. nur fuer bestimmte Business Partner oder Regionen.
+        </p>
+      </div>
+
+      <div class="concept">
+        <div class="concept-title">
+          Contract Definitions
+          <span class="badge badge-core">Kern</span>
+        </div>
+        <p>
+          Verknuepft Assets mit Policies. Eine Contract Definition legt fest:
+          &bdquo;Dieses Asset darf unter dieser <code>Access Policy</code> im Katalog
+          angezeigt und unter dieser <code>Contract Policy</code> verhandelt werden.&ldquo;
+        </p>
+      </div>
+
+      <div class="concept">
+        <div class="concept-title">
+          Catalog
+          <span class="badge badge-flow">Ablauf</span>
+        </div>
+        <p>
+          Der Consumer kann den Katalog eines Providers abfragen, um zu sehen,
+          welche Assets verfuegbar sind und unter welchen Bedingungen sie geteilt
+          werden. Der Katalog wird dynamisch aus den Contract Definitions generiert.
+        </p>
+      </div>
+
+      <div class="concept">
+        <div class="concept-title">
+          Contract Negotiation
+          <span class="badge badge-flow">Ablauf</span>
+        </div>
+        <p>
+          Automatisierter Verhandlungsprozess: Der Consumer waehlt ein Angebot aus
+          dem Katalog, sendet eine Verhandlungsanfrage, und der Provider prueft die
+          hinterlegten Policies. Bei Erfolg entsteht ein
+          <code>Contract Agreement</code> &mdash; die verbindliche Vereinbarung.
+        </p>
+      </div>
+
+      <div class="concept">
+        <div class="concept-title">
+          Transfer Process
+          <span class="badge badge-flow">Ablauf</span>
+        </div>
+        <p>
+          Nach erfolgreicher Verhandlung kann der Datentransfer gestartet werden.
+          Bei <code>HttpData-PULL</code> erhaelt der Consumer ein
+          <code>Endpoint Data Reference (EDR)</code> &mdash; einen Token,
+          mit dem er die Daten direkt vom Provider-Backend abrufen kann.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Datenfluss ────────────────────────────────── -->
+    <section class="section">
+      <h2>Datenfluss (Provider &rarr; Consumer)</h2>
+      <p>
+        Der typische Ablauf eines Datenaustauschs ueber den EDC umfasst sechs Schritte,
+        verteilt auf Provider- und Consumer-Seite:
+      </p>
+
+      <div class="flow-diagram">
+        <!-- Provider Side -->
+        <div class="flow-side flow-provider">
+          <div class="flow-side-header">Provider</div>
+          <div class="flow-step">
+            <span class="flow-step-num">1</span>
+            <span>Asset erstellen</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-step-num">2</span>
+            <span>Policy erstellen</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-step-num">3</span>
+            <span>Contract Definition erstellen</span>
+          </div>
+        </div>
+
+        <!-- Arrows -->
+        <div class="flow-arrows">
+          <div class="flow-arrow">
+            <span class="flow-arrow-label">DSP Protokoll</span>
+            <svg viewBox="0 0 40 16">
+              <line x1="2" y1="8" x2="34" y2="8"/>
+              <polyline points="30,3 36,8 30,13"/>
+            </svg>
+          </div>
+          <div class="flow-arrow">
+            <span class="flow-arrow-label">Verhandlung</span>
+            <svg viewBox="0 0 40 16">
+              <line x1="38" y1="8" x2="6" y2="8"/>
+              <polyline points="10,3 4,8 10,13"/>
+            </svg>
+          </div>
+          <div class="flow-arrow">
+            <span class="flow-arrow-label">Datentransfer</span>
+            <svg viewBox="0 0 40 16">
+              <line x1="2" y1="8" x2="34" y2="8"/>
+              <polyline points="30,3 36,8 30,13"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Consumer Side -->
+        <div class="flow-side flow-consumer">
+          <div class="flow-side-header">Consumer</div>
+          <div class="flow-step">
+            <span class="flow-step-num">4</span>
+            <span>Katalog abfragen</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-step-num">5</span>
+            <span>Vertrag verhandeln</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-step-num">6</span>
+            <span>Transfer starten</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-box-title">Hinweis</div>
+        <p>
+          Bei <code>HttpData-PULL</code> erhaelt der Consumer nach dem Transfer-Start ein
+          <code>EDR</code> (Endpoint Data Reference) mit Zugangstoken. Mit diesem Token
+          kann er die Daten direkt vom Provider-Backend abrufen &mdash; die Daten fliessen
+          also nicht durch den Connector selbst.
+        </p>
+      </div>
+    </section>
+
+    <!-- ── Provider vs Consumer ──────────────────────── -->
+    <section class="section">
+      <h2>Provider vs Consumer</h2>
+      <p>
+        Jeder EDC Connector kann sowohl als Provider als auch als Consumer agieren.
+        In einem typischen Szenario uebernimmt jede Seite eine bestimmte Rolle:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Provider</th>
+              <th>Consumer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Rolle</td>
+              <td>Stellt Daten bereit</td>
+              <td>Fragt Daten an</td>
+            </tr>
+            <tr>
+              <td>Erstellt</td>
+              <td>Assets, Policies, Contract Definitions</td>
+              <td>Katalogabfragen, Verhandlungen, Transfers</td>
+            </tr>
+            <tr>
+              <td>Management API</td>
+              <td><code>Port 19193</code></td>
+              <td><code>Port 29193</code></td>
+            </tr>
+            <tr>
+              <td>Protocol API (DSP)</td>
+              <td><code>Port 19194</code></td>
+              <td><code>Port 29194</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── iam-mock ──────────────────────────────────── -->
+    <section class="section">
+      <h2>iam-mock (Entwicklungsmodus)</h2>
+      <p>
+        In Produktivumgebungen verwenden EDC Connectors eine
+        <strong>DID-basierte Authentifizierung</strong>
+        (Decentralized Identifiers). Dabei weist sich jeder Connector mit einer
+        kryptographisch gesicherten, dezentralen Identitaet aus &mdash; ohne zentrale
+        Zertifizierungsstelle.
+      </p>
+      <p>
+        Fuer die lokale Entwicklung und Tests stellt die
+        <code>iam-mock</code> Extension eine vereinfachte Alternative bereit:
+        Sie ueberspringt saemtliche Authentifizierungs- und Autorisierungspruefungen,
+        sodass der vollstaendige Datenaustausch-Flow lokal getestet werden kann,
+        ohne eine echte Identity-Infrastruktur aufsetzen zu muessen.
+      </p>
+
+      <div class="info-box warning">
+        <div class="info-box-title">Wichtig</div>
+        <p>
+          Die <code>iam-mock</code> Extension darf ausschliesslich in Entwicklungs-
+          und Testumgebungen eingesetzt werden. In Produktivumgebungen muss immer
+          eine echte Identity-Loesung (z.B. DID + VerifiableCredentials) konfiguriert sein.
+        </p>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

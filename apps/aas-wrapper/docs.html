@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AAS Repository Proxy – API Documentation</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --bg: #f0f4f9;
+      --surface: #ffffff;
+      --surface-2: #f8fafb;
+      --surface-3: #eef2f6;
+      --text: #0f1d2e;
+      --text-2: #3d5468;
+      --muted: #7a92a6;
+      --accent: #0d9488;
+      --accent-light: rgba(13, 148, 136, 0.08);
+      --border: #dde4ed;
+      --radius: 12px;
+      --transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+      --green: #16a34a;
+      --green-bg: #f0fdf4;
+      --green-border: #86efac;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .docs-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 2rem;
+      height: 58px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(221, 228, 237, 0.7);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .docs-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--accent-light);
+      color: var(--accent);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .docs-back:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .docs-back svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .docs-brand {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.03em;
+    }
+
+    .docs-container {
+      max-width: 80%;
+      margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.3rem;
+    }
+
+    .docs-subtitle {
+      color: var(--text-2);
+      font-size: 0.88rem;
+      margin-bottom: 2rem;
+    }
+
+    h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 2rem 0 0.75rem;
+      color: var(--text);
+    }
+
+    .base-url-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .base-url-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .base-url-value {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      word-break: break-all;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+
+    .base-url-copy {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.3rem;
+      border-radius: 6px;
+      color: #94a3b8;
+      flex-shrink: 0;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .base-url-copy:hover {
+      color: #e2e8f0;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .base-url-copy svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .endpoint-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.9rem 1.1rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--transition);
+    }
+
+    .endpoint-card.open .endpoint-header {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .endpoint-header:hover {
+      background: var(--surface-2);
+    }
+
+    .endpoint-chevron {
+      width: 16px;
+      height: 16px;
+      stroke: var(--muted);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+      margin-left: 0.25rem;
+    }
+
+    .endpoint-card.open .endpoint-chevron {
+      transform: rotate(90deg);
+    }
+
+    .endpoint-body {
+      display: none;
+      padding: 1rem 1.1rem;
+    }
+
+    .endpoint-card.open .endpoint-body {
+      display: block;
+    }
+
+    .method-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+
+    .method-get {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid var(--green-border);
+    }
+
+    .endpoint-path {
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .endpoint-summary {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .endpoint-body p {
+      margin: 0 0 0.75rem;
+      font-size: 0.82rem;
+      color: var(--text-2);
+    }
+
+    .response-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+      margin-top: 0.75rem;
+    }
+
+    code, pre {
+      font-family: 'Courier New', monospace;
+    }
+
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .status-code {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.4rem;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: 'Courier New', monospace;
+    }
+
+    .status-200 { background: var(--green-bg); color: var(--green); }
+    .status-401 { background: #fef2f2; color: #dc2626; }
+    .status-404 { background: #fffbeb; color: #b45309; }
+    .status-502 { background: #fef2f2; color: #dc2626; }
+
+    .try-section {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .try-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      background: linear-gradient(135deg, var(--accent) 0%, #0e7490 100%);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+    }
+
+    .try-btn:hover {
+      box-shadow: 0 4px 16px rgba(13, 148, 136, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .try-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .try-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .try-result {
+      margin-top: 0.75rem;
+    }
+
+    .try-result-status {
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+
+    .try-result pre {
+      margin: 0;
+    }
+
+    .param-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .param-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      min-width: 110px;
+    }
+
+    .param-input {
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      width: 260px;
+      outline: none;
+      transition: border-color var(--transition);
+    }
+
+    .param-input:focus {
+      border-color: var(--accent);
+    }
+
+    .section-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 5px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      margin-left: 0.5rem;
+    }
+
+    .badge-cached {
+      background: rgba(13, 148, 136, 0.1);
+      color: var(--accent);
+    }
+
+    .badge-proxy {
+      background: rgba(100, 116, 139, 0.1);
+      color: #64748b;
+    }
+
+    @media (max-width: 768px) {
+      .docs-container { max-width: 100%; padding: 1rem; }
+      .endpoint-summary { display: none; }
+      .param-input { width: 160px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="docs-header">
+    <a href="/apps/aas-repo-proxy" class="docs-back">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <span class="docs-brand">AAS Repository Proxy — API</span>
+  </header>
+
+  <div class="docs-container">
+    <h1>API Documentation</h1>
+    <p class="docs-subtitle">AAS Repository API nach IDTA-01002 V3.1 Spezifikation.</p>
+
+    <div class="base-url-card">
+      <div class="base-url-label">Base URL</div>
+      <div class="base-url-value">
+        <span id="base-url-text"></span>
+        <button class="base-url-copy" onclick="copyBaseUrl()" title="Copy">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── Asset Administration Shell Endpoints ────────────────── -->
+    <h2>Asset Administration Shell Endpoints</h2>
+
+    <!-- GET /shells -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/shells</span>
+        <span class="endpoint-summary">Alle Shells auflisten</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Gibt alle Asset Administration Shells als persistierte Liste zur&uuml;ck. Die Daten werden &uuml;ber die Config-Seite aufgebaut und in der Datenbank gespeichert.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "paging_metadata": { "cursor": "" },
+  "result": [
+    {
+      "idShort": "ExampleShell",
+      "id": "https://example.com/aas/ExampleShell#1",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/asset/1",
+        "assetType": "IRI"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [{ "type": "Submodel", "value": "https://example.com/submodel/1" }]
+        }
+      ]
+    }
+  ]
+}</pre>
+
+        <div class="try-section">
+          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/shells')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /shells/{aasIdentifier} -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/shells/{aasIdentifier}</span>
+        <span class="endpoint-summary">Shell abrufen</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Ruft eine einzelne Asset Administration Shell anhand ihres base64url-codierten Identifiers ab.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "idShort": "ExampleShell",
+  "id": "https://example.com/aas/ExampleShell#1",
+  "assetInformation": { "assetKind": "Instance", "globalAssetId": "https://example.com/asset/1" },
+  "submodels": [...]
+}</pre>
+
+        <div class="response-label">Error <span class="status-code status-502">502 Bad Gateway</span></div>
+<pre>{ "error": "PROXY_ERROR", "message": "HTTP 404" }</pre>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">aasIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url-encoded ID" data-param="aasId" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryShellEndpoint(this, '/shells/{aasId}')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /shells/{aasIdentifier}/asset-information -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/shells/{aasIdentifier}/asset-information</span>
+        <span class="endpoint-summary">Asset-Information</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Gibt die Asset-Information (assetKind, globalAssetId, assetType) einer Shell zur&uuml;ck.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "assetKind": "Instance",
+  "globalAssetId": "https://viewer-dogan.dti.neoception.dev/300128",
+  "assetType": "IRI"
+}</pre>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">aasIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url-encoded ID" data-param="aasId" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryShellEndpoint(this, '/shells/{aasId}/asset-information')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /shells/{aasIdentifier}/asset-information/thumbnail -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/shells/{aasIdentifier}/asset-information/thumbnail</span>
+        <span class="endpoint-summary">Thumbnail</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Gibt das Thumbnail-Bild der Asset-Information zur&uuml;ck (bin&auml;r).</p>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">aasIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url-encoded ID" data-param="aasId" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryShellEndpoint(this, '/shells/{aasId}/asset-information/thumbnail')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /shells/{aasIdentifier}/submodel-refs -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/shells/{aasIdentifier}/submodel-refs</span>
+        <span class="endpoint-summary">Submodel-Referenzen</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Listet alle Submodel-Referenzen einer Shell auf. Jede Referenz enth&auml;lt den Typ und den Schl&uuml;ssel zum Submodel.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "result": [
+    {
+      "type": "ModelReference",
+      "keys": [{ "type": "Submodel", "value": "https://..." }]
+    }
+  ]
+}</pre>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">aasIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url-encoded ID" data-param="aasId" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryShellEndpoint(this, '/shells/{aasId}/submodel-refs')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /shells/{aasIdentifier}/submodels/{submodelIdentifier} -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/shells/{aasIdentifier}/submodels/{submodelIdentifier}</span>
+        <span class="endpoint-summary">Shell-Submodel abrufen</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Ruft ein spezifisches Submodel einer Shell ab. Beide Identifier m&uuml;ssen base64url-encoded sein.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "idShort": "Identification",
+  "id": "https://...",
+  "submodelElements": [...]
+}</pre>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">aasIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url-encoded ID" data-param="aasId" />
+          </div>
+          <div class="param-row">
+            <label class="param-label">submodelIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url" data-param="smId" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryDualEndpoint(this, '/shells/{aasId}/submodels/{smId}')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Submodel Endpoints ───────────────────────────────── -->
+    <h2>Submodel Endpoints</h2>
+
+    <!-- GET /submodels/{submodelIdentifier} -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/submodels/{submodelIdentifier}</span>
+        <span class="endpoint-summary">Submodel direkt abrufen</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Ruft ein Submodel direkt &uuml;ber seinen base64url-codierten Identifier ab (ohne Shell-Kontext).</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "idShort": "Identification",
+  "id": "https://...",
+  "submodelElements": [...]
+}</pre>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">submodelIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url" data-param="smId" />
+          </div>
+          <button class="try-btn" type="button" onclick="trySmEndpoint(this, '/submodels/{smId}')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /submodels/{submodelIdentifier}/submodel-elements/{idShortPath} -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}</span>
+        <span class="endpoint-summary">Submodel-Element</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Greift auf ein bestimmtes Element innerhalb eines Submodels zu. Der <code>idShortPath</code> verwendet Punkt-Notation (z.B. <code>Identification.Country</code>).</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "idShort": "Country",
+  "modelType": "Property",
+  "valueType": "xs:string",
+  "value": "DE"
+}</pre>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">submodelIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url" data-param="smId" />
+          </div>
+          <div class="param-row">
+            <label class="param-label">idShortPath</label>
+            <input class="param-input" type="text" placeholder="Identification.Country" data-param="idPath" />
+          </div>
+          <button class="try-btn" type="button" onclick="trySmElementEndpoint(this, '/submodels/{smId}/submodel-elements/{idPath}')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment</span>
+        <span class="endpoint-summary">Element-Attachment</span>
+      </div>
+      <div class="endpoint-body">
+        <p>L&auml;dt das Attachment (Datei) eines Submodel-Elements herunter. Gibt bin&auml;re Daten zur&uuml;ck.</p>
+
+        <div class="try-section">
+          <div class="param-row">
+            <label class="param-label">submodelIdentifier</label>
+            <input class="param-input" type="text" placeholder="base64url" data-param="smId" />
+          </div>
+          <div class="param-row">
+            <label class="param-label">idShortPath</label>
+            <input class="param-input" type="text" placeholder="Documents.Datasheet" data-param="idPath" />
+          </div>
+          <button class="try-btn" type="button" onclick="trySmElementEndpoint(this, '/submodels/{smId}/submodel-elements/{idPath}/attachment')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Utility Endpoints ────────────────────────────────── -->
+    <h2>Utility Endpoints</h2>
+
+    <!-- GET /description -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/description</span>
+        <span class="endpoint-summary">API-Beschreibung</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Gibt die Self-Description des AAS Repositories zur&uuml;ck. Enth&auml;lt unterst&uuml;tzte Profile und Interfaces.</p>
+
+        <div class="try-section">
+          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/description')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /serialization -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/serialization</span>
+        <span class="endpoint-summary">Serialisierung</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Exportiert die Daten des Repositories als AASX, JSON oder XML. Unterst&uuml;tzt <code>?aasIds=</code> und <code>?submodelIds=</code> Query-Parameter zur Filterung.</p>
+
+        <div class="try-section">
+          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/serialization')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const APP_BASE = "/apps/aas-repo-proxy";
+    const proxyId = new URLSearchParams(location.search).get("proxy") || "{proxy-id}";
+    const BASE = APP_BASE + "/" + proxyId;
+
+    document.getElementById("base-url-text").textContent = location.origin + BASE;
+
+    // Update back link
+    document.querySelector(".docs-back").href = APP_BASE;
+
+    function copyBaseUrl() {
+      navigator.clipboard.writeText(location.origin + BASE).then(() => {
+        const btn = document.querySelector(".base-url-copy");
+        btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        setTimeout(() => {
+          btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        }, 1500);
+      });
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement("div");
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function showResult(btn, status, text) {
+      const resultDiv = btn.parentElement.querySelector(".try-result");
+      resultDiv.hidden = false;
+      let formatted = text;
+      try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+      resultDiv.innerHTML =
+        '<div class="try-result-status">Status: <span class="status-code status-' + (status < 400 ? '200' : status < 500 ? '404' : '502') + '">' + status + '</span></div>' +
+        '<pre>' + escapeHtml(formatted) + '</pre>';
+    }
+
+    async function tryEndpoint(btn, path) {
+      btn.disabled = true;
+      btn.textContent = "Loading...";
+      try {
+        const res = await fetch(BASE + path);
+        const text = await res.text();
+        showResult(btn, res.status, text);
+      } catch (e) {
+        showResult(btn, 0, e.message);
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Try it';
+    }
+
+    async function tryShellEndpoint(btn, template) {
+      const card = btn.closest(".endpoint-card");
+      const aasId = card.querySelector('[data-param="aasId"]').value.trim();
+      if (!aasId) { alert("aasIdentifier is required"); return; }
+      const path = template.replace("{aasId}", encodeURIComponent(aasId));
+      await tryEndpoint(btn, path);
+    }
+
+    async function tryDualEndpoint(btn, template) {
+      const card = btn.closest(".endpoint-card");
+      const aasId = card.querySelector('[data-param="aasId"]').value.trim();
+      const smId = card.querySelector('[data-param="smId"]').value.trim();
+      if (!aasId || !smId) { alert("Both identifiers are required"); return; }
+      const path = template.replace("{aasId}", encodeURIComponent(aasId)).replace("{smId}", encodeURIComponent(smId));
+      await tryEndpoint(btn, path);
+    }
+
+    async function trySmEndpoint(btn, template) {
+      const card = btn.closest(".endpoint-card");
+      const smId = card.querySelector('[data-param="smId"]').value.trim();
+      if (!smId) { alert("submodelIdentifier is required"); return; }
+      const path = template.replace("{smId}", encodeURIComponent(smId));
+      await tryEndpoint(btn, path);
+    }
+
+    async function trySmElementEndpoint(btn, template) {
+      const card = btn.closest(".endpoint-card");
+      const smId = card.querySelector('[data-param="smId"]').value.trim();
+      const idPath = card.querySelector('[data-param="idPath"]').value.trim();
+      if (!smId || !idPath) { alert("Both submodelIdentifier and idShortPath are required"); return; }
+      const path = template.replace("{smId}", encodeURIComponent(smId)).replace("{idPath}", encodeURIComponent(idPath));
+      await tryEndpoint(btn, path);
+    }
+  </script>
+</body>
+</html>

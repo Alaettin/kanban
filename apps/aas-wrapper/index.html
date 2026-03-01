@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AAS Repository Proxy – Workspace</title>
+  <link rel="stylesheet" href="/apps/aas-repo-proxy/styles.css?v=5" />
+</head>
+<body>
+  <header class="app-header">
+    <a id="back-btn" href="/dashboard" class="header-back-btn" title="Zurück">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <circle cx="12" cy="5" r="2.5"/>
+        <circle cx="5" cy="19" r="2.5"/>
+        <circle cx="19" cy="19" r="2.5"/>
+        <path d="M12 7.5v4.5M10.5 13.5L6.5 17M13.5 13.5L17.5 17" stroke-linecap="round"/>
+      </svg>
+      <span id="brand-text">AAS Repository Proxy</span>
+    </div>
+    <div class="header-spacer"></div>
+    <a id="docs-link" href="/apps/aas-repo-proxy/docs" class="header-swagger-btn" target="_blank" title="API Docs">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <span>API Docs</span>
+    </a>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+
+    <!-- ═══ Sidebar: Proxy List ═══ -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title" id="sidebar-title">Proxies</span>
+        <button id="proxy-add-btn" class="sidebar-add-btn" type="button" title="Neuer Proxy">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <div id="proxy-list" class="proxy-list"></div>
+      <div id="proxy-hint" class="proxy-hint" hidden></div>
+    </aside>
+
+    <!-- ═══ Main: Proxy Detail ═══ -->
+    <main class="main-content" id="main-content">
+
+      <!-- Empty State -->
+      <div id="empty-state" class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="2.5"/>
+          <circle cx="5" cy="19" r="2.5"/>
+          <circle cx="19" cy="19" r="2.5"/>
+          <path d="M12 7.5v4.5M10.5 13.5L6.5 17M13.5 13.5L17.5 17" stroke-linecap="round"/>
+        </svg>
+        <p id="empty-state-text">Proxy auswählen oder erstellen</p>
+      </div>
+
+      <!-- Detail (hidden until proxy selected) -->
+      <div id="proxy-detail" class="proxy-detail" hidden>
+
+        <!-- Base URL Card -->
+        <section class="card" id="base-url-card">
+          <div class="base-url-label" id="lbl-base-url-title">Base URL</div>
+          <div class="base-url-value">
+            <span id="proxy-base-url-text"></span>
+            <button class="base-url-copy" id="copy-base-url-btn" type="button" title="Copy">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- Config Section -->
+        <section class="card" id="config-card">
+          <h2 id="config-title" class="card-title">Konfiguration</h2>
+          <form id="config-form" autocomplete="off">
+            <div class="form-group">
+              <label for="f-base-url" id="lbl-base-url">AAS Base URL</label>
+              <input id="f-base-url" type="url" placeholder="https://aas-repo.example.com" />
+            </div>
+            <div class="form-group">
+              <label for="f-items-endpoint" id="lbl-items-endpoint">Item ID Endpoint</label>
+              <input id="f-items-endpoint" type="text" placeholder="/items oder https://..." />
+            </div>
+            <div class="form-group">
+              <label for="f-auto-refresh" id="lbl-auto-refresh">Auto-Refresh (min)</label>
+              <input id="f-auto-refresh" type="number" min="0" value="0" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" id="save-btn" class="btn btn-primary">
+                <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span id="save-btn-label">Speichern</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Cache Section -->
+        <section class="card" id="cache-card">
+          <div class="card-header">
+            <h2 id="cache-title" class="card-title">Daten</h2>
+            <button id="refresh-btn" class="btn btn-accent" type="button">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span id="refresh-btn-label">Daten aktualisieren</span>
+            </button>
+          </div>
+          <div class="status-grid" id="status-grid">
+            <div class="status-item">
+              <span class="status-label" id="lbl-status">Status</span>
+              <span class="status-value" id="val-status">—</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label" id="lbl-shells">Shells</span>
+              <span class="status-value" id="val-shells">0</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label" id="lbl-items">Items</span>
+              <span class="status-value" id="val-items">0</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label" id="lbl-last-refresh">Letzter Refresh</span>
+              <span class="status-value" id="val-last-refresh">—</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label" id="lbl-errors">Fehler</span>
+              <span class="status-value" id="val-errors">0</span>
+            </div>
+          </div>
+          <div id="build-progress" class="build-progress" hidden>
+            <div class="build-progress-bar">
+              <div class="build-progress-fill"></div>
+            </div>
+            <span class="build-progress-text" id="build-progress-text">Daten werden aktualisiert…</span>
+          </div>
+        </section>
+
+        <!-- Error Section -->
+        <section class="card" id="errors-card" hidden>
+          <h2 id="errors-title" class="card-title">Fehler</h2>
+          <div id="errors-list" class="errors-list"></div>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <dialog id="delete-modal" class="aw-modal">
+    <form id="delete-form" method="dialog">
+      <h2 id="delete-modal-title">Proxy löschen?</h2>
+      <p id="delete-modal-msg"></p>
+      <div class="aw-modal-actions">
+        <button class="btn btn-secondary" type="button" id="delete-cancel-btn">Abbrechen</button>
+        <button class="btn btn-danger" type="submit" id="delete-confirm-btn">Löschen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="aw-toast" class="aw-toast" hidden></div>
+  <script src="/apps/aas-repo-proxy/app.js?v=5"></script>
+</body>
+</html>
