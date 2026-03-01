@@ -47,4 +47,4 @@ services:
 networks:
   edc-network:
     name: edc-network
-    external: true
+    driver: bridge
