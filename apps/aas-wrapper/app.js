@@ -178,7 +178,6 @@ function applyDetailLocale() {
   $("#lbl-last-refresh").textContent = t("lblLastRefresh");
   $("#lbl-errors").textContent = t("lblErrors");
   $("#errors-title").textContent = t("errorsTitle");
-  $("#build-progress-text").textContent = t("buildProgress");
   $("#logout-btn").textContent = t("logout");
 }
 
