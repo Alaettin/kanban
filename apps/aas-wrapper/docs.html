@@ -484,6 +484,14 @@
             <label class="param-label">cursor</label>
             <input class="param-input" type="text" placeholder="optional" data-param="cursor" />
           </div>
+          <div class="param-row">
+            <label class="param-label">idShort</label>
+            <input class="param-input" type="text" placeholder="optional" data-param="idShort" />
+          </div>
+          <div class="param-row">
+            <label class="param-label">assetIds</label>
+            <input class="param-input" type="text" placeholder="base64url-encoded SpecificAssetId" data-param="assetIds" />
+          </div>
           <button class="try-btn" type="button" onclick="tryPaginatedEndpoint(this, '/shells')">
             <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Try it
@@ -956,8 +964,12 @@
       if (cursor) params.set("cursor", cursor);
       const level = card.querySelector('[data-param="level"]');
       const extent = card.querySelector('[data-param="extent"]');
+      const idShort = card.querySelector('[data-param="idShort"]');
+      const assetIds = card.querySelector('[data-param="assetIds"]');
       if (level?.value) params.set("level", level.value);
       if (extent?.value) params.set("extent", extent.value);
+      if (idShort?.value.trim()) params.set("idShort", idShort.value.trim());
+      if (assetIds?.value.trim()) params.set("assetIds", assetIds.value.trim());
       const qs = params.toString();
       await tryEndpoint(btn, path + (qs ? "?" + qs : ""));
     }

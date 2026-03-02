@@ -60,7 +60,11 @@ async function getCacheStatus(proxyId) {
 }
 
 function paginate(items, query) {
-  const limit = query.limit ? Math.max(1, parseInt(query.limit, 10) || items.length) : items.length;
+  if (query.limit !== undefined) {
+    const n = parseInt(query.limit, 10);
+    if (isNaN(n) || n < 1) return null; // caller sends 400
+  }
+  const limit = query.limit ? parseInt(query.limit, 10) : items.length;
   let offset = 0;
   if (query.cursor) {
     try { offset = JSON.parse(Buffer.from(query.cursor, "base64").toString()).offset || 0; } catch {}
@@ -96,7 +100,35 @@ async function getShellsList(proxyId, query = {}) {
     "SELECT shell_json FROM aas_proxy_shells WHERE proxy_id = ?",
     [proxyId]
   );
-  return paginate(rows.map(r => JSON.parse(r.shell_json)), query);
+  let items = rows.map(r => JSON.parse(r.shell_json));
+
+  // Filter by idShort
+  if (query.idShort) {
+    items = items.filter(s => s.idShort === query.idShort);
+  }
+
+  // Filter by assetIds (base64url-encoded SpecificAssetId JSON)
+  if (query.assetIds) {
+    const assetIdParams = Array.isArray(query.assetIds) ? query.assetIds : [query.assetIds];
+    const decoded = [];
+    for (const b64 of assetIdParams) {
+      try {
+        decoded.push(JSON.parse(Buffer.from(b64, "base64url").toString()));
+      } catch {
+        return { __invalid: "assetIds" };
+      }
+    }
+    items = items.filter(s => {
+      const gId = s.assetInformation?.globalAssetId;
+      const specific = s.assetInformation?.specificAssetIds || [];
+      return decoded.some(d => {
+        if (d.name === "globalAssetId") return d.value === gId;
+        return specific.some(sa => sa.name === d.name && sa.value === d.value);
+      });
+    });
+  }
+
+  return paginate(items, query);
 }
 
 function deleteCache(proxyId) {
@@ -478,7 +510,10 @@ function mountRoutes(router) {
 
   // Cached shells list
   router.get("/:proxyId/shells", resolveProxyPublic, async (req, res) => {
-    res.json(await getShellsList(req.proxy.proxy_id, req.query));
+    const result = await getShellsList(req.proxy.proxy_id, req.query);
+    if (!result) return res.status(400).json({ error: "BAD_REQUEST", message: "Invalid limit parameter" });
+    if (result.__invalid) return res.status(400).json({ error: "BAD_REQUEST", message: `Invalid ${result.__invalid} parameter` });
+    res.json(result);
   });
 
   // Shell endpoints
@@ -499,7 +534,9 @@ function mountRoutes(router) {
     if (req.query.extent !== "withBlobValue") items = items.map(sm =>
       sm.submodelElements ? { ...sm, submodelElements: stripBlobValues(sm.submodelElements) } : sm
     );
-    res.json(paginate(items, req.query));
+    const result = paginate(items, req.query);
+    if (!result) return res.status(400).json({ error: "BAD_REQUEST", message: "Invalid limit parameter" });
+    res.json(result);
   });
 
   // Single submodel endpoints (proxy passthrough)
