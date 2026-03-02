@@ -380,6 +380,7 @@ async function stopEdc() {
   setEdcBtnsDisabled(false);
   if (res.ok) {
     showToast(t("edcStopped"));
+    await clearCommLog();
     await refreshEdcStatus();
     refreshAllData();
   } else {
@@ -396,6 +397,7 @@ async function restartEdc() {
   setEdcBtnsDisabled(false);
   if (res.ok) {
     showToast(t("edcRestarted"));
+    await clearCommLog();
     await refreshEdcStatus();
     refreshAllData();
   } else {
