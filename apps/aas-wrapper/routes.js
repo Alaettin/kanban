@@ -325,6 +325,23 @@ async function resolveProxy(req, res, next) {
   }
 }
 
+// Public resolver — no auth required, lookup by proxy_id only
+async function resolveProxyPublic(req, res, next) {
+  const proxyId = req.params.proxyId;
+  if (!proxyId) return res.status(400).json({ error: "MISSING_PROXY_ID" });
+  try {
+    const row = await db.get(
+      "SELECT * FROM aas_proxies WHERE proxy_id = ?",
+      [proxyId]
+    );
+    if (!row) return res.status(404).json({ error: "PROXY_NOT_FOUND" });
+    req.proxy = row;
+    next();
+  } catch {
+    res.status(500).json({ error: "RESOLVE_FAILED" });
+  }
+}
+
 // ── Routes ──────────────────────────────────────────────────
 function mountRoutes(router) {
 
@@ -455,20 +472,22 @@ function mountRoutes(router) {
     }
   }
 
+  // ── AAS V3 Data Endpoints (no auth — public API) ──────────
+
   // Cached shells list
-  router.get("/:proxyId/shells", auth.requireAuth, resolveProxy, async (req, res) => {
+  router.get("/:proxyId/shells", resolveProxyPublic, async (req, res) => {
     res.json(await getShellsList(req.proxy.proxy_id, req.query));
   });
 
   // Shell endpoints
-  router.get("/:proxyId/shells/:aasId", auth.requireAuth, resolveProxy, proxyHandler);
-  router.get("/:proxyId/shells/:aasId/asset-information", auth.requireAuth, resolveProxy, proxyHandler);
-  router.get("/:proxyId/shells/:aasId/asset-information/thumbnail", auth.requireAuth, resolveProxy, proxyHandler);
-  router.get("/:proxyId/shells/:aasId/submodel-refs", auth.requireAuth, resolveProxy, proxyHandler);
-  router.get("/:proxyId/shells/:aasId/submodels/:smId", auth.requireAuth, resolveProxy, proxyHandler);
+  router.get("/:proxyId/shells/:aasId", resolveProxyPublic, proxyHandler);
+  router.get("/:proxyId/shells/:aasId/asset-information", resolveProxyPublic, proxyHandler);
+  router.get("/:proxyId/shells/:aasId/asset-information/thumbnail", resolveProxyPublic, proxyHandler);
+  router.get("/:proxyId/shells/:aasId/submodel-refs", resolveProxyPublic, proxyHandler);
+  router.get("/:proxyId/shells/:aasId/submodels/:smId", resolveProxyPublic, proxyHandler);
 
   // Cached submodels list
-  router.get("/:proxyId/submodels", auth.requireAuth, resolveProxy, async (req, res) => {
+  router.get("/:proxyId/submodels", resolveProxyPublic, async (req, res) => {
     const rows = await db.all(
       "SELECT sm_json FROM aas_proxy_submodels WHERE proxy_id = ?",
       [req.proxy.proxy_id]
@@ -482,14 +501,14 @@ function mountRoutes(router) {
   });
 
   // Single submodel endpoints (proxy passthrough)
-  router.get("/:proxyId/submodels/:smId", auth.requireAuth, resolveProxy, proxyHandler);
-  router.get("/:proxyId/submodels/:smId/submodel-elements/*", auth.requireAuth, resolveProxy, proxyHandler);
+  router.get("/:proxyId/submodels/:smId", resolveProxyPublic, proxyHandler);
+  router.get("/:proxyId/submodels/:smId/submodel-elements/*", resolveProxyPublic, proxyHandler);
 
   // Utility endpoints
-  router.get("/:proxyId/description", auth.requireAuth, resolveProxy, proxyHandler);
+  router.get("/:proxyId/description", resolveProxyPublic, proxyHandler);
 
   // Serialization — AAS Environment JSON from cache
-  router.get("/:proxyId/serialization", auth.requireAuth, resolveProxy, async (req, res) => {
+  router.get("/:proxyId/serialization", resolveProxyPublic, async (req, res) => {
     const shellRows = await db.all(
       "SELECT shell_json FROM aas_proxy_shells WHERE proxy_id = ?",
       [req.proxy.proxy_id]
