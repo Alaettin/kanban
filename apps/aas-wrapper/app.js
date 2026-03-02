@@ -43,6 +43,7 @@ const I18N = {
     deleteCancel: "Abbrechen",
     deleteConfirm: "Löschen",
     shellsLabel: "Shells",
+    lblSubmodels: "Submodels",
   },
   en: {
     brandText: "AAS Repository Proxy",
@@ -82,6 +83,7 @@ const I18N = {
     deleteCancel: "Cancel",
     deleteConfirm: "Delete",
     shellsLabel: "Shells",
+    lblSubmodels: "Submodels",
   },
 };
 
@@ -108,8 +110,10 @@ const fAutoRefresh   = $("#f-auto-refresh");
 const refreshBtn     = $("#refresh-btn");
 const errorsCard     = $("#errors-card");
 const errorsList     = $("#errors-list");
-const buildProgress  = $("#build-progress");
-const toastEl        = $("#aw-toast");
+const buildProgress     = $("#build-progress");
+const buildProgressFill = $("#build-progress-fill");
+const buildProgressText = $("#build-progress-text");
+const toastEl           = $("#aw-toast");
 const baseUrlText    = $("#proxy-base-url-text");
 const copyBaseUrlBtn = $("#copy-base-url-btn");
 const deleteModal    = $("#delete-modal");
@@ -171,6 +175,7 @@ function applyDetailLocale() {
   $("#refresh-btn-label").textContent = t("refreshBtn");
   $("#lbl-status").textContent = t("lblStatus");
   $("#lbl-shells").textContent = t("lblShells");
+  $("#lbl-submodels").textContent = t("lblSubmodels");
   $("#lbl-items").textContent = t("lblItems");
   $("#lbl-last-refresh").textContent = t("lblLastRefresh");
   $("#lbl-errors").textContent = t("lblErrors");
@@ -433,13 +438,29 @@ async function loadStatus() {
   if (!data) return;
   renderStatus(data);
   if (data.building) {
-    if (!pollTimer) pollTimer = setInterval(loadStatus, 3000);
+    if (!pollTimer) pollTimer = setInterval(loadStatus, 2000);
     buildProgress.hidden = false;
+    buildProgress.className = "build-progress";
     refreshBtn.disabled = true;
+    const pct = data.buildTotal > 0 ? Math.round((data.buildDone / data.buildTotal) * 100) : 0;
+    buildProgressFill.style.width = pct + "%";
+    buildProgressText.textContent = `${data.buildDone} / ${data.buildTotal}`;
   } else {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    buildProgress.hidden = true;
     refreshBtn.disabled = false;
+    if (!buildProgress.hidden && data.buildDone > 0) {
+      buildProgressFill.style.width = "100%";
+      if (data.buildErrors > 0) {
+        buildProgress.className = "build-progress error";
+        buildProgressText.textContent = `${data.buildErrors} ${t("lblErrors")}`;
+      } else {
+        buildProgress.className = "build-progress done";
+        buildProgressText.textContent = t("statusReady");
+      }
+      setTimeout(() => { buildProgress.hidden = true; }, 4000);
+    } else {
+      buildProgress.hidden = true;
+    }
   }
 }
 
@@ -465,6 +486,7 @@ function renderStatus(s) {
   }
 
   valShells.textContent = s.shellCount;
+  $("#val-submodels").textContent = s.submodelCount || 0;
   valItems.textContent = s.totalItems;
 
   if (s.lastRefresh) {
@@ -501,7 +523,10 @@ async function triggerRefresh() {
   if (data?.ok) {
     toast(t("toastRefreshStarted"));
     buildProgress.hidden = false;
-    if (!pollTimer) pollTimer = setInterval(loadStatus, 3000);
+    buildProgress.className = "build-progress";
+    buildProgressFill.style.width = "0%";
+    buildProgressText.textContent = "0 / 0";
+    if (!pollTimer) pollTimer = setInterval(loadStatus, 2000);
     setTimeout(loadStatus, 500);
   } else if (data?.error === "BUILD_IN_PROGRESS") {
     toast(t("toastRefreshBusy"), true);

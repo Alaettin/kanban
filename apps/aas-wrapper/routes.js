@@ -8,13 +8,14 @@ function toBase64Url(str) {
 }
 
 // ── Concurrency-limited parallel fetch ──────────────────────
-async function parallelFetch(items, fn, concurrency = 5) {
+async function parallelFetch(items, fn, concurrency = 5, onProgress) {
   const results = [];
   let idx = 0;
   async function worker() {
     while (idx < items.length) {
       const i = idx++;
       try { results[i] = await fn(items[i]); } catch (err) { results[i] = { __error: err.message }; }
+      if (onProgress) onProgress(results[i]);
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
@@ -22,7 +23,7 @@ async function parallelFetch(items, fn, concurrency = 5) {
 }
 
 // ── Building-State (in-memory, transient) ───────────────────
-const buildingSet = new Set();   // proxyIds currently building
+const buildJobs = {};  // { proxyId: { total, done, errors, running } }
 
 // ── DB-backed cache helpers ─────────────────────────────────
 
@@ -35,10 +36,19 @@ async function getCacheStatus(proxyId) {
     "SELECT COUNT(*) AS cnt FROM aas_proxy_shells WHERE proxy_id = ?",
     [proxyId]
   );
+  const smCount = await db.get(
+    "SELECT COUNT(*) AS cnt FROM aas_proxy_submodels WHERE proxy_id = ?",
+    [proxyId]
+  );
   const errors = row?.cache_errors ? JSON.parse(row.cache_errors) : [];
+  const job = buildJobs[proxyId];
   return {
     shellCount: shellCount?.cnt || 0,
-    building: buildingSet.has(proxyId),
+    submodelCount: smCount?.cnt || 0,
+    building: job?.running || false,
+    buildTotal: job?.total || 0,
+    buildDone: job?.done || 0,
+    buildErrors: job?.errors || 0,
     lastRefresh: row?.cache_last_refresh || null,
     totalItems: row?.cache_total_items || 0,
     errorCount: errors.length,
@@ -67,7 +77,7 @@ function deleteCache(proxyId) {
 
 // ── Cache Build ─────────────────────────────────────────────
 async function buildCache(proxyId) {
-  if (buildingSet.has(proxyId)) return;
+  if (buildJobs[proxyId]?.running) return;
 
   const config = await db.get(
     "SELECT * FROM aas_proxies WHERE proxy_id = ?",
@@ -75,8 +85,9 @@ async function buildCache(proxyId) {
   );
   if (!config?.aas_base_url || !config?.items_endpoint) return;
 
-  buildingSet.add(proxyId);
-  const errors = [];
+  const job = { total: 0, done: 0, errors: 0, running: true };
+  buildJobs[proxyId] = job;
+  const errorDetails = [];
   let totalItems = 0;
 
   try {
@@ -98,9 +109,11 @@ async function buildCache(proxyId) {
     else throw new Error("Unexpected items format");
 
     totalItems = itemIds.length;
+    job.total = totalItems;
     const baseUrl = config.aas_base_url.replace(/\/+$/, "");
 
-    const results = await parallelFetch(itemIds, async (itemId) => {
+    // ── Phase 1: Fetch shells ──
+    const shellResults = await parallelFetch(itemIds, async (itemId) => {
       const encoded = toBase64Url(itemId);
       const resp = await fetch(`${baseUrl}/shells/${encoded}`, {
         headers: { Accept: "application/json" },
@@ -108,36 +121,82 @@ async function buildCache(proxyId) {
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
-    }, 5);
+    }, 5, (result) => {
+      job.done++;
+      if (result?.__error) job.errors++;
+    });
 
-    // Write shells to DB in a transaction
+    // Write shells to DB
     await db.run("DELETE FROM aas_proxy_shells WHERE proxy_id = ?", [proxyId]);
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
+    const successShells = [];
+    for (let i = 0; i < shellResults.length; i++) {
+      const r = shellResults[i];
       if (r && r.__error) {
-        errors.push({ itemId: itemIds[i], error: r.__error });
+        errorDetails.push({ itemId: itemIds[i], error: r.__error });
       } else if (r) {
         const aasId = r.id || itemIds[i];
         await db.run(
           "INSERT OR REPLACE INTO aas_proxy_shells (proxy_id, aas_id, shell_json) VALUES (?, ?, ?)",
           [proxyId, String(aasId), JSON.stringify(r)]
         );
+        successShells.push(r);
       }
     }
+
+    // ── Phase 2: Extract submodel refs and fetch submodels ──
+    const smRefs = successShells.flatMap(s =>
+      (s.submodels || []).map(ref => ref.keys?.[0]?.value).filter(Boolean)
+    );
+    const uniqueSmIds = [...new Set(smRefs)];
+
+    if (uniqueSmIds.length > 0) {
+      job.total += uniqueSmIds.length;
+
+      const smResults = await parallelFetch(uniqueSmIds, async (smId) => {
+        const encoded = toBase64Url(smId);
+        const resp = await fetch(`${baseUrl}/submodels/${encoded}`, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+      }, 5, (result) => {
+        job.done++;
+        if (result?.__error) job.errors++;
+      });
+
+      // Write submodels to DB
+      await db.run("DELETE FROM aas_proxy_submodels WHERE proxy_id = ?", [proxyId]);
+      for (let i = 0; i < smResults.length; i++) {
+        const r = smResults[i];
+        if (r && r.__error) {
+          errorDetails.push({ itemId: uniqueSmIds[i], error: r.__error });
+        } else if (r) {
+          const smId = r.id || uniqueSmIds[i];
+          await db.run(
+            "INSERT OR REPLACE INTO aas_proxy_submodels (proxy_id, submodel_id, sm_json) VALUES (?, ?, ?)",
+            [proxyId, String(smId), JSON.stringify(r)]
+          );
+        }
+      }
+    } else {
+      await db.run("DELETE FROM aas_proxy_submodels WHERE proxy_id = ?", [proxyId]);
+    }
   } catch (err) {
-    errors.push({ itemId: "(items-endpoint)", error: err.message });
+    errorDetails.push({ itemId: "(items-endpoint)", error: err.message });
   }
 
   // Update status in DB
   const lastRefresh = new Date().toISOString();
   await db.run(
     "UPDATE aas_proxies SET cache_last_refresh = ?, cache_total_items = ?, cache_errors = ? WHERE proxy_id = ?",
-    [lastRefresh, totalItems, JSON.stringify(errors), proxyId]
+    [lastRefresh, totalItems, JSON.stringify(errorDetails), proxyId]
   );
 
-  buildingSet.delete(proxyId);
+  job.running = false;
   const shellCount = await db.get("SELECT COUNT(*) AS cnt FROM aas_proxy_shells WHERE proxy_id = ?", [proxyId]);
-  console.log(`[AAS Proxy] Cache built for proxy ${proxyId}: ${shellCount?.cnt || 0} shells, ${errors.length} errors`);
+  const smCount = await db.get("SELECT COUNT(*) AS cnt FROM aas_proxy_submodels WHERE proxy_id = ?", [proxyId]);
+  console.log(`[AAS Proxy] Cache built for proxy ${proxyId}: ${shellCount?.cnt || 0} shells, ${smCount?.cnt || 0} submodels, ${errorDetails.length} errors`);
 
   setupAutoRefresh(proxyId, config.auto_refresh_min);
 }
@@ -177,6 +236,14 @@ async function initAasWrapperTables() {
     aas_id     TEXT NOT NULL,
     shell_json TEXT NOT NULL,
     PRIMARY KEY (proxy_id, aas_id),
+    FOREIGN KEY (proxy_id) REFERENCES aas_proxies(proxy_id) ON DELETE CASCADE
+  )`);
+
+  await db.run(`CREATE TABLE IF NOT EXISTS aas_proxy_submodels (
+    proxy_id    TEXT NOT NULL,
+    submodel_id TEXT NOT NULL,
+    sm_json     TEXT NOT NULL,
+    PRIMARY KEY (proxy_id, submodel_id),
     FOREIGN KEY (proxy_id) REFERENCES aas_proxies(proxy_id) ON DELETE CASCADE
   )`);
 
@@ -276,6 +343,7 @@ function mountRoutes(router) {
   // Delete proxy
   router.delete("/api/proxies/:proxyId", auth.requireAuth, resolveProxy, async (req, res) => {
     try {
+      await db.run("DELETE FROM aas_proxy_submodels WHERE proxy_id = ?", [req.proxy.proxy_id]);
       await db.run("DELETE FROM aas_proxy_shells WHERE proxy_id = ?", [req.proxy.proxy_id]);
       await db.run("DELETE FROM aas_proxies WHERE proxy_id = ?", [req.proxy.proxy_id]);
       deleteCache(req.proxy.proxy_id);
@@ -364,13 +432,41 @@ function mountRoutes(router) {
   router.get("/:proxyId/shells/:aasId/submodel-refs", auth.requireAuth, resolveProxy, proxyHandler);
   router.get("/:proxyId/shells/:aasId/submodels/:smId", auth.requireAuth, resolveProxy, proxyHandler);
 
-  // Submodel endpoints
+  // Cached submodels list
+  router.get("/:proxyId/submodels", auth.requireAuth, resolveProxy, async (req, res) => {
+    const rows = await db.all(
+      "SELECT sm_json FROM aas_proxy_submodels WHERE proxy_id = ?",
+      [req.proxy.proxy_id]
+    );
+    res.json({
+      paging_metadata: { cursor: "" },
+      result: rows.map(r => JSON.parse(r.sm_json)),
+    });
+  });
+
+  // Single submodel endpoints (proxy passthrough)
   router.get("/:proxyId/submodels/:smId", auth.requireAuth, resolveProxy, proxyHandler);
   router.get("/:proxyId/submodels/:smId/submodel-elements/*", auth.requireAuth, resolveProxy, proxyHandler);
 
   // Utility endpoints
   router.get("/:proxyId/description", auth.requireAuth, resolveProxy, proxyHandler);
-  router.get("/:proxyId/serialization", auth.requireAuth, resolveProxy, proxyHandler);
+
+  // Serialization — AAS Environment JSON from cache
+  router.get("/:proxyId/serialization", auth.requireAuth, resolveProxy, async (req, res) => {
+    const shellRows = await db.all(
+      "SELECT shell_json FROM aas_proxy_shells WHERE proxy_id = ?",
+      [req.proxy.proxy_id]
+    );
+    const smRows = await db.all(
+      "SELECT sm_json FROM aas_proxy_submodels WHERE proxy_id = ?",
+      [req.proxy.proxy_id]
+    );
+    res.json({
+      assetAdministrationShells: shellRows.map(r => JSON.parse(r.shell_json)),
+      submodels: smRows.map(r => JSON.parse(r.sm_json)),
+      conceptDescriptions: [],
+    });
+  });
 }
 
 module.exports = { initAasWrapperTables, mountRoutes };

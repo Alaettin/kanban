@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>AAS Repository Proxy – Workspace</title>
-  <link rel="stylesheet" href="/apps/aas-repo-proxy/styles.css?v=5" />
+  <link rel="stylesheet" href="/apps/aas-repo-proxy/styles.css?v=6" />
 </head>
 <body>
   <header class="app-header">
@@ -128,6 +128,10 @@
               <span class="status-value" id="val-shells">0</span>
             </div>
             <div class="status-item">
+              <span class="status-label" id="lbl-submodels">Submodels</span>
+              <span class="status-value" id="val-submodels">0</span>
+            </div>
+            <div class="status-item">
               <span class="status-label" id="lbl-items">Items</span>
               <span class="status-value" id="val-items">0</span>
             </div>
@@ -142,7 +146,7 @@
           </div>
           <div id="build-progress" class="build-progress" hidden>
             <div class="build-progress-bar">
-              <div class="build-progress-fill"></div>
+              <div class="build-progress-fill" id="build-progress-fill"></div>
             </div>
             <span class="build-progress-text" id="build-progress-text">Daten werden aktualisiert…</span>
           </div>
@@ -172,6 +176,6 @@
   </dialog>
 
   <div id="aw-toast" class="aw-toast" hidden></div>
-  <script src="/apps/aas-repo-proxy/app.js?v=5"></script>
+  <script src="/apps/aas-repo-proxy/app.js?v=6"></script>
 </body>
 </html>

@@ -321,16 +321,14 @@ body{
 }
 .build-progress-fill{
   height:100%;background:var(--accent);border-radius:3px;
-  width:30%;
-  animation:indeterminate 1.4s ease-in-out infinite;
+  width:0%;
+  transition:width 0.3s ease;
 }
 .build-progress-text{font-size:.78rem;color:var(--text-muted);margin-top:6px;display:block}
-
-@keyframes indeterminate{
-  0%{width:30%;margin-left:0}
-  50%{width:50%;margin-left:25%}
-  100%{width:30%;margin-left:70%}
-}
+.build-progress.done .build-progress-fill{background:#16a34a}
+.build-progress.done .build-progress-text{color:#16a34a}
+.build-progress.error .build-progress-fill{background:var(--danger)}
+.build-progress.error .build-progress-text{color:var(--danger)}
 
 /* ── Errors List ──────────────────────────────────────────── */
 .errors-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto}
