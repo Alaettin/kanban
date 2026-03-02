@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>BMEcat Reader – Workspace</title>
+  <link rel="stylesheet" href="/apps/bmecat-reader/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <a href="/dashboard" class="header-back-btn" title="Zurück zum Dashboard">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <span id="brand-text">BMEcat Reader</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="user-menu-wrap">
+      <button id="user-menu-toggle" class="user-avatar-btn" type="button" aria-haspopup="true" aria-expanded="false">
+        <span id="user-initials">--</span>
+      </button>
+      <div id="user-menu" class="user-menu" hidden>
+        <div id="user-info" class="user-menu-info"></div>
+        <div class="user-menu-section">
+          <div class="locale-switch" role="radiogroup" aria-label="Sprache">
+            <button id="locale-de-btn" class="locale-switch-btn active" type="button" role="radio" aria-checked="true">DE</button>
+            <button id="locale-en-btn" class="locale-switch-btn" type="button" role="radio" aria-checked="false">EN</button>
+          </div>
+        </div>
+        <button id="logout-btn" class="user-menu-item" type="button">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Drop Zone / File Picker -->
+    <div id="drop-zone" class="drop-zone">
+      <svg class="drop-icon" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <polyline points="9 15 12 12 15 15"/>
+      </svg>
+      <p id="drop-text" class="drop-text">BMEcat-XML-Datei hierher ziehen oder klicken</p>
+      <button id="open-btn" class="open-btn" type="button">
+        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span id="open-btn-label">Datei öffnen</span>
+      </button>
+      <input type="file" id="file-input" accept=".xml" hidden />
+    </div>
+
+    <!-- Catalog View (hidden until file loaded) -->
+    <div id="catalog-view" class="catalog-view" hidden>
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button id="close-btn" class="toolbar-btn" type="button" title="Schließen">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <span id="file-name" class="file-name"></span>
+        <div class="toolbar-spacer"></div>
+        <div class="search-bar">
+          <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="search-input" type="text" class="search-input" autocomplete="off" />
+          <button id="search-clear" class="search-clear-btn" type="button" hidden>&times;</button>
+        </div>
+        <span id="product-count" class="product-count"></span>
+      </div>
+
+      <!-- Header Info -->
+      <div id="catalog-header" class="catalog-header"></div>
+
+      <!-- Product Grid -->
+      <div id="product-grid" class="product-grid"></div>
+    </div>
+  </main>
+
+  <script src="/apps/bmecat-reader/app.js"></script>
+</body>
+</html>

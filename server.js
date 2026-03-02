@@ -28,6 +28,7 @@ const resilienceRoutes = require("./apps/resilience/routes");
 const uccRoutes = require("./apps/use-case-checker/routes");
 const aasWrapperRoutes = require("./apps/aas-wrapper/routes");
 const edcRoutes = require("./apps/edc-connector/routes");
+const bmecatRoutes = require("./apps/bmecat-reader/routes");
 
 const app = express();
 const dtiDir = path.join(__dirname, "apps", "dti-connector");
@@ -38,6 +39,7 @@ const resilienceDir = path.join(__dirname, "apps", "resilience");
 const uccDir = path.join(__dirname, "apps", "use-case-checker");
 const aasWrapperDir = path.join(__dirname, "apps", "aas-wrapper");
 const edcDir = path.join(__dirname, "apps", "edc-connector");
+const bmecatDir = path.join(__dirname, "apps", "bmecat-reader");
 const PORT = process.env.PORT || 3000;
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "platform.db");
@@ -126,6 +128,15 @@ registry.register({
   icon: "edc-connector",
   path: "/apps/edc-connector",
   color: "#E11D48",
+});
+
+registry.register({
+  id: "bmecat-reader",
+  name: "BMEcat Reader",
+  description: "BMEcat-XML-Dateien \u00f6ffnen und \u00fcbersichtlich lesen",
+  icon: "bmecat-reader",
+  path: "/apps/bmecat-reader",
+  color: "#6366f1",
 });
 
 // --- Middleware ---
@@ -358,6 +369,14 @@ const edcRouter = express.Router();
 edcRoutes.mountRoutes(edcRouter);
 app.use("/apps/edc-connector", edcRouter);
 
+// --- BMEcat Reader App ---
+app.get("/apps/bmecat-reader/styles.css", (req, res) => res.sendFile(path.join(bmecatDir, "styles.css")));
+app.get("/apps/bmecat-reader/app.js", (req, res) => res.sendFile(path.join(bmecatDir, "app.js")));
+app.get("/apps/bmecat-reader", auth.requireAuthPage, requireAppAccess("bmecat-reader"), (req, res) => res.sendFile(path.join(bmecatDir, "index.html")));
+const bmecatRouter = express.Router();
+bmecatRoutes.mountRoutes(bmecatRouter);
+app.use("/apps/bmecat-reader", bmecatRouter);
+
 // --- Admin ---
 const adminDir = path.join(platformDir, "admin");
 
@@ -544,6 +563,7 @@ async function start() {
   await uccRoutes.initUccTables();
   await aasWrapperRoutes.initAasWrapperTables();
   await edcRoutes.initEdcTables();
+  await bmecatRoutes.initBmecatReaderTables();
   resilienceRoutes.scheduleImports();
   auth.startMaintenanceJobs();
 
