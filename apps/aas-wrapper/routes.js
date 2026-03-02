@@ -168,6 +168,7 @@ async function buildCache(proxyId) {
       if (r && r.__error) {
         errorDetails.push({ itemId: itemIds[i], error: r.__error });
       } else if (r) {
+        if (!r.modelType) r.modelType = "AssetAdministrationShell";
         const aasId = r.id || itemIds[i];
         await db.run(
           "INSERT OR REPLACE INTO aas_proxy_shells (proxy_id, aas_id, shell_json) VALUES (?, ?, ?)",
@@ -207,6 +208,7 @@ async function buildCache(proxyId) {
         if (r && r.__error) {
           errorDetails.push({ itemId: uniqueSmIds[i], error: r.__error });
         } else if (r) {
+          if (!r.modelType) r.modelType = "Submodel";
           const smId = r.id || uniqueSmIds[i];
           await db.run(
             "INSERT OR REPLACE INTO aas_proxy_submodels (proxy_id, submodel_id, sm_json) VALUES (?, ?, ?)",
