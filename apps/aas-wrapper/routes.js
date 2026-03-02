@@ -2,6 +2,18 @@ const crypto = require("crypto");
 const db = require("../../shared/db");
 const auth = require("../../shared/auth");
 
+// ── AAS V3 Result error helper ───────────────────────────────
+function aasError(res, status, text) {
+  res.status(status).json({
+    messages: [{
+      messageType: "Error",
+      text,
+      code: String(status),
+      timestamp: new Date().toISOString(),
+    }],
+  });
+}
+
 // ── Base64-URL encoding (AAS V3 spec) ──────────────────────
 function toBase64Url(str) {
   return Buffer.from(str, "utf-8").toString("base64url");
@@ -362,17 +374,17 @@ async function resolveProxy(req, res, next) {
 // Public resolver — no auth required, lookup by proxy_id only
 async function resolveProxyPublic(req, res, next) {
   const proxyId = req.params.proxyId;
-  if (!proxyId) return res.status(400).json({ error: "MISSING_PROXY_ID" });
+  if (!proxyId) return aasError(res, 400, "Missing proxy ID");
   try {
     const row = await db.get(
       "SELECT * FROM aas_proxies WHERE proxy_id = ?",
       [proxyId]
     );
-    if (!row) return res.status(404).json({ error: "PROXY_NOT_FOUND" });
+    if (!row) return aasError(res, 404, "Proxy not found");
     req.proxy = row;
     next();
   } catch {
-    res.status(500).json({ error: "RESOLVE_FAILED" });
+    aasError(res, 500, "Internal server error");
   }
 }
 
@@ -484,7 +496,7 @@ function mountRoutes(router) {
   // Shared proxy handler — forwards to the real AAS repo
   async function proxyHandler(req, res) {
     try {
-      if (!req.proxy?.aas_base_url) return res.status(503).json({ error: "NOT_CONFIGURED" });
+      if (!req.proxy?.aas_base_url) return aasError(res, 503, "Proxy not configured");
       // req.path = /{proxyId}/shells/... → strip /{proxyId} to get AAS V3 path
       const aasPath = req.path.substring(1 + req.proxy.proxy_id.length);
       const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
@@ -502,7 +514,7 @@ function mountRoutes(router) {
         res.status(resp.status).set("Content-Type", ct || "application/octet-stream").send(buf);
       }
     } catch (err) {
-      res.status(502).json({ error: "PROXY_ERROR", message: err.message });
+      aasError(res, 502, err.message);
     }
   }
 
@@ -511,8 +523,8 @@ function mountRoutes(router) {
   // Cached shells list
   router.get("/:proxyId/shells", resolveProxyPublic, async (req, res) => {
     const result = await getShellsList(req.proxy.proxy_id, req.query);
-    if (!result) return res.status(400).json({ error: "BAD_REQUEST", message: "Invalid limit parameter" });
-    if (result.__invalid) return res.status(400).json({ error: "BAD_REQUEST", message: `Invalid ${result.__invalid} parameter` });
+    if (!result) return aasError(res, 400, "Invalid limit parameter");
+    if (result.__invalid) return aasError(res, 400, `Invalid ${result.__invalid} parameter`);
     res.json(result);
   });
 
@@ -535,7 +547,7 @@ function mountRoutes(router) {
       sm.submodelElements ? { ...sm, submodelElements: stripBlobValues(sm.submodelElements) } : sm
     );
     const result = paginate(items, req.query);
-    if (!result) return res.status(400).json({ error: "BAD_REQUEST", message: "Invalid limit parameter" });
+    if (!result) return aasError(res, 400, "Invalid limit parameter");
     res.json(result);
   });
 
