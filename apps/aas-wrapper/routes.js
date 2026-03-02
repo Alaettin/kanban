@@ -28,7 +28,7 @@ async function parallelFetch(items, fn, concurrency = 5, onProgress) {
 }
 
 // ── Building-State (in-memory, transient) ───────────────────
-const buildJobs = {};  // { proxyId: { total, done, errors, running } }
+const buildJobs = {};  // { proxyId: { phases: [{ label, total, done, errors }], running } }
 
 // ── DB-backed cache helpers ─────────────────────────────────
 
@@ -51,9 +51,7 @@ async function getCacheStatus(proxyId) {
     shellCount: shellCount?.cnt || 0,
     submodelCount: smCount?.cnt || 0,
     building: job?.running || false,
-    buildTotal: job?.total || 0,
-    buildDone: job?.done || 0,
-    buildErrors: job?.errors || 0,
+    buildPhases: job?.phases || [],
     lastRefresh: row?.cache_last_refresh || null,
     totalItems: row?.cache_total_items || 0,
     errorCount: errors.length,
@@ -119,7 +117,7 @@ async function buildCache(proxyId) {
   );
   if (!config?.aas_base_url || !config?.items_endpoint) return;
 
-  const job = { total: 0, done: 0, errors: 0, running: true };
+  const job = { phases: [], running: true };
   buildJobs[proxyId] = job;
   const errorDetails = [];
   let totalItems = 0;
@@ -143,10 +141,12 @@ async function buildCache(proxyId) {
     else throw new Error("Unexpected items format");
 
     totalItems = itemIds.length;
-    job.total = totalItems;
     const baseUrl = config.aas_base_url.replace(/\/+$/, "");
 
     // ── Phase 1: Fetch shells ──
+    const shellPhase = { label: "Shells", total: itemIds.length, done: 0, errors: 0 };
+    job.phases.push(shellPhase);
+
     const shellResults = await parallelFetch(itemIds, async (itemId) => {
       const encoded = toBase64Url(itemId);
       const resp = await fetch(`${baseUrl}/shells/${encoded}`, {
@@ -156,8 +156,8 @@ async function buildCache(proxyId) {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     }, 5, (result) => {
-      job.done++;
-      if (result?.__error) job.errors++;
+      shellPhase.done++;
+      if (result?.__error) shellPhase.errors++;
     });
 
     // Write shells to DB
@@ -184,7 +184,8 @@ async function buildCache(proxyId) {
     const uniqueSmIds = [...new Set(smRefs)];
 
     if (uniqueSmIds.length > 0) {
-      job.total += uniqueSmIds.length;
+      const smPhase = { label: "Submodels", total: uniqueSmIds.length, done: 0, errors: 0 };
+      job.phases.push(smPhase);
 
       const smResults = await parallelFetch(uniqueSmIds, async (smId) => {
         const encoded = toBase64Url(smId);
@@ -195,8 +196,8 @@ async function buildCache(proxyId) {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
       }, 5, (result) => {
-        job.done++;
-        if (result?.__error) job.errors++;
+        smPhase.done++;
+        if (result?.__error) smPhase.errors++;
       });
 
       // Write submodels to DB

@@ -111,8 +111,6 @@ const refreshBtn     = $("#refresh-btn");
 const errorsCard     = $("#errors-card");
 const errorsList     = $("#errors-list");
 const buildProgress     = $("#build-progress");
-const buildProgressFill = $("#build-progress-fill");
-const buildProgressText = $("#build-progress-text");
 const toastEl           = $("#aw-toast");
 const baseUrlText    = $("#proxy-base-url-text");
 const copyBaseUrlBtn = $("#copy-base-url-btn");
@@ -432,31 +430,42 @@ async function saveConfig(e) {
 }
 
 // ── Status ───────────────────────────────────────────────────
+function renderPhases(phases, finished) {
+  return phases.map(phase => {
+    const pct = phase.total > 0 ? Math.round((phase.done / phase.total) * 100) : 0;
+    const cls = finished ? (phase.errors > 0 ? " error" : " done") : "";
+    const w = finished ? "100%" : pct + "%";
+    const count = finished && phase.errors > 0
+      ? `${phase.errors} ${t("lblErrors")}`
+      : `${phase.done} / ${phase.total}`;
+    return `<div class="build-phase${cls}">
+      <div class="build-phase-header">
+        <span class="build-phase-label">${phase.label}</span>
+        <span class="build-phase-count">${count}</span>
+      </div>
+      <div class="build-progress-bar">
+        <div class="build-progress-fill" style="width:${w}"></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
 async function loadStatus() {
   if (!currentProxyId) return;
   const data = await api(`/api/proxies/${currentProxyId}/status`);
   if (!data) return;
   renderStatus(data);
+  const phases = data.buildPhases || [];
   if (data.building) {
     if (!pollTimer) pollTimer = setInterval(loadStatus, 2000);
     buildProgress.hidden = false;
-    buildProgress.className = "build-progress";
     refreshBtn.disabled = true;
-    const pct = data.buildTotal > 0 ? Math.round((data.buildDone / data.buildTotal) * 100) : 0;
-    buildProgressFill.style.width = pct + "%";
-    buildProgressText.textContent = `${data.buildDone} / ${data.buildTotal}`;
+    buildProgress.innerHTML = renderPhases(phases, false);
   } else {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     refreshBtn.disabled = false;
-    if (!buildProgress.hidden && data.buildDone > 0) {
-      buildProgressFill.style.width = "100%";
-      if (data.buildErrors > 0) {
-        buildProgress.className = "build-progress error";
-        buildProgressText.textContent = `${data.buildErrors} ${t("lblErrors")}`;
-      } else {
-        buildProgress.className = "build-progress done";
-        buildProgressText.textContent = t("statusReady");
-      }
+    if (!buildProgress.hidden && phases.length > 0) {
+      buildProgress.innerHTML = renderPhases(phases, true);
       setTimeout(() => { buildProgress.hidden = true; }, 4000);
     } else {
       buildProgress.hidden = true;
@@ -523,9 +532,7 @@ async function triggerRefresh() {
   if (data?.ok) {
     toast(t("toastRefreshStarted"));
     buildProgress.hidden = false;
-    buildProgress.className = "build-progress";
-    buildProgressFill.style.width = "0%";
-    buildProgressText.textContent = "0 / 0";
+    buildProgress.innerHTML = "";
     if (!pollTimer) pollTimer = setInterval(loadStatus, 2000);
     setTimeout(loadStatus, 500);
   } else if (data?.error === "BUILD_IN_PROGRESS") {
