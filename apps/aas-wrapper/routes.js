@@ -56,15 +56,26 @@ async function getCacheStatus(proxyId) {
   };
 }
 
-async function getShellsList(proxyId) {
+function paginate(items, query) {
+  const limit = query.limit ? Math.max(1, parseInt(query.limit, 10) || items.length) : items.length;
+  let offset = 0;
+  if (query.cursor) {
+    try { offset = JSON.parse(Buffer.from(query.cursor, "base64").toString()).offset || 0; } catch {}
+  }
+  const page = items.slice(offset, offset + limit);
+  const nextOffset = offset + limit;
+  const cursor = nextOffset < items.length
+    ? Buffer.from(JSON.stringify({ offset: nextOffset, total: items.length })).toString("base64")
+    : "";
+  return { paging_metadata: { cursor }, result: page };
+}
+
+async function getShellsList(proxyId, query = {}) {
   const rows = await db.all(
     "SELECT shell_json FROM aas_proxy_shells WHERE proxy_id = ?",
     [proxyId]
   );
-  return {
-    paging_metadata: { cursor: "" },
-    result: rows.map(r => JSON.parse(r.shell_json)),
-  };
+  return paginate(rows.map(r => JSON.parse(r.shell_json)), query);
 }
 
 function deleteCache(proxyId) {
@@ -422,7 +433,7 @@ function mountRoutes(router) {
 
   // Cached shells list
   router.get("/:proxyId/shells", auth.requireAuth, resolveProxy, async (req, res) => {
-    res.json(await getShellsList(req.proxy.proxy_id));
+    res.json(await getShellsList(req.proxy.proxy_id, req.query));
   });
 
   // Shell endpoints
@@ -438,10 +449,7 @@ function mountRoutes(router) {
       "SELECT sm_json FROM aas_proxy_submodels WHERE proxy_id = ?",
       [req.proxy.proxy_id]
     );
-    res.json({
-      paging_metadata: { cursor: "" },
-      result: rows.map(r => JSON.parse(r.sm_json)),
-    });
+    res.json(paginate(rows.map(r => JSON.parse(r.sm_json)), req.query));
   });
 
   // Single submodel endpoints (proxy passthrough)
