@@ -530,6 +530,17 @@ async function triggerRefresh() {
   const data = await api(`/api/proxies/${currentProxyId}/refresh`, { method: "POST" });
   if (data?.ok) {
     toast(t("toastRefreshStarted"));
+    // Reset status values and hide errors
+    $("#val-status").textContent = t("statusBuilding");
+    $("#val-status").className = "status-value building";
+    $("#val-shells").textContent = "—";
+    $("#val-submodels").textContent = "—";
+    $("#val-items").textContent = "—";
+    $("#val-last-refresh").textContent = "—";
+    $("#val-errors").textContent = "—";
+    $("#val-errors").className = "status-value";
+    errorsCard.hidden = true;
+    errorsList.innerHTML = "";
     buildProgress.hidden = false;
     buildProgress.innerHTML = "";
     if (!pollTimer) pollTimer = setInterval(loadStatus, 2000);
