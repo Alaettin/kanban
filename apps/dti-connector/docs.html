@@ -595,7 +595,7 @@
         <span class="endpoint-summary">Get property values for an asset</span>
       </div>
       <div class="endpoint-body">
-        <p>Returns property values for a specific asset. Use the request body to filter by language and/or property IDs. Send empty arrays to get all values.</p>
+        <p>Returns property values for a specific asset. Use the request body to filter by language and/or property IDs. Send empty arrays to get all values. Image files are returned as Base64 inline. Non-image files (PDF, DOCX, etc.) return <code>needsResolve: true</code> with the file ID as <code>value</code> — use <code>/documents</code> to resolve them.</p>
 
         <div class="response-label">Request Body</div>
 <pre>{
@@ -637,6 +637,14 @@
     "mimeType": "image/png",
     "filename": "logo_de",
     "needsResolve": false
+  },
+  {
+    "propertyId": "ds_pm0202_en_co",
+    "value": "dt_abc123",
+    "valueLanguage": "en",
+    "mimeType": "application/pdf",
+    "filename": "datasheet",
+    "needsResolve": true
   }
 ]</pre>
 
@@ -688,6 +696,61 @@
             Try it
           </button>
           <div id="try-item-values-result" class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST /Product/{itemId}/documents -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-post">POST</span>
+        <span class="endpoint-path">/Product/{itemId}/documents</span>
+        <span class="endpoint-summary">Resolve file content for document properties</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns the full Base64-encoded file content for the requested document properties. Use this to resolve files that were returned with <code>needsResolve: true</code> in the <code>/values</code> endpoint. If <code>languages</code> is empty, defaults to <code>["en"]</code>.</p>
+
+        <div class="response-label">Request Body</div>
+<pre>{
+  "languages": ["en"],
+  "propertyIds": ["ds_pm0202_en_co"]
+}</pre>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>[
+  {
+    "propertyId": "ds_pm0202_en_co",
+    "value": "JVBERi0xLjQ...",
+    "filename": "ds_pm0202_en_co",
+    "valueLanguage": "en",
+    "needsResolve": false
+  }
+]</pre>
+
+        <div class="response-label">Error <span class="status-code status-401">401 Unauthorized</span></div>
+<pre>{ "error": "Invalid API key" }</pre>
+
+        <div class="response-label">Error <span class="status-code status-404">404 Not Found</span></div>
+<pre>{ "error": "Asset not found" }</pre>
+
+        <div class="try-section">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--muted)">Item ID</label>
+            <input id="try-item-docs-id" type="text" placeholder="assetId" style="font-family:'Courier New',monospace;font-size:0.8rem;padding:0.3rem 0.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);width:200px" />
+          </div>
+          <div style="margin-bottom:0.5rem">
+            <label style="font-size:0.75rem;font-weight:600;color:var(--muted);display:block;margin-bottom:0.3rem">Request Body</label>
+            <textarea id="try-item-docs-body" rows="5" style="width:100%;font-family:'Courier New',monospace;font-size:0.78rem;padding:0.6rem 0.8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);resize:vertical;line-height:1.5">{
+  "languages": ["en"],
+  "propertyIds": []
+}</textarea>
+          </div>
+          <button id="try-item-docs-btn" class="try-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div id="try-item-docs-result" class="try-result" hidden></div>
         </div>
       </div>
     </div>
@@ -750,6 +813,7 @@
         document.getElementById("try-model-btn").disabled = false;
         document.getElementById("try-item-hierarchy-btn").disabled = false;
         document.getElementById("try-item-values-btn").disabled = false;
+        document.getElementById("try-item-docs-btn").disabled = false;
       } else {
         baseUrlDisplay.innerHTML =
           '<div class="base-url-none">Kein API-Schl\u00fcssel gespeichert. ' +
@@ -912,6 +976,43 @@
 
       const url = APP_BASE + "/api/v1/" + apiKey + "/Product/" + encodeURIComponent(itemId) + "/values";
       let bodyText = document.getElementById("try-item-values-body").value;
+
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: bodyText
+        });
+        const status = res.status;
+        const text = await res.text();
+        let formatted = text;
+        try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+
+        resultDiv.innerHTML =
+          '<div class="try-result-status">' +
+          '<span class="status-code ' + (status === 200 ? 'status-200' : status === 404 ? 'status-404' : 'status-401') + '">' +
+          status + ' ' + (status === 200 ? 'OK' : 'Error') + '</span> ' +
+          '<span style="color:var(--muted);font-size:0.72rem">POST ' + escapeHtml(url) + '</span></div>' +
+          '<pre>' + escapeHtml(formatted) + '</pre>';
+        resultDiv.hidden = false;
+      } catch (err) {
+        resultDiv.innerHTML = '<pre style="color:#dc2626">Request failed: ' + escapeHtml(err.message) + '</pre>';
+        resultDiv.hidden = false;
+      }
+
+      btn.disabled = false;
+    });
+
+    document.getElementById("try-item-docs-btn").addEventListener("click", async () => {
+      if (!apiKey) return;
+      const itemId = document.getElementById("try-item-docs-id").value.trim();
+      if (!itemId) return;
+      const btn = document.getElementById("try-item-docs-btn");
+      const resultDiv = document.getElementById("try-item-docs-result");
+      btn.disabled = true;
+
+      const url = APP_BASE + "/api/v1/" + apiKey + "/Product/" + encodeURIComponent(itemId) + "/documents";
+      let bodyText = document.getElementById("try-item-docs-body").value;
 
       try {
         const res = await fetch(url, {
