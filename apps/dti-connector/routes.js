@@ -1408,13 +1408,14 @@ function mountRoutes(router) {
           }
           const files = await db.all(query, params);
           for (const f of files) {
+            const isImage = f.mime_type && f.mime_type.startsWith("image/");
             result.push({
               propertyId: key,
-              value: readFileBase64(fileId, f.lang, f.original_name),
+              value: isImage ? readFileBase64(fileId, f.lang, f.original_name) : fileId,
               mimeType: f.mime_type,
               filename: path.basename(f.original_name, path.extname(f.original_name)),
               valueLanguage: f.lang,
-              needsResolve: false,
+              needsResolve: !isImage,
             });
           }
         } else {
@@ -1449,6 +1450,64 @@ function mountRoutes(router) {
       res.json(result);
     } catch {
       res.status(500).json({ error: "Failed to load values" });
+    }
+  });
+
+  router.post("/api/v1/:apiKey/Product/:itemId/documents", async (req, res) => {
+    try {
+      const conn = await resolveApiKey(req.params.apiKey);
+      if (!conn) return res.status(401).json({ error: "Invalid API key" });
+      const cid = conn.connector_id;
+      const userId = conn.user_id;
+      const itemId = req.params.itemId;
+      const asset = await db.get("SELECT asset_id FROM dti_assets WHERE connector_id = ? AND asset_id = ?", [cid, itemId]);
+      if (!asset) return res.status(404).json({ error: "Asset not found" });
+
+      const model = await db.all("SELECT dp_id, type FROM dti_model_datapoints WHERE connector_id = ?", [cid]);
+      const fileKeys = new Set();
+      for (const m of model) { if (m.type === 1) fileKeys.add(m.dp_id); }
+
+      function readFileBase64(fileId, lang, originalName) {
+        const ext = path.extname(originalName);
+        const filePath = path.join(UPLOADS_DIR, userId, cid, fileId + "_" + lang + ext);
+        try { return fs.readFileSync(filePath).toString("base64"); } catch { return ""; }
+      }
+
+      const body = req.body || {};
+      const languages = Array.isArray(body.languages) && body.languages.length > 0 ? body.languages : ["en"];
+      const propertyIds = Array.isArray(body.propertyIds) ? body.propertyIds : [];
+
+      const result = [];
+      for (const key of propertyIds) {
+        if (!fileKeys.has(key)) continue;
+        const valRow = await db.get(
+          "SELECT value FROM dti_asset_values WHERE connector_id = ? AND asset_id = ? AND key = ? LIMIT 1",
+          [cid, itemId, key]
+        );
+        if (!valRow || !valRow.value) continue;
+        let fileId = valRow.value;
+        if (fileId.startsWith("file:image_")) fileId = fileId.slice(11);
+        else if (fileId.startsWith("file:")) fileId = fileId.slice(5);
+
+        let query = "SELECT lang, original_name, mime_type FROM dti_files WHERE connector_id = ? AND file_id = ?";
+        const params = [cid, fileId];
+        query += " AND lang IN (" + languages.map(() => "?").join(",") + ")";
+        params.push(...languages);
+
+        const files = await db.all(query, params);
+        for (const f of files) {
+          result.push({
+            propertyId: key,
+            value: readFileBase64(fileId, f.lang, f.original_name),
+            filename: path.basename(f.original_name, path.extname(f.original_name)),
+            valueLanguage: f.lang,
+            needsResolve: false,
+          });
+        }
+      }
+      res.json(result);
+    } catch {
+      res.status(500).json({ error: "Failed to load documents" });
     }
   });
 
