@@ -448,6 +448,7 @@
         <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
         <span class="method-badge method-get">GET</span>
         <span class="endpoint-path">/shells</span>
+        <span class="section-badge badge-cached">CACHED</span>
         <span class="endpoint-summary">Alle Shells auflisten</span>
       </div>
       <div class="endpoint-body">
@@ -649,8 +650,92 @@
       </div>
     </div>
 
+    <!-- GET /serialization -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/serialization</span>
+        <span class="section-badge badge-cached">CACHED</span>
+        <span class="endpoint-summary">AAS Environment JSON</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Gibt das gesamte AAS Environment als JSON zur&uuml;ck. Enth&auml;lt alle gecachten Shells, Submodels und Concept Descriptions. Wird aus dem lokalen Cache zusammengebaut.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "assetAdministrationShells": [
+    {
+      "idShort": "ExampleShell",
+      "id": "https://example.com/aas/1",
+      "assetInformation": { "assetKind": "Instance", "globalAssetId": "..." },
+      "submodels": [...]
+    }
+  ],
+  "submodels": [
+    {
+      "idShort": "Identification",
+      "id": "https://example.com/submodel/1",
+      "submodelElements": [...]
+    }
+  ],
+  "conceptDescriptions": []
+}</pre>
+
+        <div class="try-section">
+          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/serialization')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ─── Submodel Endpoints ───────────────────────────────── -->
     <h2>Submodel Endpoints</h2>
+
+    <!-- GET /submodels -->
+    <div class="endpoint-card">
+      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
+        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        <span class="method-badge method-get">GET</span>
+        <span class="endpoint-path">/submodels</span>
+        <span class="section-badge badge-cached">CACHED</span>
+        <span class="endpoint-summary">Alle Submodels auflisten</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Gibt alle gecachten Submodels zur&uuml;ck. Die Submodels werden beim Daten-Refresh automatisch aus den Shell-Referenzen extrahiert und abgerufen.</p>
+
+        <div class="response-label">Response <span class="status-code status-200">200 OK</span></div>
+<pre>{
+  "paging_metadata": { "cursor": "" },
+  "result": [
+    {
+      "idShort": "Identification",
+      "id": "https://example.com/submodel/1",
+      "kind": "Instance",
+      "submodelElements": [
+        {
+          "idShort": "ManufacturerName",
+          "modelType": "Property",
+          "valueType": "xs:string",
+          "value": "Example Corp"
+        }
+      ]
+    }
+  ]
+}</pre>
+
+        <div class="try-section">
+          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/submodels')">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Try it
+          </button>
+          <div class="try-result" hidden></div>
+        </div>
+      </div>
+    </div>
 
     <!-- GET /submodels/{submodelIdentifier} -->
     <div class="endpoint-card">
@@ -766,27 +851,6 @@
 
         <div class="try-section">
           <button class="try-btn" type="button" onclick="tryEndpoint(this, '/description')">
-            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Try it
-          </button>
-          <div class="try-result" hidden></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- GET /serialization -->
-    <div class="endpoint-card">
-      <div class="endpoint-header" onclick="this.parentElement.classList.toggle('open')">
-        <svg class="endpoint-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
-        <span class="method-badge method-get">GET</span>
-        <span class="endpoint-path">/serialization</span>
-        <span class="endpoint-summary">Serialisierung</span>
-      </div>
-      <div class="endpoint-body">
-        <p>Exportiert die Daten des Repositories als AASX, JSON oder XML. Unterst&uuml;tzt <code>?aasIds=</code> und <code>?submodelIds=</code> Query-Parameter zur Filterung.</p>
-
-        <div class="try-section">
-          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/serialization')">
             <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Try it
           </button>
