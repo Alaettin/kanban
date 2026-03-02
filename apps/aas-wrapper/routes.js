@@ -70,6 +70,24 @@ function paginate(items, query) {
   return { paging_metadata: { cursor }, result: page };
 }
 
+// AAS V3 level=core: strip nested children from SubmodelElementCollections
+function applyCoreLevel(sm) {
+  if (!sm.submodelElements) return sm;
+  return { ...sm, submodelElements: sm.submodelElements.map(el =>
+    el.value && Array.isArray(el.value) ? { ...el, value: [] } : el
+  )};
+}
+
+// AAS V3 extent=withoutBlobValue: remove value from Blob elements (recursive)
+function stripBlobValues(elements) {
+  if (!elements) return elements;
+  return elements.map(el => {
+    if (el.modelType === "Blob") return { ...el, value: undefined };
+    if (el.value && Array.isArray(el.value)) return { ...el, value: stripBlobValues(el.value) };
+    return el;
+  });
+}
+
 async function getShellsList(proxyId, query = {}) {
   const rows = await db.all(
     "SELECT shell_json FROM aas_proxy_shells WHERE proxy_id = ?",
@@ -449,7 +467,12 @@ function mountRoutes(router) {
       "SELECT sm_json FROM aas_proxy_submodels WHERE proxy_id = ?",
       [req.proxy.proxy_id]
     );
-    res.json(paginate(rows.map(r => JSON.parse(r.sm_json)), req.query));
+    let items = rows.map(r => JSON.parse(r.sm_json));
+    if (req.query.level === "core") items = items.map(applyCoreLevel);
+    if (req.query.extent !== "withBlobValue") items = items.map(sm =>
+      sm.submodelElements ? { ...sm, submodelElements: stripBlobValues(sm.submodelElements) } : sm
+    );
+    res.json(paginate(items, req.query));
   });
 
   // Single submodel endpoints (proxy passthrough)

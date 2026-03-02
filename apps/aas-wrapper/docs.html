@@ -746,6 +746,20 @@
             <label class="param-label">cursor</label>
             <input class="param-input" type="text" placeholder="optional" data-param="cursor" />
           </div>
+          <div class="param-row">
+            <label class="param-label">level</label>
+            <select class="param-input" data-param="level">
+              <option value="">deep (default)</option>
+              <option value="core">core</option>
+            </select>
+          </div>
+          <div class="param-row">
+            <label class="param-label">extent</label>
+            <select class="param-input" data-param="extent">
+              <option value="">withoutBlobValue (default)</option>
+              <option value="withBlobValue">withBlobValue</option>
+            </select>
+          </div>
           <button class="try-btn" type="button" onclick="tryPaginatedEndpoint(this, '/submodels')">
             <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Try it
@@ -940,6 +954,10 @@
       const params = new URLSearchParams();
       if (limit) params.set("limit", limit);
       if (cursor) params.set("cursor", cursor);
+      const level = card.querySelector('[data-param="level"]');
+      const extent = card.querySelector('[data-param="extent"]');
+      if (level?.value) params.set("level", level.value);
+      if (extent?.value) params.set("extent", extent.value);
       const qs = params.toString();
       await tryEndpoint(btn, path + (qs ? "?" + qs : ""));
     }
