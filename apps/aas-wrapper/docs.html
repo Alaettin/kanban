@@ -476,7 +476,15 @@
 }</pre>
 
         <div class="try-section">
-          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/shells')">
+          <div class="param-row">
+            <label class="param-label">limit</label>
+            <input class="param-input" type="number" min="1" placeholder="optional" data-param="limit" />
+          </div>
+          <div class="param-row">
+            <label class="param-label">cursor</label>
+            <input class="param-input" type="text" placeholder="optional" data-param="cursor" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryPaginatedEndpoint(this, '/shells')">
             <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Try it
           </button>
@@ -730,7 +738,15 @@
 }</pre>
 
         <div class="try-section">
-          <button class="try-btn" type="button" onclick="tryEndpoint(this, '/submodels')">
+          <div class="param-row">
+            <label class="param-label">limit</label>
+            <input class="param-input" type="number" min="1" placeholder="optional" data-param="limit" />
+          </div>
+          <div class="param-row">
+            <label class="param-label">cursor</label>
+            <input class="param-input" type="text" placeholder="optional" data-param="cursor" />
+          </div>
+          <button class="try-btn" type="button" onclick="tryPaginatedEndpoint(this, '/submodels')">
             <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Try it
           </button>
@@ -915,6 +931,17 @@
       }
       btn.disabled = false;
       btn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Try it';
+    }
+
+    async function tryPaginatedEndpoint(btn, path) {
+      const card = btn.closest(".endpoint-card");
+      const limit = card.querySelector('[data-param="limit"]').value.trim();
+      const cursor = card.querySelector('[data-param="cursor"]').value.trim();
+      const params = new URLSearchParams();
+      if (limit) params.set("limit", limit);
+      if (cursor) params.set("cursor", cursor);
+      const qs = params.toString();
+      await tryEndpoint(btn, path + (qs ? "?" + qs : ""));
     }
 
     async function tryShellEndpoint(btn, template) {
