@@ -1408,13 +1408,14 @@ function mountRoutes(router) {
           }
           const files = await db.all(query, params);
           for (const f of files) {
+            const isImage = f.mime_type && f.mime_type.startsWith("image/");
             result.push({
               propertyId: key,
-              value: fileId,
+              value: isImage ? readFileBase64(fileId, f.lang, f.original_name) : fileId,
               mimeType: f.mime_type,
               filename: path.basename(f.original_name, path.extname(f.original_name)),
               valueLanguage: f.lang,
-              needsResolve: true,
+              needsResolve: !isImage,
             });
           }
         } else {
