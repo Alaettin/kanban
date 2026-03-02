@@ -14,7 +14,12 @@ async function parallelFetch(items, fn, concurrency = 5, onProgress) {
   async function worker() {
     while (idx < items.length) {
       const i = idx++;
-      try { results[i] = await fn(items[i]); } catch (err) { results[i] = { __error: err.message }; }
+      try {
+        results[i] = await fn(items[i]);
+      } catch (err) {
+        // Retry once
+        try { results[i] = await fn(items[i]); } catch (err2) { results[i] = { __error: err2.message }; }
+      }
       if (onProgress) onProgress(results[i]);
     }
   }
@@ -146,7 +151,7 @@ async function buildCache(proxyId) {
       const encoded = toBase64Url(itemId);
       const resp = await fetch(`${baseUrl}/shells/${encoded}`, {
         headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
@@ -185,7 +190,7 @@ async function buildCache(proxyId) {
         const encoded = toBase64Url(smId);
         const resp = await fetch(`${baseUrl}/submodels/${encoded}`, {
           headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(30000),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
@@ -434,7 +439,7 @@ function mountRoutes(router) {
       const url = `${req.proxy.aas_base_url.replace(/\/+$/, "")}${aasPath}${qs}`;
       const resp = await fetch(url, {
         headers: { Accept: req.headers.accept || "application/json" },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
       const ct = resp.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
