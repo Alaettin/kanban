@@ -728,15 +728,22 @@ function mountRoutes(router) {
           await db.run("DELETE FROM dti_files WHERE connector_id = ? AND file_id = ? AND lang = ?", [cid, fileId, lang]);
         }
 
-        // Write file to disk
-        const buf = await zipFile.buffer();
+        // Write file to disk via stream (avoids loading entire file into memory)
         const destPath = path.join(connDir, diskName);
-        fs.writeFileSync(destPath, buf);
+        const fileSize = await new Promise((resolve, reject) => {
+          let bytes = 0;
+          const ws = fs.createWriteStream(destPath);
+          zipFile.stream()
+            .on("data", (chunk) => { bytes += chunk.length; })
+            .pipe(ws);
+          ws.on("finish", () => resolve(bytes));
+          ws.on("error", reject);
+        });
 
         // Insert DB record
         await db.run(
           "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
-          [cid, fileId, lang, originalName, buf.length, mimeType]
+          [cid, fileId, lang, originalName, fileSize, mimeType]
         );
         imported++;
       }
@@ -1227,11 +1234,19 @@ function mountRoutes(router) {
           const zipFile = findFile("files/" + diskName);
           if (!zipFile) continue;
 
-          const buf = await zipFile.buffer();
-          fs.writeFileSync(path.join(connDir, diskName), buf);
+          const destPath = path.join(connDir, diskName);
+          const fileSize = await new Promise((resolve, reject) => {
+            let bytes = 0;
+            const ws = fs.createWriteStream(destPath);
+            zipFile.stream()
+              .on("data", (chunk) => { bytes += chunk.length; })
+              .pipe(ws);
+            ws.on("finish", () => resolve(bytes));
+            ws.on("error", reject);
+          });
           await db.run(
             "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
-            [cid, fileId, lang, originalName, buf.length, mimeType]
+            [cid, fileId, lang, originalName, fileSize, mimeType]
           );
         }
       }
