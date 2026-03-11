@@ -597,7 +597,16 @@ function mountRoutes(router) {
       if (!row) return res.status(404).json({ error: "File not found" });
       const ext = path.extname(row.original_name);
       const filePath = path.join(UPLOADS_DIR, req.connector.user_id, cid, fileId + "_" + lang + ext);
-      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found on disk" });
+      if (!fs.existsSync(filePath)) {
+        console.error("File not on disk:", filePath);
+        // List actual files in directory for debugging
+        try {
+          const dir = path.dirname(filePath);
+          const dirFiles = fs.readdirSync(dir);
+          console.error("Files in dir:", dir, dirFiles.slice(0, 20));
+        } catch {}
+        return res.status(404).json({ error: "File not found on disk" });
+      }
       res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
       res.setHeader("Content-Disposition", "inline");
       fs.createReadStream(filePath).pipe(res);
@@ -1240,6 +1249,7 @@ function mountRoutes(router) {
             const buf = await zipFile.buffer();
             const destPath = path.join(connDir, diskName);
             await fs.promises.writeFile(destPath, buf);
+            console.log("File written:", destPath, buf.length, "bytes");
             await db.run(
               "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
               [cid, fileId, lang, originalName, buf.length, mimeType]
