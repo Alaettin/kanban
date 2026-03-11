@@ -728,22 +728,15 @@ function mountRoutes(router) {
           await db.run("DELETE FROM dti_files WHERE connector_id = ? AND file_id = ? AND lang = ?", [cid, fileId, lang]);
         }
 
-        // Write file to disk via stream (avoids loading entire file into memory)
+        // Write file to disk
+        const buf = await zipFile.buffer();
         const destPath = path.join(connDir, diskName);
-        const fileSize = await new Promise((resolve, reject) => {
-          let bytes = 0;
-          const ws = fs.createWriteStream(destPath);
-          zipFile.stream()
-            .on("data", (chunk) => { bytes += chunk.length; })
-            .pipe(ws);
-          ws.on("finish", () => resolve(bytes));
-          ws.on("error", reject);
-        });
+        await fs.promises.writeFile(destPath, buf);
 
         // Insert DB record
         await db.run(
           "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
-          [cid, fileId, lang, originalName, fileSize, mimeType]
+          [cid, fileId, lang, originalName, buf.length, mimeType]
         );
         imported++;
       }
@@ -751,8 +744,9 @@ function mountRoutes(router) {
       fs.unlink(tmpPath, () => {});
       res.json({ ok: true, imported, skipped });
     } catch (err) {
+      console.error("ZIP import error:", err);
       fs.unlink(tmpPath, () => {});
-      res.status(500).json({ error: "Failed to import ZIP" });
+      res.status(500).json({ error: "Failed to import ZIP", detail: err.message });
     }
   });
 
@@ -1234,19 +1228,12 @@ function mountRoutes(router) {
           const zipFile = findFile("files/" + diskName);
           if (!zipFile) continue;
 
+          const buf = await zipFile.buffer();
           const destPath = path.join(connDir, diskName);
-          const fileSize = await new Promise((resolve, reject) => {
-            let bytes = 0;
-            const ws = fs.createWriteStream(destPath);
-            zipFile.stream()
-              .on("data", (chunk) => { bytes += chunk.length; })
-              .pipe(ws);
-            ws.on("finish", () => resolve(bytes));
-            ws.on("error", reject);
-          });
+          await fs.promises.writeFile(destPath, buf);
           await db.run(
             "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
-            [cid, fileId, lang, originalName, fileSize, mimeType]
+            [cid, fileId, lang, originalName, buf.length, mimeType]
           );
         }
       }
@@ -1298,8 +1285,9 @@ function mountRoutes(router) {
       fs.unlink(tmpPath, () => {});
       res.json({ ok: true });
     } catch (err) {
+      console.error("Full import error:", err);
       fs.unlink(tmpPath, () => {});
-      res.status(500).json({ error: "Failed to import connector data" });
+      res.status(500).json({ error: "Failed to import connector data", detail: err.message });
     }
   });
 
