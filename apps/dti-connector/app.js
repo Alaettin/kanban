@@ -76,6 +76,8 @@ const I18N = {
     connectorImportConfirm: "Importieren",
     connectorImportSuccess: "Konnektor erfolgreich importiert.",
     connectorImportError: "Fehler beim Importieren.",
+    connectorImportFiles: "Dateien importiert",
+    connectorImportSkipped: "\u00fcbersprungen",
     connectorExportError: "Fehler beim Exportieren.",
     shareTitle: "Konnektor teilen",
     shareRoleLabel: "Rolle",
@@ -252,6 +254,8 @@ const I18N = {
     connectorImportConfirm: "Import",
     connectorImportSuccess: "Connector imported successfully.",
     connectorImportError: "Import failed.",
+    connectorImportFiles: "files imported",
+    connectorImportSkipped: "skipped",
     connectorExportError: "Export failed.",
     shareTitle: "Share connector",
     shareRoleLabel: "Role",
@@ -938,10 +942,15 @@ connectorImportForm.addEventListener("submit", async (e) => {
     });
     const result = await resp.json();
     if (!resp.ok) {
-      connectorHint.textContent = result.error || t("connectorImportError");
+      connectorHint.textContent = (result.detail || result.error || t("connectorImportError"));
       connectorHint.className = "hierarchy-hint hint-error";
       connectorHint.hidden = false;
-      setTimeout(() => { connectorHint.hidden = true; }, 3000);
+      setTimeout(() => { connectorHint.hidden = true; }, 5000);
+    } else if (result.filesSkipped > 0) {
+      connectorHint.textContent = t("connectorImportSuccess") + " (" + result.filesImported + " " + t("connectorImportFiles") + ", " + result.filesSkipped + " " + t("connectorImportSkipped") + ")";
+      connectorHint.className = "hierarchy-hint hint-warning";
+      connectorHint.hidden = false;
+      setTimeout(() => { connectorHint.hidden = true; }, 6000);
     } else {
       connectorHint.textContent = t("connectorImportSuccess");
       connectorHint.className = "hierarchy-hint hint-success";

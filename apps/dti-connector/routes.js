@@ -1203,6 +1203,7 @@ function mountRoutes(router) {
       }
 
       // --- 3. Files ---
+      let filesImported = 0, filesSkipped = 0, fileErrors = [];
       const manifestEntry = findFile("files/manifest.json");
       if (manifestEntry) {
         const manifest = JSON.parse((await manifestEntry.buffer()).toString("utf-8"));
@@ -1223,18 +1224,32 @@ function mountRoutes(router) {
           const originalName = entry.original_name || entry.disk_name || "";
           const diskName = entry.disk_name || "";
           const mimeType = entry.mime_type || "";
-          if (!fileId || !ID_PATTERN.test(fileId) || !VALID_LANGS.includes(lang) || !diskName) continue;
+          if (!fileId || !ID_PATTERN.test(fileId) || !VALID_LANGS.includes(lang) || !diskName) {
+            filesSkipped++;
+            continue;
+          }
 
           const zipFile = findFile("files/" + diskName);
-          if (!zipFile) continue;
+          if (!zipFile) {
+            filesSkipped++;
+            fileErrors.push(diskName + " not found in ZIP");
+            continue;
+          }
 
-          const buf = await zipFile.buffer();
-          const destPath = path.join(connDir, diskName);
-          await fs.promises.writeFile(destPath, buf);
-          await db.run(
-            "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
-            [cid, fileId, lang, originalName, buf.length, mimeType]
-          );
+          try {
+            const buf = await zipFile.buffer();
+            const destPath = path.join(connDir, diskName);
+            await fs.promises.writeFile(destPath, buf);
+            await db.run(
+              "INSERT INTO dti_files (connector_id, file_id, lang, original_name, size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
+              [cid, fileId, lang, originalName, buf.length, mimeType]
+            );
+            filesImported++;
+          } catch (fileErr) {
+            filesSkipped++;
+            fileErrors.push(diskName + ": " + fileErr.message);
+            console.error("File write error:", diskName, fileErr.message);
+          }
         }
       }
 
@@ -1283,7 +1298,9 @@ function mountRoutes(router) {
       }
 
       fs.unlink(tmpPath, () => {});
-      res.json({ ok: true });
+      const result = { ok: true, filesImported, filesSkipped };
+      if (fileErrors.length) result.fileErrors = fileErrors;
+      res.json(result);
     } catch (err) {
       console.error("Full import error:", err);
       fs.unlink(tmpPath, () => {});
