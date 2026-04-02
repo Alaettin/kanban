@@ -413,6 +413,39 @@ function mountAuthRoutes(app) {
     }
   });
 
+  app.post("/auth/local", async (req, res) => {
+    const { username, password } = req.body || {};
+    if (username !== "rekilienz" || password !== "password") {
+      res.redirect("/?error=1");
+      return;
+    }
+    try {
+      const userId = "local_rekilienz";
+      await run(
+        `INSERT INTO users (id, email, name, picture, updated_at)
+         VALUES (?, '', ?, '', CURRENT_TIMESTAMP)
+         ON CONFLICT(id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP`,
+        [userId, "rekilienz"]
+      );
+      const session = await createSession(userId);
+      const ip = req.headers["x-forwarded-for"]
+        ? req.headers["x-forwarded-for"].split(",")[0].trim()
+        : req.socket?.remoteAddress || "";
+      const ua = req.headers["user-agent"] || "";
+      await recordLogin(userId, ip, ua);
+      setCookie(res, "sid", session.sid, {
+        path: "/",
+        maxAge: Math.floor(SESSION_TTL_MS / 1000),
+        httpOnly: true,
+        sameSite: "Lax",
+        secure: isProduction(),
+      });
+      res.redirect("/dashboard");
+    } catch {
+      res.status(500).send("Login fehlgeschlagen.");
+    }
+  });
+
   app.post("/auth/logout", requireAuth, async (req, res) => {
     try {
       await run("DELETE FROM sessions WHERE sid = ?", [req.user.sid]);

@@ -41,6 +41,7 @@ const settingsNavAasImport = document.getElementById("settings-nav-aas-import");
 const settingsNavCC = document.getElementById("settings-nav-country-codes");
 const settingsNavGdeltBq = document.getElementById("settings-nav-gdelt-bq");
 const settingsNavDangerZone = document.getElementById("settings-nav-danger-zone");
+const settingsNavSharing = document.getElementById("settings-nav-sharing");
 const bqSaInput = document.getElementById("bq-sa-input");
 const bqSaSaveBtn = document.getElementById("bq-sa-save-btn");
 const bqSaStatus = document.getElementById("bq-sa-status");
@@ -770,6 +771,27 @@ const I18N = {
     "ref.60": "1 Std.",
     "ref.360": "6 Std.",
     "ref.1440": "24 Std.",
+    // Sharing
+    sharingTab: "Teilen",
+    sharingMemberTitle: "Geteilter Workspace",
+    sharingTitle: "Workspace teilen",
+    sharingDesc: "Erstelle einen Einladungslink, um deinen Workspace mit anderen zu teilen.",
+    shareRoleLabel: "Rolle",
+    shareGenerate: "Link erstellen",
+    shareCopy: "Kopieren",
+    shareCopied: "Link kopiert!",
+    shareError: "Fehler beim Erstellen des Links.",
+    membersTitle: "Mitglieder",
+    membersEmpty: "Noch keine Mitglieder.",
+    memberEditor: "Editor",
+    memberViewer: "Viewer",
+    memberOwner: "Owner",
+    memberRemove: "Entfernen",
+    workspaceBanner: "Du bist {role} in {owner}'s Workspace.",
+    workspaceLeave: "Verlassen",
+    inviteAccepted: "Einladung angenommen!",
+    inviteExpired: "Einladung abgelaufen.",
+    inviteError: "Fehler beim Annehmen der Einladung.",
   },
   en: {
     brandText: "Resilience",
@@ -1402,6 +1424,27 @@ const I18N = {
     "ref.60": "1 hour",
     "ref.360": "6 hours",
     "ref.1440": "24 hours",
+    // Sharing
+    sharingTab: "Share",
+    sharingMemberTitle: "Shared Workspace",
+    sharingTitle: "Share Workspace",
+    sharingDesc: "Create an invite link to share your workspace with others.",
+    shareRoleLabel: "Role",
+    shareGenerate: "Create Link",
+    shareCopy: "Copy",
+    shareCopied: "Link copied!",
+    shareError: "Failed to create link.",
+    membersTitle: "Members",
+    membersEmpty: "No members yet.",
+    memberEditor: "Editor",
+    memberViewer: "Viewer",
+    memberOwner: "Owner",
+    memberRemove: "Remove",
+    workspaceBanner: "You are {role} in {owner}'s workspace.",
+    workspaceLeave: "Leave",
+    inviteAccepted: "Invite accepted!",
+    inviteExpired: "Invite expired.",
+    inviteError: "Failed to accept invite.",
   },
 };
 
@@ -1673,6 +1716,15 @@ function applyLocaleToUI() {
   document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
   document.getElementById("settings-nav-gdelt-btn").textContent = t("settingsNavGdelt");
   document.getElementById("settings-nav-danger-btn").textContent = t("settingsNavDanger");
+  document.getElementById("settings-nav-sharing-btn").textContent = t("sharingTab");
+  document.getElementById("sharing-member-title").textContent = t("sharingMemberTitle");
+  document.getElementById("sharing-title").textContent = t("sharingTitle");
+  document.getElementById("sharing-desc").textContent = t("sharingDesc");
+  document.getElementById("share-role-label").textContent = t("shareRoleLabel");
+  document.getElementById("share-generate-label").textContent = t("shareGenerate");
+  document.getElementById("share-copy-btn").textContent = t("shareCopy");
+  document.getElementById("members-title").textContent = t("membersTitle");
+  document.getElementById("workspace-leave-label").textContent = t("workspaceLeave");
   document.getElementById("danger-zone-title").textContent = t("dangerZoneTitle");
   document.getElementById("danger-zone-desc").textContent = t("dangerZoneDesc");
   document.getElementById("danger-zone-input-label").innerHTML = t("dangerZoneInputLabel");
@@ -2431,11 +2483,14 @@ function switchSettingsNav(nav) {
   settingsNavCC.hidden = nav !== "country-codes";
   settingsNavGdeltBq.hidden = nav !== "gdelt-bq";
   settingsNavDangerZone.hidden = nav !== "danger-zone";
+  settingsNavSharing.hidden = nav !== "sharing";
 
   if (nav === "feeds" || nav === "gdacs" || nav === "aas-import" || nav === "gdelt-bq") {
     loadSettings();
   } else if (nav === "country-codes") {
     loadCountryMappings();
+  } else if (nav === "sharing") {
+    loadMembers();
   }
 }
 
@@ -8482,6 +8537,149 @@ docsNav.addEventListener("click", (e) => {
   loadDoc(btn.dataset.doc);
 });
 
+// ── Sharing ──────────────────────────────────────────────────────
+let workspaceRole = "owner";
+
+async function loadShareInfo() {
+  const res = await apiRequest("/apps/resilience/api/share/info");
+  if (!res.ok) return;
+  const info = res.payload;
+  workspaceRole = info.role;
+  const dangerBtn = document.getElementById("settings-nav-danger-btn");
+  const memberInfo = document.getElementById("sharing-member-info");
+  const ownerControls = document.getElementById("sharing-owner-controls");
+  if (info.role !== "owner") {
+    const roleName = info.role === "editor" ? t("memberEditor") : t("memberViewer");
+    const desc = document.getElementById("sharing-member-desc");
+    if (desc) desc.textContent = t("workspaceBanner").replace("{role}", roleName).replace("{owner}", info.ownerName);
+    if (memberInfo) memberInfo.hidden = false;
+    if (ownerControls) ownerControls.hidden = true;
+    if (dangerBtn) dangerBtn.hidden = true;
+  } else {
+    if (memberInfo) memberInfo.hidden = true;
+    if (ownerControls) ownerControls.hidden = false;
+    if (dangerBtn) dangerBtn.hidden = false;
+  }
+}
+
+document.getElementById("workspace-leave-btn")?.addEventListener("click", async () => {
+  const res = await apiRequest("/apps/resilience/api/share/leave", { method: "POST" });
+  if (res.ok) {
+    location.reload();
+  }
+});
+
+// Generate invite link
+document.getElementById("share-generate-btn")?.addEventListener("click", async () => {
+  const role = document.getElementById("share-role-select").value;
+  const hint = document.getElementById("share-hint");
+  try {
+    const res = await apiRequest("/apps/resilience/api/share/invite", {
+      method: "POST",
+      body: { role },
+    });
+    if (!res.ok) throw new Error();
+    const linkInput = document.getElementById("share-link-input");
+    linkInput.value = res.payload.inviteUrl;
+    document.getElementById("share-link-box").hidden = false;
+    hint.hidden = true;
+  } catch {
+    hint.textContent = t("shareError");
+    hint.className = "settings-hint hint-error";
+    hint.hidden = false;
+    setTimeout(() => { hint.hidden = true; }, 3000);
+  }
+});
+
+document.getElementById("share-copy-btn")?.addEventListener("click", () => {
+  const linkInput = document.getElementById("share-link-input");
+  navigator.clipboard.writeText(linkInput.value).then(() => {
+    const hint = document.getElementById("share-hint");
+    hint.textContent = t("shareCopied");
+    hint.className = "settings-hint hint-success";
+    hint.hidden = false;
+    setTimeout(() => { hint.hidden = true; }, 2000);
+  });
+});
+
+async function loadMembers() {
+  const list = document.getElementById("members-list");
+  if (!list) return;
+  const res = await apiRequest("/apps/resilience/api/share/members");
+  if (!res.ok) { list.innerHTML = `<p class="settings-desc">${t("membersEmpty")}</p>`; return; }
+  const { members, canManage } = res.payload;
+  if (!members.length) { list.innerHTML = `<p class="settings-desc" style="padding:0.5rem 0">${t("membersEmpty")}</p>`; return; }
+  list.innerHTML = "";
+  for (const m of members) {
+    const row = document.createElement("div");
+    row.className = "member-row";
+    const info = document.createElement("div");
+    info.className = "member-info";
+    const nameEl = document.createElement("span");
+    nameEl.className = "member-name";
+    nameEl.textContent = m.name;
+    const emailEl = document.createElement("span");
+    emailEl.className = "member-email";
+    emailEl.textContent = m.email;
+    info.appendChild(nameEl);
+    info.appendChild(emailEl);
+    row.appendChild(info);
+
+    if (canManage) {
+      const sel = document.createElement("select");
+      sel.className = "member-role-select";
+      sel.innerHTML = `<option value="editor">${t("memberEditor")}</option><option value="viewer">${t("memberViewer")}</option>`;
+      sel.value = m.role;
+      sel.addEventListener("change", async () => {
+        await apiRequest("/apps/resilience/api/share/members/" + m.userId, {
+          method: "PATCH",
+          body: { role: sel.value },
+        });
+      });
+      row.appendChild(sel);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-danger btn-sm";
+      removeBtn.textContent = t("memberRemove");
+      removeBtn.addEventListener("click", async () => {
+        const r = await apiRequest("/apps/resilience/api/share/members/" + m.userId, { method: "DELETE" });
+        if (r.ok) row.remove();
+      });
+      row.appendChild(removeBtn);
+    } else {
+      const roleEl = document.createElement("span");
+      roleEl.className = "member-role-badge";
+      roleEl.textContent = m.role === "editor" ? t("memberEditor") : t("memberViewer");
+      row.appendChild(roleEl);
+    }
+    list.appendChild(row);
+  }
+}
+
+async function handleInviteFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("invite");
+  if (!token) return;
+  const clean = new URL(window.location);
+  clean.searchParams.delete("invite");
+  window.history.replaceState({}, "", clean);
+  const res = await apiRequest("/apps/resilience/api/share/invite/" + token + "/accept", { method: "POST" });
+  if (res.ok) {
+    location.reload();
+    return;
+  }
+  // Show error in sharing tab
+  const hint = document.getElementById("share-hint");
+  if (hint) {
+    hint.textContent = res.status === 410 ? t("inviteExpired") : t("inviteError");
+    hint.className = "settings-hint hint-error";
+    hint.hidden = false;
+  }
+  // Navigate to sharing settings to show the error
+  navigateTo("settings");
+  switchSettingsNav("sharing");
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
   const userResult = await apiRequest("/api/me");
@@ -8507,6 +8705,8 @@ async function init() {
     }
   }
 
+  await handleInviteFromUrl();
+  await loadShareInfo();
   navigateTo("dashboard");
 }
 

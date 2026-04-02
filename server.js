@@ -141,6 +141,7 @@ registry.register({
 
 // --- Middleware ---
 app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false }));
 
 // --- Platform static assets ---
 app.get("/dashboard.css", (req, res) => {

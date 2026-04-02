@@ -397,6 +397,31 @@ async function initResilienceTables() {
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN direct_lat REAL DEFAULT NULL`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_gdacs_aas_map ADD COLUMN direct_lon REAL DEFAULT NULL`); } catch { /* exists */ }
 
+  // Sharing tables
+  await db.run(`
+    CREATE TABLE IF NOT EXISTS resilience_members (
+      owner_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('editor', 'viewer')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (owner_id, user_id),
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  await db.run("CREATE INDEX IF NOT EXISTS idx_resilience_members_user ON resilience_members(user_id)");
+  await db.run(`
+    CREATE TABLE IF NOT EXISTS resilience_invites (
+      token TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('editor', 'viewer')),
+      created_by TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   console.log("[Resilience] Ready.");
 }
 
@@ -899,21 +924,192 @@ function walkElements(elements, segments, depth, values) {
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getBaseUrl(req) {
+  const proto = typeof req.headers["x-forwarded-proto"] === "string"
+    ? req.headers["x-forwarded-proto"].split(",")[0].trim()
+    : req.protocol;
+  return `${proto}://${req.get("host")}`;
+}
+
+async function resolveWorkspace(req, res, next) {
+  try {
+    const membership = await db.get(
+      "SELECT owner_id, role FROM resilience_members WHERE user_id = ?",
+      [req.user.id]
+    );
+    if (membership) {
+      req.resOwner = membership.owner_id;
+      req.resRole = membership.role;
+    } else {
+      req.resOwner = req.user.id;
+      req.resRole = "owner";
+    }
+    next();
+  } catch {
+    res.status(500).json({ error: "WORKSPACE_RESOLVE_FAILED" });
+  }
+}
+
+function requireResRole(...allowed) {
+  return (req, res, next) => {
+    if (!allowed.includes(req.resRole)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    next();
+  };
+}
+
 function mountRoutes(router) {
+  // ── Role-based write guard (runs after resolveWorkspace on each route) ──
+  // Share endpoints handle their own guards via requireResRole.
+  // This guard protects all other write operations.
+  function writeGuard(ownerOnly) {
+    return (req, res, next) => {
+      if (ownerOnly) {
+        if (req.resRole !== "owner") return res.status(403).json({ error: "Insufficient permissions" });
+      } else {
+        if (!["owner", "editor"].includes(req.resRole)) return res.status(403).json({ error: "Insufficient permissions" });
+      }
+      next();
+    };
+  }
+
+  // ── Sharing ─────────────────────────────────────────────────────
+  router.get("/api/share/info", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    try {
+      if (req.resRole === "owner") {
+        return res.json({ role: "owner", ownerName: null });
+      }
+      const owner = await db.get("SELECT name, email FROM users WHERE id = ?", [req.resOwner]);
+      res.json({ role: req.resRole, ownerName: owner?.name || owner?.email || "Unknown" });
+    } catch {
+      res.status(500).json({ error: "Failed to load share info" });
+    }
+  });
+
+  router.post("/api/share/invite", auth.requireAuth, resolveWorkspace, requireResRole("owner"), async (req, res) => {
+    const role = req.body?.role === "viewer" ? "viewer" : "editor";
+    try {
+      const token = crypto.randomUUID();
+      const expiresAt = Date.now() + INVITE_TTL_MS;
+      await db.run(
+        "INSERT INTO resilience_invites (token, owner_id, role, created_by, expires_at) VALUES (?, ?, ?, ?, ?)",
+        [token, req.user.id, role, req.user.id, expiresAt]
+      );
+      const inviteUrl = `${getBaseUrl(req)}/apps/resilience?invite=${token}`;
+      res.status(201).json({ ok: true, inviteUrl, expiresAt, role });
+    } catch {
+      res.status(500).json({ error: "Failed to create invite" });
+    }
+  });
+
+  router.post("/api/share/invite/:token/accept", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    try {
+      await db.run("DELETE FROM resilience_invites WHERE expires_at < ?", [Date.now()]);
+      const invite = await db.get(
+        "SELECT token, owner_id, role, expires_at FROM resilience_invites WHERE token = ?",
+        [req.params.token]
+      );
+      if (!invite) return res.status(404).json({ error: "Invite not found or expired" });
+      if (invite.expires_at < Date.now()) {
+        await db.run("DELETE FROM resilience_invites WHERE token = ?", [invite.token]);
+        return res.status(410).json({ error: "Invite expired" });
+      }
+      if (invite.owner_id === req.user.id) {
+        return res.status(400).json({ error: "Cannot join own workspace" });
+      }
+      // Remove existing membership (user can only be in one workspace)
+      await db.run("DELETE FROM resilience_members WHERE user_id = ?", [req.user.id]);
+      await db.run(
+        "INSERT INTO resilience_members (owner_id, user_id, role) VALUES (?, ?, ?)",
+        [invite.owner_id, req.user.id, invite.role]
+      );
+      await db.run("DELETE FROM resilience_invites WHERE token = ?", [invite.token]);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to accept invite" });
+    }
+  });
+
+  router.get("/api/share/members", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    try {
+      const ownerId = req.resRole === "owner" ? req.resOwner : req.resOwner;
+      const rows = await db.all(
+        `SELECT m.user_id, m.role, u.name, u.email, u.picture
+         FROM resilience_members m JOIN users u ON u.id = m.user_id
+         WHERE m.owner_id = ?
+         ORDER BY CASE m.role WHEN 'editor' THEN 0 ELSE 1 END, u.name COLLATE NOCASE`,
+        [ownerId]
+      );
+      const owner = await db.get("SELECT id, name, email, picture FROM users WHERE id = ?", [ownerId]);
+      res.json({
+        owner: { userId: owner.id, name: owner.name || owner.email || "Unknown", email: owner.email || "", picture: owner.picture || "" },
+        members: rows.map(r => ({
+          userId: r.user_id, role: r.role,
+          name: r.name || r.email || "Unknown",
+          email: r.email || "", picture: r.picture || ""
+        })),
+        canManage: req.resRole === "owner",
+        currentUserId: req.user.id
+      });
+    } catch {
+      res.status(500).json({ error: "Failed to load members" });
+    }
+  });
+
+  router.patch("/api/share/members/:userId", auth.requireAuth, resolveWorkspace, requireResRole("owner"), async (req, res) => {
+    const nextRole = req.body?.role === "viewer" ? "viewer" : req.body?.role === "editor" ? "editor" : null;
+    if (!nextRole) return res.status(400).json({ error: "Invalid role" });
+    try {
+      const result = await db.run(
+        "UPDATE resilience_members SET role = ? WHERE owner_id = ? AND user_id = ?",
+        [nextRole, req.user.id, req.params.userId]
+      );
+      if (result.changes === 0) return res.status(404).json({ error: "Member not found" });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to update role" });
+    }
+  });
+
+  router.delete("/api/share/members/:userId", auth.requireAuth, resolveWorkspace, requireResRole("owner"), async (req, res) => {
+    try {
+      const result = await db.run(
+        "DELETE FROM resilience_members WHERE owner_id = ? AND user_id = ?",
+        [req.user.id, req.params.userId]
+      );
+      if (result.changes === 0) return res.status(404).json({ error: "Member not found" });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to remove member" });
+    }
+  });
+
+  router.post("/api/share/leave", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    try {
+      await db.run("DELETE FROM resilience_members WHERE user_id = ?", [req.user.id]);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: "Failed to leave workspace" });
+    }
+  });
+
   // ── Settings ────────────────────────────────────────────────────
-  router.get("/api/settings", auth.requireAuth, async (req, res) => {
+  router.get("/api/settings", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const settings = await db.get(
         "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter, bq_service_account FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const feeds = await db.all(
         "SELECT feed_id, url, title, last_fetched_at, last_error FROM resilience_feeds WHERE user_id = ? ORDER BY created_at ASC",
-        [req.user.id]
+        [req.resOwner]
       );
       const gdacsCountries = await db.all(
         "SELECT country_id, name, created_at FROM resilience_gdacs_countries WHERE user_id = ? ORDER BY created_at ASC",
-        [req.user.id]
+        [req.resOwner]
       );
       // Resolve matching group name
       let matchingGroupName = "";
@@ -952,58 +1148,58 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/settings", auth.requireAuth, async (req, res) => {
+  router.put("/api/settings", auth.requireAuth, resolveWorkspace, writeGuard(true), async (req, res) => {
     try {
       const body = req.body || {};
       // Ensure row exists
-      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.resOwner]);
       // Partial update — only update fields that are provided
       if (body.retention_days !== undefined) {
         await db.run("UPDATE resilience_settings SET retention_days = ? WHERE user_id = ?",
-          [parseInt(body.retention_days) || 30, req.user.id]);
+          [parseInt(body.retention_days) || 30, req.resOwner]);
       }
       if (body.refresh_minutes !== undefined) {
         await db.run("UPDATE resilience_settings SET refresh_minutes = ? WHERE user_id = ?",
-          [parseInt(body.refresh_minutes) || 60, req.user.id]);
+          [parseInt(body.refresh_minutes) || 60, req.resOwner]);
       }
       if (body.gdacs_refresh_minutes !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_refresh_minutes = ? WHERE user_id = ?",
-          [parseInt(body.gdacs_refresh_minutes) || 60, req.user.id]);
+          [parseInt(body.gdacs_refresh_minutes) || 60, req.resOwner]);
       }
       if (body.gdacs_retention_days !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_retention_days = ? WHERE user_id = ?",
-          [parseInt(body.gdacs_retention_days) || 30, req.user.id]);
+          [parseInt(body.gdacs_retention_days) || 30, req.resOwner]);
       }
       if (body.import_interval_hours !== undefined) {
         const hours = parseInt(body.import_interval_hours) || 0;
         await db.run("UPDATE resilience_settings SET import_interval_hours = ? WHERE user_id = ?",
-          [hours, req.user.id]);
-        scheduleUserImport(req.user.id, hours);
+          [hours, req.resOwner]);
+        scheduleUserImport(req.resOwner, hours);
       }
       if (body.gdacs_aas_group_id !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_aas_group_id = ? WHERE user_id = ?",
-          [String(body.gdacs_aas_group_id), req.user.id]);
+          [String(body.gdacs_aas_group_id), req.resOwner]);
       }
       if (body.gdacs_aas_path !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_aas_path = ? WHERE user_id = ?",
-          [String(body.gdacs_aas_path), req.user.id]);
+          [String(body.gdacs_aas_path), req.resOwner]);
       }
       if (body.gdacs_aas_columns !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_aas_columns = ? WHERE user_id = ?",
-          [JSON.stringify(body.gdacs_aas_columns), req.user.id]);
+          [JSON.stringify(body.gdacs_aas_columns), req.resOwner]);
         // columns_data will be recomputed on-the-fly in dashboard
       }
       if (body.geocoding_group_id !== undefined) {
         await db.run("UPDATE resilience_settings SET geocoding_group_id = ? WHERE user_id = ?",
-          [String(body.geocoding_group_id), req.user.id]);
+          [String(body.geocoding_group_id), req.resOwner]);
       }
       if (body.geocoding_country_path !== undefined) {
         await db.run("UPDATE resilience_settings SET geocoding_country_path = ? WHERE user_id = ?",
-          [String(body.geocoding_country_path), req.user.id]);
+          [String(body.geocoding_country_path), req.resOwner]);
       }
       if (body.geocoding_city_path !== undefined) {
         await db.run("UPDATE resilience_settings SET geocoding_city_path = ? WHERE user_id = ?",
-          [String(body.geocoding_city_path), req.user.id]);
+          [String(body.geocoding_city_path), req.resOwner]);
       }
       if (body.gdacs_distance_thresholds !== undefined) {
         const th = body.gdacs_distance_thresholds;
@@ -1012,7 +1208,7 @@ function mountRoutes(router) {
         );
         if (valid) {
           await db.run("UPDATE resilience_settings SET gdacs_distance_thresholds = ? WHERE user_id = ?",
-            [JSON.stringify(th), req.user.id]);
+            [JSON.stringify(th), req.resOwner]);
         }
       }
       if (body.matching_params) {
@@ -1024,21 +1220,21 @@ function mountRoutes(router) {
           WHERE user_id=?`,
           [String(p.group_id), String(p.country_path),
            String(p.group_id), String(p.country_path), String(p.city_path),
-           String(p.lat_path), String(p.lon_path), req.user.id]);
+           String(p.lat_path), String(p.lon_path), req.resOwner]);
       }
       if (body.company_group_id !== undefined) {
         await db.run("UPDATE resilience_settings SET company_group_id = ? WHERE user_id = ?",
-          [String(body.company_group_id), req.user.id]);
+          [String(body.company_group_id), req.resOwner]);
       }
       if (body.company_name_path !== undefined) {
         await db.run("UPDATE resilience_settings SET company_name_path = ? WHERE user_id = ?",
-          [String(body.company_name_path), req.user.id]);
+          [String(body.company_name_path), req.resOwner]);
       }
       if (body.dash_aas_match_filter !== undefined) {
         const f = body.dash_aas_match_filter;
         if (Array.isArray(f)) {
           await db.run("UPDATE resilience_settings SET dash_aas_match_filter = ? WHERE user_id = ?",
-            [JSON.stringify(f), req.user.id]);
+            [JSON.stringify(f), req.resOwner]);
         }
       }
       if (body.bq_service_account !== undefined) {
@@ -1050,12 +1246,12 @@ function mountRoutes(router) {
             if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
               return res.status(400).json({ error: "INVALID_SERVICE_ACCOUNT" });
             }
-            await db.run("UPDATE resilience_settings SET bq_service_account = ? WHERE user_id = ?", [val, req.user.id]);
+            await db.run("UPDATE resilience_settings SET bq_service_account = ? WHERE user_id = ?", [val, req.resOwner]);
           } catch {
             return res.status(400).json({ error: "INVALID_JSON" });
           }
         } else if (val === "") {
-          await db.run("UPDATE resilience_settings SET bq_service_account = '' WHERE user_id = ?", [req.user.id]);
+          await db.run("UPDATE resilience_settings SET bq_service_account = '' WHERE user_id = ?", [req.resOwner]);
         }
         // If val starts with "•" → keep existing (do nothing)
       }
@@ -1066,14 +1262,14 @@ function mountRoutes(router) {
   });
 
   // ── Country Mappings ───────────────────────────────────────────
-  router.get("/api/country-mappings", auth.requireAuth, async (req, res) => {
+  router.get("/api/country-mappings", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      await seedCountryMappings(req.user.id);
+      await seedCountryMappings(req.resOwner);
       const limit = Math.min(parseInt(req.query.limit) || 30, 300);
       const offset = parseInt(req.query.offset) || 0;
       const q = (req.query.q || "").trim();
       let where = "user_id = ?";
-      const params = [req.user.id];
+      const params = [req.resOwner];
       if (q) {
         where += " AND (iso_code LIKE ? OR aas_names LIKE ? OR gdacs_names LIKE ?)";
         const like = `%${q}%`;
@@ -1091,18 +1287,18 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/country-mappings/:isoCode", auth.requireAuth, async (req, res) => {
+  router.put("/api/country-mappings/:isoCode", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { isoCode } = req.params;
       const { aas_names, gdacs_names } = req.body || {};
       const row = await db.get(
         "SELECT 1 FROM resilience_country_mappings WHERE user_id = ? AND iso_code = ?",
-        [req.user.id, isoCode]
+        [req.resOwner, isoCode]
       );
       if (!row) return res.status(404).json({ error: "NOT_FOUND" });
       await db.run(
         "UPDATE resilience_country_mappings SET aas_names = ?, gdacs_names = ? WHERE user_id = ? AND iso_code = ?",
-        [String(aas_names ?? ""), String(gdacs_names ?? ""), req.user.id, isoCode]
+        [String(aas_names ?? ""), String(gdacs_names ?? ""), req.resOwner, isoCode]
       );
       res.json({ ok: true });
     } catch (err) {
@@ -1111,12 +1307,12 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/country-mappings/reset", auth.requireAuth, async (req, res) => {
+  router.post("/api/country-mappings/reset", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
-      await db.run("DELETE FROM resilience_country_mappings WHERE user_id = ?", [req.user.id]);
+      await db.run("DELETE FROM resilience_country_mappings WHERE user_id = ?", [req.resOwner]);
       const stmt = "INSERT OR IGNORE INTO resilience_country_mappings (iso_code, user_id, alpha3, numeric, gdacs_names) VALUES (?, ?, ?, ?, ?)";
       for (const [code, name, alpha3, num] of ISO_COUNTRIES) {
-        await db.run(stmt, [code, req.user.id, alpha3, num, name]);
+        await db.run(stmt, [code, req.resOwner, alpha3, num, name]);
       }
       res.json({ ok: true });
     } catch (err) {
@@ -1125,12 +1321,12 @@ function mountRoutes(router) {
     }
   });
 
-  router.get("/api/country-mappings/export", auth.requireAuth, async (req, res) => {
+  router.get("/api/country-mappings/export", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      await seedCountryMappings(req.user.id);
+      await seedCountryMappings(req.resOwner);
       const rows = await db.all(
         "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ? ORDER BY iso_code ASC",
-        [req.user.id]
+        [req.resOwner]
       );
       res.setHeader("Content-Disposition", 'attachment; filename="country-mappings.json"');
       res.json(rows);
@@ -1140,12 +1336,12 @@ function mountRoutes(router) {
     }
   });
 
-  router.get("/api/country-mappings/aas-countries", auth.requireAuth, async (req, res) => {
+  router.get("/api/country-mappings/aas-countries", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      await seedCountryMappings(req.user.id);
+      await seedCountryMappings(req.resOwner);
       const rows = await db.all(
         "SELECT gdacs_names FROM resilience_country_mappings WHERE user_id = ? AND TRIM(aas_names) != ''",
-        [req.user.id]
+        [req.resOwner]
       );
       const names = rows.map(r => r.gdacs_names).filter(Boolean);
       res.json({ names });
@@ -1155,23 +1351,23 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/country-mappings/import", auth.requireAuth, async (req, res) => {
+  router.post("/api/country-mappings/import", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const items = req.body;
       if (!Array.isArray(items)) return res.status(400).json({ error: "INVALID_FORMAT" });
-      await seedCountryMappings(req.user.id);
+      await seedCountryMappings(req.resOwner);
       let updated = 0;
       for (const item of items) {
         const code = (item.iso_code || "").trim().toUpperCase();
         if (!code) continue;
         const row = await db.get(
           "SELECT 1 FROM resilience_country_mappings WHERE user_id = ? AND iso_code = ?",
-          [req.user.id, code]
+          [req.resOwner, code]
         );
         if (!row) continue;
         await db.run(
           "UPDATE resilience_country_mappings SET aas_names = ?, gdacs_names = ? WHERE user_id = ? AND iso_code = ?",
-          [String(item.aas_names ?? ""), String(item.gdacs_names ?? ""), req.user.id, code]
+          [String(item.aas_names ?? ""), String(item.gdacs_names ?? ""), req.resOwner, code]
         );
         updated++;
       }
@@ -1186,7 +1382,7 @@ function mountRoutes(router) {
 
   // walkElements is defined at module level (shared with buildAasAlertData)
 
-  router.post("/api/country-mappings/aas-extract", auth.requireAuth, async (req, res) => {
+  router.post("/api/country-mappings/aas-extract", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { group_id, id_short_path } = req.body || {};
       if (!group_id || !id_short_path) return res.status(400).json({ error: "MISSING_PARAMS" });
@@ -1199,7 +1395,7 @@ function mountRoutes(router) {
       for (const m of members) {
         const imp = await db.get(
           "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-          [m.aas_id, req.user.id]
+          [m.aas_id, req.resOwner]
         );
         if (!imp || !imp.submodels_data) continue;
         try {
@@ -1222,13 +1418,13 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/country-mappings/aas-match", auth.requireAuth, async (req, res) => {
+  router.post("/api/country-mappings/aas-match", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { values } = req.body || {};
       if (!Array.isArray(values)) return res.status(400).json({ error: "INVALID_FORMAT" });
       const rows = await db.all(
         "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const matched = [];
       const unmatched = [];
@@ -1254,13 +1450,13 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/country-mappings/aas-ai-match", auth.requireAuth, async (req, res) => {
+  router.post("/api/country-mappings/aas-ai-match", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { values } = req.body || {};
       if (!Array.isArray(values) || values.length === 0) return res.status(400).json({ error: "INVALID_FORMAT" });
       const settings = await db.get(
         "SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       if (!settings || !settings.api_key) {
         return res.json({ ai_unavailable: true, matched: [], unmatched: values });
@@ -1305,7 +1501,7 @@ function mountRoutes(router) {
 
       // Validate iso_codes against DB
       const validCodes = new Set(
-        (await db.all("SELECT iso_code FROM resilience_country_mappings WHERE user_id = ?", [req.user.id]))
+        (await db.all("SELECT iso_code FROM resilience_country_mappings WHERE user_id = ?", [req.resOwner]))
           .map(r => r.iso_code)
       );
       const matched = [];
@@ -1329,7 +1525,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/country-mappings/aas-apply", auth.requireAuth, async (req, res) => {
+  router.post("/api/country-mappings/aas-apply", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { mappings } = req.body || {};
       if (!Array.isArray(mappings)) return res.status(400).json({ error: "INVALID_FORMAT" });
@@ -1338,7 +1534,7 @@ function mountRoutes(router) {
         if (!m.value || !m.iso_code) continue;
         const row = await db.get(
           "SELECT aas_names FROM resilience_country_mappings WHERE user_id = ? AND iso_code = ?",
-          [req.user.id, m.iso_code]
+          [req.resOwner, m.iso_code]
         );
         if (!row) continue;
         const existing = (row.aas_names || "").split(",").map(s => s.trim()).filter(Boolean);
@@ -1346,7 +1542,7 @@ function mountRoutes(router) {
         existing.push(m.value.trim());
         await db.run(
           "UPDATE resilience_country_mappings SET aas_names = ? WHERE user_id = ? AND iso_code = ?",
-          [existing.join(", "), req.user.id, m.iso_code]
+          [existing.join(", "), req.resOwner, m.iso_code]
         );
         updated++;
       }
@@ -1358,7 +1554,7 @@ function mountRoutes(router) {
   });
 
   // ── Feeds CRUD ──────────────────────────────────────────────────
-  router.post("/api/feeds", auth.requireAuth, async (req, res) => {
+  router.post("/api/feeds", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { url } = req.body || {};
       if (!url || typeof url !== "string") {
@@ -1379,7 +1575,7 @@ function mountRoutes(router) {
       // Check duplicate
       const existing = await db.get(
         "SELECT feed_id FROM resilience_feeds WHERE user_id = ? AND url = ?",
-        [req.user.id, parsedUrl.href]
+        [req.resOwner, parsedUrl.href]
       );
       if (existing) {
         return res.status(409).json({ error: "FEED_EXISTS" });
@@ -1397,7 +1593,7 @@ function mountRoutes(router) {
       const feedId = crypto.randomUUID();
       await db.run(
         "INSERT INTO resilience_feeds (feed_id, user_id, url, title) VALUES (?, ?, ?, ?)",
-        [feedId, req.user.id, parsedUrl.href, feedTitle]
+        [feedId, req.resOwner, parsedUrl.href, feedTitle]
       );
 
       res.json({ feed_id: feedId, url: parsedUrl.href, title: feedTitle });
@@ -1406,12 +1602,12 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/feeds/:feedId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/feeds/:feedId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { feedId } = req.params;
       const feed = await db.get(
         "SELECT feed_id FROM resilience_feeds WHERE feed_id = ? AND user_id = ?",
-        [feedId, req.user.id]
+        [feedId, req.resOwner]
       );
       if (!feed) return res.status(404).json({ error: "NOT_FOUND" });
 
@@ -1424,9 +1620,9 @@ function mountRoutes(router) {
   });
 
   // ── Manual refresh ───────────────────────────────────────────────
-  router.post("/api/feeds/refresh", auth.requireAuth, async (req, res) => {
+  router.post("/api/feeds/refresh", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
-      await refreshUserFeeds(req.user.id);
+      await refreshUserFeeds(req.resOwner);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "REFRESH_FAILED" });
@@ -1434,14 +1630,14 @@ function mountRoutes(router) {
   });
 
   // ── News items ──────────────────────────────────────────────────
-  router.get("/api/news", auth.requireAuth, async (req, res) => {
+  router.get("/api/news", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 30, 100);
       const offset = parseInt(req.query.offset) || 0;
       const q = (req.query.q || "").trim();
 
       let where = "i.user_id = ?";
-      const params = [req.user.id];
+      const params = [req.resOwner];
       if (q) {
         where += " AND (i.title LIKE ? OR i.guid LIKE ?)";
         const like = `%${q}%`;
@@ -1471,9 +1667,9 @@ function mountRoutes(router) {
   });
 
   // ── Purge all news items ────────────────────────────────────────
-  router.delete("/api/news", auth.requireAuth, async (req, res) => {
+  router.delete("/api/news", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
-      await db.run("DELETE FROM resilience_feed_items WHERE user_id = ?", [req.user.id]);
+      await db.run("DELETE FROM resilience_feed_items WHERE user_id = ?", [req.resOwner]);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "DELETE_FAILED" });
@@ -1481,7 +1677,7 @@ function mountRoutes(router) {
   });
 
   // ── GDACS search ────────────────────────────────────────────────
-  router.get("/api/gdacs/search", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdacs/search", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
       const eventlist = req.query.eventlist || "EQ,TC,FL,VO,WF,DR";
@@ -1521,11 +1717,11 @@ function mountRoutes(router) {
 
 
   // ── GDACS watched countries ───────────────────────────────────
-  router.get("/api/gdacs/countries", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdacs/countries", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const countries = await db.all(
         "SELECT country_id, name, created_at FROM resilience_gdacs_countries WHERE user_id = ? ORDER BY created_at ASC",
-        [req.user.id]
+        [req.resOwner]
       );
       res.json({ countries });
     } catch {
@@ -1533,7 +1729,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/gdacs/countries", auth.requireAuth, async (req, res) => {
+  router.post("/api/gdacs/countries", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const name = ((req.body || {}).name || "").trim();
       if (!name || name.length > 100) {
@@ -1542,14 +1738,14 @@ function mountRoutes(router) {
       // Check duplicate (case-insensitive)
       const existing = await db.get(
         "SELECT country_id FROM resilience_gdacs_countries WHERE user_id = ? AND LOWER(name) = LOWER(?)",
-        [req.user.id, name]
+        [req.resOwner, name]
       );
       if (existing) return res.status(409).json({ error: "COUNTRY_EXISTS" });
 
       const countryId = crypto.randomUUID();
       await db.run(
         "INSERT INTO resilience_gdacs_countries (country_id, user_id, name) VALUES (?, ?, ?)",
-        [countryId, req.user.id, name]
+        [countryId, req.resOwner, name]
       );
       res.json({ country_id: countryId, name });
     } catch {
@@ -1557,11 +1753,11 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/gdacs/countries/:countryId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/gdacs/countries/:countryId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const row = await db.get(
         "SELECT country_id FROM resilience_gdacs_countries WHERE country_id = ? AND user_id = ?",
-        [req.params.countryId, req.user.id]
+        [req.params.countryId, req.resOwner]
       );
       if (!row) return res.status(404).json({ error: "NOT_FOUND" });
       await db.run("DELETE FROM resilience_gdacs_countries WHERE country_id = ?", [req.params.countryId]);
@@ -1572,7 +1768,7 @@ function mountRoutes(router) {
   });
 
   // ── GDACS stored alerts ───────────────────────────────────────
-  router.get("/api/gdacs/alerts", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdacs/alerts", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 30, 200);
       const offset = parseInt(req.query.offset) || 0;
@@ -1580,12 +1776,12 @@ function mountRoutes(router) {
 
       const settings = await db.get(
         "SELECT gdacs_retention_days FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const retDays = settings?.gdacs_retention_days ?? 30;
 
       let where = "a.user_id = ? AND a.fetched_at >= datetime('now', '-' || ? || ' days')";
-      const params = [req.user.id, retDays];
+      const params = [req.resOwner, retDays];
       if (countryId) {
         where += " AND a.country_id = ?";
         params.push(countryId);
@@ -1615,18 +1811,18 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/gdacs/alerts/refresh", auth.requireAuth, async (req, res) => {
+  router.post("/api/gdacs/alerts/refresh", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
-      await refreshUserGdacsAlerts(req.user.id);
+      await refreshUserGdacsAlerts(req.resOwner);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "REFRESH_FAILED" });
     }
   });
 
-  router.delete("/api/gdacs/alerts", auth.requireAuth, async (req, res) => {
+  router.delete("/api/gdacs/alerts", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
-      await db.run("DELETE FROM resilience_gdacs_alerts WHERE user_id = ?", [req.user.id]);
+      await db.run("DELETE FROM resilience_gdacs_alerts WHERE user_id = ?", [req.resOwner]);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "DELETE_FAILED" });
@@ -1634,9 +1830,9 @@ function mountRoutes(router) {
   });
 
   // ── GDACS Map Data (world map modal) ─────────────────────────
-  router.get("/api/gdacs/map-data", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdacs/map-data", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.resOwner;
       const settings = await db.get(
         "SELECT gdacs_retention_days FROM resilience_settings WHERE user_id = ?", [userId]);
       const retDays = settings?.gdacs_retention_days || 30;
@@ -1682,9 +1878,9 @@ function mountRoutes(router) {
   });
 
   // ── Debug: map stats (temporary) ─────────────────────────────
-  router.get("/api/gdacs/map-debug", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdacs/map-debug", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      const { aasEntries, totalMembers } = await buildAasAlertData(req.user.id);
+      const { aasEntries, totalMembers } = await buildAasAlertData(req.resOwner);
       const withCoords = aasEntries.filter(a => a.lat !== null && a.lon !== null).length;
       const missing = aasEntries.filter(a => a.lat === null || a.lon === null)
         .map(a => ({ aas_id: a.aas_id, country: a.country_value, city: a.city_value, iso: a.iso_code }));
@@ -1693,9 +1889,9 @@ function mountRoutes(router) {
   });
 
   // ── GDACS AAS Overview (dashboard tile) ──────────────────────
-  router.get("/api/gdacs/aas-overview", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdacs/aas-overview", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      const { aasEntries, matches, columns } = await buildAasAlertData(req.user.id);
+      const { aasEntries, matches, columns } = await buildAasAlertData(req.resOwner);
       if (!aasEntries.length) return res.json({ items: [], total: 0, columns: [], updated_at: null });
 
       const columnPaths = columns.map(c => typeof c === "string" ? c : c.path);
@@ -1753,9 +1949,9 @@ function mountRoutes(router) {
   });
 
   // ── Company Detail (modal) ──────────────────────────────────────
-  router.get("/api/company-detail/:aasId", auth.requireAuth, async (req, res) => {
+  router.get("/api/company-detail/:aasId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.resOwner;
       const aasId = req.params.aasId;
 
       // All queries in parallel
@@ -1853,7 +2049,7 @@ function mountRoutes(router) {
   const companyNewsCache = new Map();
   const COMPANY_NEWS_TTL = 30 * 60 * 1000;
 
-  router.get("/api/company-news", auth.requireAuth, async (req, res) => {
+  router.get("/api/company-news", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const q = (req.query.q || "").trim();
       if (!q) return res.status(400).json({ error: "MISSING_QUERY" });
@@ -1947,9 +2143,9 @@ function mountRoutes(router) {
     });
   }
 
-  router.get("/api/gdelt/company", auth.requireAuth, async (req, res) => {
+  router.get("/api/gdelt/company", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
-      const userId = req.user.id;
+      const userId = req.resOwner;
       const companyName = (req.query.name || "").trim();
       const companyAlias = (req.query.alias || "").trim();
       const country = (req.query.country || "").trim();
@@ -2060,7 +2256,7 @@ function mountRoutes(router) {
   ];
   const WB_LOGISTICS_ID = "LP.LPI.OVRL.XQ";
 
-  router.get("/api/world-bank", auth.requireAuth, async (req, res) => {
+  router.get("/api/world-bank", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const iso = (req.query.iso || "").trim().toUpperCase();
       if (!iso || iso.length !== 2) return res.status(400).json({ error: "INVALID_ISO" });
@@ -2151,7 +2347,7 @@ function mountRoutes(router) {
     return { id: informWorkflowId, name: informWorkflowName };
   }
 
-  router.get("/api/inform-risk", auth.requireAuth, async (req, res) => {
+  router.get("/api/inform-risk", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const iso = (req.query.iso || "").trim().toUpperCase();
       if (!iso || iso.length !== 2) return res.status(400).json({ error: "INVALID_ISO" });
@@ -2207,11 +2403,11 @@ function mountRoutes(router) {
   });
 
   // ── Indicator classes ─────────────────────────────────────────
-  router.get("/api/indicator-classes", auth.requireAuth, async (req, res) => {
+  router.get("/api/indicator-classes", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const classes = await db.all(
         "SELECT class_id, name, created_at FROM resilience_indicator_classes WHERE user_id = ? ORDER BY created_at ASC",
-        [req.user.id]
+        [req.resOwner]
       );
       res.json({ classes });
     } catch {
@@ -2219,7 +2415,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/indicator-classes", auth.requireAuth, async (req, res) => {
+  router.post("/api/indicator-classes", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const name = ((req.body || {}).name || "").trim();
       if (!name || name.length > 100) {
@@ -2227,14 +2423,14 @@ function mountRoutes(router) {
       }
       const existing = await db.get(
         "SELECT class_id FROM resilience_indicator_classes WHERE user_id = ? AND LOWER(name) = LOWER(?)",
-        [req.user.id, name]
+        [req.resOwner, name]
       );
       if (existing) return res.status(409).json({ error: "CLASS_EXISTS" });
 
       const classId = crypto.randomUUID();
       await db.run(
         "INSERT INTO resilience_indicator_classes (class_id, user_id, name) VALUES (?, ?, ?)",
-        [classId, req.user.id, name]
+        [classId, req.resOwner, name]
       );
       res.json({ class_id: classId, name });
     } catch {
@@ -2242,11 +2438,11 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/indicator-classes/:classId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/indicator-classes/:classId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const row = await db.get(
         "SELECT class_id FROM resilience_indicator_classes WHERE class_id = ? AND user_id = ?",
-        [req.params.classId, req.user.id]
+        [req.params.classId, req.resOwner]
       );
       if (!row) return res.status(404).json({ error: "NOT_FOUND" });
       await db.run("DELETE FROM resilience_indicator_classes WHERE class_id = ?", [req.params.classId]);
@@ -2259,7 +2455,7 @@ function mountRoutes(router) {
   // ── Indicators CRUD ─────────────────────────────────────────────
   const VALID_OPERATORS = new Set([">", "<", ">=", "<=", "==", "!="]);
 
-  router.get("/api/indicators", auth.requireAuth, async (req, res) => {
+  router.get("/api/indicators", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const indicators = await db.all(
         `SELECT i.indicator_id, i.name, i.class_id, i.created_at,
@@ -2269,7 +2465,7 @@ function mountRoutes(router) {
          LEFT JOIN resilience_indicator_classes c ON c.class_id = i.class_id
          WHERE i.user_id = ?
          ORDER BY i.created_at ASC`,
-        [req.user.id]
+        [req.resOwner]
       );
       res.json({ indicators });
     } catch {
@@ -2278,11 +2474,11 @@ function mountRoutes(router) {
   });
 
   // ── Indicator Dashboard Config (must be before :indicatorId) ──
-  router.get("/api/indicators/dashboard-config", auth.requireAuth, async (req, res) => {
+  router.get("/api/indicators/dashboard-config", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const row = await db.get(
         "SELECT indicator_dashboard_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       res.json(JSON.parse(row?.indicator_dashboard_config || "{}"));
     } catch {
@@ -2290,14 +2486,14 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/indicators/dashboard-config", auth.requireAuth, async (req, res) => {
+  router.put("/api/indicators/dashboard-config", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const config = req.body.config;
       if (config === undefined) return res.status(400).json({ error: "MISSING_CONFIG" });
-      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.resOwner]);
       await db.run(
         "UPDATE resilience_settings SET indicator_dashboard_config = ? WHERE user_id = ?",
-        [JSON.stringify(config), req.user.id]
+        [JSON.stringify(config), req.resOwner]
       );
       res.json({ ok: true });
     } catch {
@@ -2306,11 +2502,11 @@ function mountRoutes(router) {
   });
 
   // ── Score Dashboard Config ─────────────────────────────────────
-  router.get("/api/score/dashboard-config", auth.requireAuth, async (req, res) => {
+  router.get("/api/score/dashboard-config", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const row = await db.get(
         "SELECT score_dashboard_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       res.json(JSON.parse(row?.score_dashboard_config || "{}"));
     } catch {
@@ -2318,14 +2514,14 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/score/dashboard-config", auth.requireAuth, async (req, res) => {
+  router.put("/api/score/dashboard-config", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const config = req.body.config;
       if (config === undefined) return res.status(400).json({ error: "MISSING_CONFIG" });
-      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.resOwner]);
       await db.run(
         "UPDATE resilience_settings SET score_dashboard_config = ? WHERE user_id = ?",
-        [JSON.stringify(config), req.user.id]
+        [JSON.stringify(config), req.resOwner]
       );
       res.json({ ok: true });
     } catch {
@@ -2333,11 +2529,11 @@ function mountRoutes(router) {
     }
   });
 
-  router.get("/api/score/dashboard-evaluate", auth.requireAuth, async (req, res) => {
+  router.get("/api/score/dashboard-evaluate", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const row = await db.get(
         "SELECT score_dashboard_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const config = JSON.parse(row?.score_dashboard_config || "{}");
       if (!config.group_id || !Array.isArray(config.aas_ids) || !config.aas_ids.length || !config.label_path || !config.target_path) {
@@ -2347,7 +2543,7 @@ function mountRoutes(router) {
       for (const aasId of config.aas_ids) {
         const imp = await db.get(
           "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-          [aasId, req.user.id]
+          [aasId, req.resOwner]
         );
         if (!imp?.submodels_data) continue;
         let submodels;
@@ -2366,11 +2562,11 @@ function mountRoutes(router) {
   });
 
   // ── Value Tiles ──────────────────────────────────────────────
-  router.get("/api/value-tiles", auth.requireAuth, async (req, res) => {
+  router.get("/api/value-tiles", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const row = await db.get(
         "SELECT value_tiles_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       res.json(JSON.parse(row?.value_tiles_config || "[]"));
     } catch {
@@ -2378,14 +2574,14 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/value-tiles", auth.requireAuth, async (req, res) => {
+  router.put("/api/value-tiles", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { config } = req.body;
       if (!Array.isArray(config)) return res.status(400).json({ error: "INVALID_CONFIG" });
-      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.user.id]);
+      await db.run("INSERT OR IGNORE INTO resilience_settings (user_id) VALUES (?)", [req.resOwner]);
       await db.run(
         "UPDATE resilience_settings SET value_tiles_config = ? WHERE user_id = ?",
-        [JSON.stringify(config), req.user.id]
+        [JSON.stringify(config), req.resOwner]
       );
       res.json({ ok: true });
     } catch {
@@ -2393,11 +2589,11 @@ function mountRoutes(router) {
     }
   });
 
-  router.get("/api/value-tile-data", auth.requireAuth, async (req, res) => {
+  router.get("/api/value-tile-data", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const row = await db.get(
         "SELECT value_tiles_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const config = JSON.parse(row?.value_tiles_config || "[]");
       if (!config.length) return res.json([]);
@@ -2405,7 +2601,7 @@ function mountRoutes(router) {
       for (const tile of config) {
         const imp = await db.get(
           "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-          [tile.aas_id, req.user.id]
+          [tile.aas_id, req.resOwner]
         );
         let label = tile.label_path;
         let value = "";
@@ -2426,7 +2622,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.get("/api/indicators/dashboard-evaluate", auth.requireAuth, async (req, res) => {
+  router.get("/api/indicators/dashboard-evaluate", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 20, 100);
       const offset = parseInt(req.query.offset) || 0;
@@ -2435,7 +2631,7 @@ function mountRoutes(router) {
 
       const row = await db.get(
         "SELECT indicator_dashboard_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const config = JSON.parse(row?.indicator_dashboard_config || "{}");
       if (!config.group_id || !Array.isArray(config.indicators) || !config.indicators.length) {
@@ -2462,7 +2658,7 @@ function mountRoutes(router) {
       for (const ic of config.indicators) {
         const ind = await db.get(
           "SELECT * FROM resilience_indicators WHERE indicator_id = ? AND user_id = ?",
-          [ic.indicator_id, req.user.id]
+          [ic.indicator_id, req.resOwner]
         );
         if (!ind) continue;
         const groups = await db.all(
@@ -2484,7 +2680,7 @@ function mountRoutes(router) {
       for (const m of members) {
         const imp = await db.get(
           "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-          [m.aas_id, req.user.id]
+          [m.aas_id, req.resOwner]
         );
         if (!imp?.submodels_data) continue;
         let submodels;
@@ -2566,12 +2762,12 @@ function mountRoutes(router) {
   });
 
   // ── Indicator Detail for a single AAS item ──────────────────
-  router.get("/api/indicators/dashboard-detail/:aasId", auth.requireAuth, async (req, res) => {
+  router.get("/api/indicators/dashboard-detail/:aasId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const aasId = req.params.aasId;
       const row = await db.get(
         "SELECT indicator_dashboard_config FROM resilience_settings WHERE user_id = ?",
-        [req.user.id]
+        [req.resOwner]
       );
       const config = JSON.parse(row?.indicator_dashboard_config || "{}");
       if (!config.group_id || !Array.isArray(config.indicators) || !config.indicators.length) {
@@ -2581,7 +2777,7 @@ function mountRoutes(router) {
       // Load AAS submodels
       const imp = await db.get(
         "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-        [aasId, req.user.id]
+        [aasId, req.resOwner]
       );
       if (!imp?.submodels_data) return res.status(404).json({ error: "AAS_NOT_FOUND" });
       let submodels;
@@ -2603,7 +2799,7 @@ function mountRoutes(router) {
            FROM resilience_indicators i
            LEFT JOIN resilience_indicator_classes c ON c.class_id = i.class_id
            WHERE i.indicator_id = ? AND i.user_id = ?`,
-          [ic.indicator_id, req.user.id]
+          [ic.indicator_id, req.resOwner]
         );
         if (!ind) continue;
 
@@ -2648,14 +2844,14 @@ function mountRoutes(router) {
     }
   });
 
-  router.get("/api/indicators/:indicatorId", auth.requireAuth, async (req, res) => {
+  router.get("/api/indicators/:indicatorId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const ind = await db.get(
         `SELECT i.*, c.name AS class_name
          FROM resilience_indicators i
          LEFT JOIN resilience_indicator_classes c ON c.class_id = i.class_id
          WHERE i.indicator_id = ? AND i.user_id = ?`,
-        [req.params.indicatorId, req.user.id]
+        [req.params.indicatorId, req.resOwner]
       );
       if (!ind) return res.status(404).json({ error: "NOT_FOUND" });
 
@@ -2675,7 +2871,7 @@ function mountRoutes(router) {
     }
   });
 
-  router.post("/api/indicators", auth.requireAuth, async (req, res) => {
+  router.post("/api/indicators", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const b = req.body || {};
       const name = (b.name || "").trim();
@@ -2685,7 +2881,7 @@ function mountRoutes(router) {
       await db.run(
         `INSERT INTO resilience_indicators (indicator_id, user_id, name, class_id, default_label, default_color, default_score)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [indicatorId, req.user.id, name, b.class_id || null,
+        [indicatorId, req.resOwner, name, b.class_id || null,
          (b.default_label || "").trim(),
          b.default_color || "#9ca3af", parseFloat(b.default_score) || 0]
       );
@@ -2698,7 +2894,7 @@ function mountRoutes(router) {
         await db.run(
           `INSERT INTO resilience_indicator_groups (group_id, indicator_id, user_id, sort_order, output_label, output_color, output_score)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [groupId, indicatorId, req.user.id, gi, (g.output_label || "").trim(),
+          [groupId, indicatorId, req.resOwner, gi, (g.output_label || "").trim(),
            g.output_color || "#9ca3af", parseFloat(g.output_score) || 0]
         );
         const conds = Array.isArray(g.conditions) ? g.conditions : [];
@@ -2708,7 +2904,7 @@ function mountRoutes(router) {
           await db.run(
             `INSERT INTO resilience_indicator_conditions (condition_id, group_id, indicator_id, user_id, sort_order, input, operator, value)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [crypto.randomUUID(), groupId, indicatorId, req.user.id, ci, (c.input || "").trim(), op, String(c.value ?? "")]
+            [crypto.randomUUID(), groupId, indicatorId, req.resOwner, ci, (c.input || "").trim(), op, String(c.value ?? "")]
           );
         }
       }
@@ -2719,11 +2915,11 @@ function mountRoutes(router) {
     }
   });
 
-  router.put("/api/indicators/:indicatorId", auth.requireAuth, async (req, res) => {
+  router.put("/api/indicators/:indicatorId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const ind = await db.get(
         "SELECT indicator_id FROM resilience_indicators WHERE indicator_id = ? AND user_id = ?",
-        [req.params.indicatorId, req.user.id]
+        [req.params.indicatorId, req.resOwner]
       );
       if (!ind) return res.status(404).json({ error: "NOT_FOUND" });
 
@@ -2750,7 +2946,7 @@ function mountRoutes(router) {
         await db.run(
           `INSERT INTO resilience_indicator_groups (group_id, indicator_id, user_id, sort_order, output_label, output_color, output_score)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [groupId, ind.indicator_id, req.user.id, gi, (g.output_label || "").trim(),
+          [groupId, ind.indicator_id, req.resOwner, gi, (g.output_label || "").trim(),
            g.output_color || "#9ca3af", parseFloat(g.output_score) || 0]
         );
         const conds = Array.isArray(g.conditions) ? g.conditions : [];
@@ -2760,7 +2956,7 @@ function mountRoutes(router) {
           await db.run(
             `INSERT INTO resilience_indicator_conditions (condition_id, group_id, indicator_id, user_id, sort_order, input, operator, value)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [crypto.randomUUID(), groupId, ind.indicator_id, req.user.id, ci, (c.input || "").trim(), op, String(c.value ?? "")]
+            [crypto.randomUUID(), groupId, ind.indicator_id, req.resOwner, ci, (c.input || "").trim(), op, String(c.value ?? "")]
           );
         }
       }
@@ -2771,11 +2967,11 @@ function mountRoutes(router) {
     }
   });
 
-  router.delete("/api/indicators/:indicatorId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/indicators/:indicatorId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const ind = await db.get(
         "SELECT indicator_id FROM resilience_indicators WHERE indicator_id = ? AND user_id = ?",
-        [req.params.indicatorId, req.user.id]
+        [req.params.indicatorId, req.resOwner]
       );
       if (!ind) return res.status(404).json({ error: "NOT_FOUND" });
       // Cascade deletes handle groups + conditions via FK
@@ -2789,7 +2985,7 @@ function mountRoutes(router) {
   });
 
   // ── Single news item detail ────────────────────────────────────
-  router.get("/api/news/:itemId", auth.requireAuth, async (req, res) => {
+  router.get("/api/news/:itemId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const item = await db.get(
         `SELECT i.item_id, i.title, i.link, i.description, i.content, i.pub_date, i.created_at, i.guid,
@@ -2797,7 +2993,7 @@ function mountRoutes(router) {
          FROM resilience_feed_items i
          JOIN resilience_feeds f ON f.feed_id = i.feed_id
          WHERE i.item_id = ? AND i.user_id = ?`,
-        [req.params.itemId, req.user.id]
+        [req.params.itemId, req.resOwner]
       );
       if (!item) return res.status(404).json({ error: "NOT_FOUND" });
       res.json(item);
@@ -2809,7 +3005,7 @@ function mountRoutes(router) {
   // ── AAS Sources ──────────────────────────────────────────────
 
   // GET all sources (with ID count)
-  router.get("/api/aas-sources", auth.requireAuth, async (req, res) => {
+  router.get("/api/aas-sources", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const sources = await db.all(
         `SELECT s.source_id, s.name, s.base_url, s.created_at,
@@ -2817,7 +3013,7 @@ function mountRoutes(router) {
          FROM resilience_aas_sources s
          WHERE s.user_id = ?
          ORDER BY s.created_at ASC`,
-        [req.user.id]
+        [req.resOwner]
       );
       res.json({ sources });
     } catch {
@@ -2826,14 +3022,14 @@ function mountRoutes(router) {
   });
 
   // POST create source
-  router.post("/api/aas-sources", auth.requireAuth, async (req, res) => {
+  router.post("/api/aas-sources", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { name, base_url, item_prefix } = req.body;
       if (!name || !base_url) return res.status(400).json({ error: "MISSING_FIELDS" });
       const sourceId = crypto.randomUUID();
       await db.run(
         "INSERT INTO resilience_aas_sources (source_id, user_id, name, base_url, item_prefix) VALUES (?, ?, ?, ?, ?)",
-        [sourceId, req.user.id, name.trim(), base_url.trim(), (item_prefix || "").trim()]
+        [sourceId, req.resOwner, name.trim(), base_url.trim(), (item_prefix || "").trim()]
       );
       res.json({ source_id: sourceId });
     } catch {
@@ -2842,11 +3038,11 @@ function mountRoutes(router) {
   });
 
   // GET single source with IDs
-  router.get("/api/aas-sources/:sourceId", auth.requireAuth, async (req, res) => {
+  router.get("/api/aas-sources/:sourceId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const source = await db.get(
         "SELECT source_id, name, base_url, item_prefix, created_at FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       if (!source) return res.status(404).json({ error: "NOT_FOUND" });
       const ids = await db.all(
@@ -2860,13 +3056,13 @@ function mountRoutes(router) {
   });
 
   // PUT update source metadata
-  router.put("/api/aas-sources/:sourceId", auth.requireAuth, async (req, res) => {
+  router.put("/api/aas-sources/:sourceId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { name, base_url, item_prefix } = req.body;
       if (!name || !base_url) return res.status(400).json({ error: "MISSING_FIELDS" });
       const existing = await db.get(
         "SELECT source_id FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       if (!existing) return res.status(404).json({ error: "NOT_FOUND" });
       await db.run(
@@ -2880,11 +3076,11 @@ function mountRoutes(router) {
   });
 
   // DELETE source (cascade IDs)
-  router.delete("/api/aas-sources/:sourceId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/aas-sources/:sourceId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       await db.run(
         "DELETE FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       res.json({ ok: true });
     } catch {
@@ -2893,12 +3089,12 @@ function mountRoutes(router) {
   });
 
   // POST add AAS ID to source
-  router.post("/api/aas-sources/:sourceId/ids", auth.requireAuth, async (req, res) => {
+  router.post("/api/aas-sources/:sourceId/ids", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { aas_id, entry_type, item_id } = req.body;
       const source = await db.get(
         "SELECT source_id, item_prefix FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       if (!source) return res.status(404).json({ error: "NOT_FOUND" });
 
@@ -2916,7 +3112,7 @@ function mountRoutes(router) {
       const entryId = crypto.randomUUID();
       await db.run(
         "INSERT INTO resilience_aas_source_ids (entry_id, source_id, user_id, aas_id, entry_type, item_id) VALUES (?, ?, ?, ?, ?, ?)",
-        [entryId, req.params.sourceId, req.user.id, finalAasId, finalType, finalItemId]
+        [entryId, req.params.sourceId, req.resOwner, finalAasId, finalType, finalItemId]
       );
       res.json({ entry_id: entryId, aas_id: finalAasId });
     } catch (err) {
@@ -2928,11 +3124,11 @@ function mountRoutes(router) {
   });
 
   // DELETE AAS ID from source
-  router.delete("/api/aas-sources/:sourceId/ids/:entryId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/aas-sources/:sourceId/ids/:entryId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       await db.run(
         "DELETE FROM resilience_aas_source_ids WHERE entry_id = ? AND source_id = ? AND user_id = ?",
-        [req.params.entryId, req.params.sourceId, req.user.id]
+        [req.params.entryId, req.params.sourceId, req.resOwner]
       );
       res.json({ ok: true });
     } catch {
@@ -2941,16 +3137,16 @@ function mountRoutes(router) {
   });
 
   // DELETE all IDs from source
-  router.delete("/api/aas-sources/:sourceId/ids", auth.requireAuth, async (req, res) => {
+  router.delete("/api/aas-sources/:sourceId/ids", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const source = await db.get(
         "SELECT source_id FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       if (!source) return res.status(404).json({ error: "NOT_FOUND" });
       const { changes } = await db.run(
         "DELETE FROM resilience_aas_source_ids WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       res.json({ ok: true, deleted: changes || 0 });
     } catch {
@@ -2959,14 +3155,14 @@ function mountRoutes(router) {
   });
 
   // POST import item IDs from external endpoint
-  router.post("/api/aas-sources/:sourceId/ids/import", auth.requireAuth, async (req, res) => {
+  router.post("/api/aas-sources/:sourceId/ids/import", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       const { url, item_prefix } = req.body;
       if (!url) return res.status(400).json({ error: "MISSING_URL" });
 
       const source = await db.get(
         "SELECT source_id, item_prefix FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [req.params.sourceId, req.user.id]
+        [req.params.sourceId, req.resOwner]
       );
       if (!source) return res.status(404).json({ error: "NOT_FOUND" });
 
@@ -2991,7 +3187,7 @@ function mountRoutes(router) {
         try {
           await db.run(
             "INSERT INTO resilience_aas_source_ids (entry_id, source_id, user_id, aas_id, entry_type, item_id) VALUES (?, ?, ?, ?, 'item', ?)",
-            [crypto.randomUUID(), req.params.sourceId, req.user.id, aasId, itemId]
+            [crypto.randomUUID(), req.params.sourceId, req.resOwner, aasId, itemId]
           );
           added++;
         } catch (err) {
@@ -3011,7 +3207,7 @@ function mountRoutes(router) {
   });
 
   // ── AAS Overview (all AAS IDs across all sources) ─────────────
-  router.get("/api/aas-overview", auth.requireAuth, async (req, res) => {
+  router.get("/api/aas-overview", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const rows = await db.all(
         `SELECT i.entry_id, i.aas_id, i.entry_type, i.item_id,
@@ -3029,7 +3225,7 @@ function mountRoutes(router) {
          LEFT JOIN resilience_aas_imports imp ON imp.aas_id = i.aas_id AND imp.user_id = ?
          WHERE s.user_id = ?
          ORDER BY s.name ASC, i.aas_id ASC`,
-        [req.user.id, req.user.id, req.user.id]
+        [req.resOwner, req.resOwner, req.resOwner]
       );
       res.json({ entries: rows });
     } catch {
@@ -3038,8 +3234,8 @@ function mountRoutes(router) {
   });
 
   // ── AAS Import: start server-side bulk import ──────────────────
-  router.post("/api/aas-import", auth.requireAuth, async (req, res) => {
-    const userId = req.user.id;
+  router.post("/api/aas-import", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const userId = req.resOwner;
     if (importJobs[userId]?.running) return res.json({ ok: true, already: true });
     res.json({ ok: true });
     runImportJob(userId);
@@ -3047,17 +3243,17 @@ function mountRoutes(router) {
 
   // ── AAS Import: poll status ──────────────────────────────────
   router.get("/api/aas-import-status", auth.requireAuth, (req, res) => {
-    const job = importJobs[req.user.id];
+    const job = importJobs[req.resOwner];
     if (!job) return res.json({ running: false });
     res.json({ running: job.running, total: job.total, done: job.done, errors: job.errors });
   });
 
   // ── AAS Import: get persisted data from DB ────────────────────
-  router.get("/api/aas-import/:aasId", auth.requireAuth, async (req, res) => {
+  router.get("/api/aas-import/:aasId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const row = await db.get(
         "SELECT shell_data, submodels_data, imported_at FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-        [req.params.aasId, req.user.id]
+        [req.params.aasId, req.resOwner]
       );
       if (!row) return res.status(404).json({ error: "NOT_IMPORTED" });
       res.json({
@@ -3071,16 +3267,16 @@ function mountRoutes(router) {
   });
 
   // ── Geocoding: start background job ──────────────────────────
-  router.post("/api/geocoding/run", auth.requireAuth, async (req, res) => {
-    const userId = req.user.id;
+  router.post("/api/geocoding/run", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const userId = req.resOwner;
     if (geocodingJobs[userId]?.running) return res.json({ ok: true, already: true });
     res.json({ ok: true });
     runGeocodingJob(userId);
   });
 
   // ── Geocoding: single-AAS geocode (uses already-imported data) ──
-  router.post("/api/geocoding/run-single", auth.requireAuth, async (req, res) => {
-    const userId = req.user.id;
+  router.post("/api/geocoding/run-single", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const userId = req.resOwner;
     const { aas_id, country_path, city_path } = req.body;
     if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
     if (!country_path || !city_path) return res.status(400).json({ error: "NO_GEOCODING_PATHS" });
@@ -3141,8 +3337,8 @@ function mountRoutes(router) {
   });
 
   // ── AAS: single import (without geocoding) ─────────────────
-  router.post("/api/aas/import-single", auth.requireAuth, async (req, res) => {
-    const userId = req.user.id;
+  router.post("/api/aas/import-single", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const userId = req.resOwner;
     const { aas_id } = req.body;
     if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
 
@@ -3202,14 +3398,14 @@ function mountRoutes(router) {
 
   // ── Geocoding: poll status ──────────────────────────────────
   router.get("/api/geocoding/status", auth.requireAuth, (req, res) => {
-    const job = geocodingJobs[req.user.id];
+    const job = geocodingJobs[req.resOwner];
     if (!job) return res.json({ running: false });
     res.json({ running: job.running, total: job.total, done: job.done, errors: job.errors });
   });
 
   // ── Company Process: batch run ───────────────────────────────
-  router.post("/api/company-process/run", auth.requireAuth, async (req, res) => {
-    const userId = req.user.id;
+  router.post("/api/company-process/run", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const userId = req.resOwner;
     if (companyProcessJobs[userId]?.running) return res.json({ ok: true, already: true });
     const settings = await db.get(
       "SELECT company_group_id, company_name_path FROM resilience_settings WHERE user_id = ?",
@@ -3223,8 +3419,8 @@ function mountRoutes(router) {
   });
 
   // ── Company Process: single AAS ─────────────────────────────
-  router.post("/api/company-process/run-single", auth.requireAuth, async (req, res) => {
-    const userId = req.user.id;
+  router.post("/api/company-process/run-single", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const userId = req.resOwner;
     const { aas_id, company_name_path } = req.body;
     if (!aas_id) return res.status(400).json({ error: "MISSING_AAS_ID" });
     if (!company_name_path) return res.status(400).json({ error: "MISSING_PATH" });
@@ -3261,20 +3457,20 @@ function mountRoutes(router) {
 
   // ── Company Process: poll status ────────────────────────────
   router.get("/api/company-process/status", auth.requireAuth, (req, res) => {
-    const job = companyProcessJobs[req.user.id];
+    const job = companyProcessJobs[req.resOwner];
     if (!job) return res.json({ running: false });
     res.json({ running: job.running, total: job.total, done: job.done, errors: job.errors, phase: job.phase, batchDone: job.batchDone, batchTotal: job.batchTotal, aliasesSoFar: job.aliasesSoFar || 0 });
   });
 
   // ── AAS Proxy: get shell (query params to avoid %2F routing issues) ──
-  router.get("/api/aas-proxy/shell", auth.requireAuth, async (req, res) => {
+  router.get("/api/aas-proxy/shell", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const { source_id, aas_id } = req.query;
       if (!source_id || !aas_id) return res.status(400).json({ error: "MISSING_PARAMS" });
 
       const source = await db.get(
         "SELECT source_id, base_url FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [source_id, req.user.id]
+        [source_id, req.resOwner]
       );
       if (!source) return res.status(404).json({ error: "SOURCE_NOT_FOUND" });
 
@@ -3296,14 +3492,14 @@ function mountRoutes(router) {
   });
 
   // ── AAS Proxy: get submodel (query params) ────────────────────
-  router.get("/api/aas-proxy/submodel", auth.requireAuth, async (req, res) => {
+  router.get("/api/aas-proxy/submodel", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const { source_id, aas_id, submodel_id } = req.query;
       if (!source_id || !aas_id || !submodel_id) return res.status(400).json({ error: "MISSING_PARAMS" });
 
       const source = await db.get(
         "SELECT source_id, base_url FROM resilience_aas_sources WHERE source_id = ? AND user_id = ?",
-        [source_id, req.user.id]
+        [source_id, req.resOwner]
       );
       if (!source) return res.status(404).json({ error: "SOURCE_NOT_FOUND" });
 
@@ -3328,7 +3524,7 @@ function mountRoutes(router) {
   // ── Asset Groups ─────────────────────────────────────────────────
 
   // List groups with member count
-  router.get("/api/asset-groups", auth.requireAuth, async (req, res) => {
+  router.get("/api/asset-groups", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const rows = await db.all(
         `SELECT g.group_id, g.name, g.created_at,
@@ -3336,7 +3532,7 @@ function mountRoutes(router) {
          FROM resilience_asset_groups g
          WHERE g.user_id = ?
          ORDER BY g.name ASC`,
-        [req.user.id]
+        [req.resOwner]
       );
       res.json({ groups: rows });
     } catch (err) {
@@ -3345,14 +3541,14 @@ function mountRoutes(router) {
   });
 
   // Create group
-  router.post("/api/asset-groups", auth.requireAuth, async (req, res) => {
+  router.post("/api/asset-groups", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: "MISSING_NAME" });
     try {
       const groupId = crypto.randomUUID();
       await db.run(
         "INSERT INTO resilience_asset_groups (group_id, user_id, name) VALUES (?, ?, ?)",
-        [groupId, req.user.id, name.trim()]
+        [groupId, req.resOwner, name.trim()]
       );
       res.json({ group_id: groupId });
     } catch (err) {
@@ -3361,11 +3557,11 @@ function mountRoutes(router) {
   });
 
   // Get group with members
-  router.get("/api/asset-groups/:groupId", auth.requireAuth, async (req, res) => {
+  router.get("/api/asset-groups/:groupId", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const group = await db.get(
         "SELECT group_id, name, created_at FROM resilience_asset_groups WHERE group_id = ? AND user_id = ?",
-        [req.params.groupId, req.user.id]
+        [req.params.groupId, req.resOwner]
       );
       if (!group) return res.status(404).json({ error: "NOT_FOUND" });
       const members = await db.all(
@@ -3379,13 +3575,13 @@ function mountRoutes(router) {
   });
 
   // Update group (name + members bulk replace)
-  router.put("/api/asset-groups/:groupId", auth.requireAuth, async (req, res) => {
+  router.put("/api/asset-groups/:groupId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     const { name, members } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: "MISSING_NAME" });
     try {
       const group = await db.get(
         "SELECT group_id FROM resilience_asset_groups WHERE group_id = ? AND user_id = ?",
-        [req.params.groupId, req.user.id]
+        [req.params.groupId, req.resOwner]
       );
       if (!group) return res.status(404).json({ error: "NOT_FOUND" });
       await db.run("UPDATE resilience_asset_groups SET name = ? WHERE group_id = ?", [name.trim(), req.params.groupId]);
@@ -3408,11 +3604,11 @@ function mountRoutes(router) {
   });
 
   // Delete group
-  router.delete("/api/asset-groups/:groupId", auth.requireAuth, async (req, res) => {
+  router.delete("/api/asset-groups/:groupId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
     try {
       await db.run(
         "DELETE FROM resilience_asset_groups WHERE group_id = ? AND user_id = ?",
-        [req.params.groupId, req.user.id]
+        [req.params.groupId, req.resOwner]
       );
       res.json({ ok: true });
     } catch (err) {
@@ -3421,9 +3617,9 @@ function mountRoutes(router) {
   });
 
   // ── Delete ALL user data (factory reset) ─────────────────────────
-  router.post("/api/delete-all-data", auth.requireAuth, async (req, res) => {
+  router.post("/api/delete-all-data", auth.requireAuth, resolveWorkspace, writeGuard(true), async (req, res) => {
     try {
-      const uid = req.user.id;
+      const uid = req.resOwner;
       // Children first (FK cascades handle some, but be explicit)
       await db.run("DELETE FROM resilience_gdacs_aas_matches WHERE user_id = ?", [uid]);
       await db.run("DELETE FROM resilience_gdacs_aas_map WHERE user_id = ?", [uid]);

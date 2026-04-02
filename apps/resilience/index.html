@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resilience – Workspace</title>
-  <link rel="stylesheet" href="/apps/resilience/styles.css?v=30" />
+  <link rel="stylesheet" href="/apps/resilience/styles.css?v=31" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
@@ -945,6 +945,7 @@
               <button class="docs-nav-item" data-settings-nav="aas-import" type="button" id="settings-nav-aas-btn">AAS Import</button>
               <button class="docs-nav-item" data-settings-nav="country-codes" type="button" id="settings-nav-cc-btn">Ländercodes</button>
               <button class="docs-nav-item" data-settings-nav="gdelt-bq" type="button" id="settings-nav-gdelt-btn">GDELT</button>
+              <button class="docs-nav-item" data-settings-nav="sharing" type="button" id="settings-nav-sharing-btn">Teilen</button>
               <button class="docs-nav-item" data-settings-nav="danger-zone" type="button" id="settings-nav-danger-btn" style="color:var(--danger,#ef4444)">Danger Zone</button>
             </nav>
 
@@ -1184,6 +1185,49 @@
                     <button id="bq-sa-save-btn" class="btn btn-primary" type="button">
                       <span id="bq-sa-save-label">Speichern</span>
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── Sharing Tab ── -->
+              <div id="settings-nav-sharing" hidden>
+                <!-- Membership info (shown for non-owners) -->
+                <div id="sharing-member-info" class="settings-card" hidden>
+                  <h3 id="sharing-member-title">Geteilter Workspace</h3>
+                  <p class="settings-desc" id="sharing-member-desc"></p>
+                  <div class="settings-actions" style="margin-top:0.75rem">
+                    <div class="settings-actions-spacer"></div>
+                    <button id="workspace-leave-btn" class="btn btn-danger btn-sm" type="button">
+                      <span id="workspace-leave-label">Verlassen</span>
+                    </button>
+                  </div>
+                </div>
+                <!-- Owner controls -->
+                <div id="sharing-owner-controls">
+                  <div class="settings-card">
+                    <h3 id="sharing-title">Workspace teilen</h3>
+                    <p class="settings-desc" id="sharing-desc">Erstelle einen Einladungslink, um deinen Workspace mit anderen zu teilen.</p>
+                    <div class="share-role-row">
+                      <label id="share-role-label" for="share-role-select">Rolle</label>
+                      <select id="share-role-select" class="feed-url-input" style="width:auto">
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                      <button id="share-generate-btn" class="btn btn-primary btn-sm" type="button">
+                        <span id="share-generate-label">Link erstellen</span>
+                      </button>
+                    </div>
+                    <div id="share-link-box" class="share-link-box" hidden>
+                      <input id="share-link-input" type="text" class="feed-url-input" readonly />
+                      <button id="share-copy-btn" class="btn btn-sm" type="button">Kopieren</button>
+                    </div>
+                    <div id="share-hint" class="settings-hint" hidden></div>
+                  </div>
+                  <div class="settings-card" style="margin-top:1rem">
+                    <h3 id="members-title">Mitglieder</h3>
+                    <div id="members-list" class="members-list">
+                      <p class="settings-desc" style="padding:0.5rem 0">Noch keine Mitglieder.</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1771,6 +1815,6 @@
     </div>
   </dialog>
 
-  <script src="/apps/resilience/app.js?v=30"></script>
+  <script src="/apps/resilience/app.js?v=31"></script>
 </body>
 </html>
