@@ -361,6 +361,8 @@ const I18N = {
     dashAasFilterPolygon: "Polygon",
     dashAasFilterDistance: "Distanz",
     dashAasFilterCountry: "Land",
+    dashAasShowUnmapped: "Nicht zugeordnete anzeigen",
+    dashAasNoMatches: "Keine Treffer",
     dashAasColsLabel: "Spaltenauswahl",
     dashAasColsBtn: "Spalten wählen",
     dashAasSettingsSave: "Speichern",
@@ -1015,6 +1017,8 @@ const I18N = {
     dashAasFilterPolygon: "Polygon",
     dashAasFilterDistance: "Distance",
     dashAasFilterCountry: "Country",
+    dashAasShowUnmapped: "Show unmapped",
+    dashAasNoMatches: "No matches",
     dashAasColsLabel: "Column Selection",
     dashAasColsBtn: "Select Columns",
     dashAasSettingsSave: "Save",
@@ -1680,6 +1684,7 @@ function applyLocaleToUI() {
   document.getElementById("dash-aas-filter-polygon-label").textContent = t("dashAasFilterPolygon");
   document.getElementById("dash-aas-filter-distance-label").textContent = t("dashAasFilterDistance");
   document.getElementById("dash-aas-filter-country-label").textContent = t("dashAasFilterCountry");
+  document.getElementById("dash-aas-show-unmapped-label").textContent = t("dashAasShowUnmapped");
   document.getElementById("dash-aas-cols-label").textContent = t("dashAasColsLabel");
   document.getElementById("dash-aas-cols-btn-label").textContent = t("dashAasColsBtn");
   document.getElementById("gdacs-matching-label").textContent = t("matchingLabel");
@@ -2016,16 +2021,18 @@ function hideGdacsCountryHint() {
 let cachedFeeds = [];
 let cachedGdacsCountries = [];
 let cachedDashMatchFilter = ["polygon", "distance"];
+let cachedDashShowUnmapped = false;
 
 
 async function loadSettings() {
   const result = await apiRequest("/apps/resilience/api/settings");
   if (!result.ok || !result.payload) return;
 
-  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter, bq_has_credentials, bq_project_id } = result.payload;
+  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter, dash_aas_show_unmapped, bq_has_credentials, bq_project_id } = result.payload;
   cachedFeeds = feeds || [];
   cachedGdacsCountries = gdacs_countries || [];
   cachedDashMatchFilter = dash_aas_match_filter || ["polygon", "distance"];
+  cachedDashShowUnmapped = !!dash_aas_show_unmapped;
 
   retentionSelect.value = String(retention_days);
   refreshSelect.value = String(refresh_minutes);
@@ -2048,9 +2055,11 @@ async function loadSettings() {
   const filterPolygon = document.getElementById("dash-filter-polygon");
   const filterDistance = document.getElementById("dash-filter-distance");
   const filterCountry = document.getElementById("dash-filter-country");
+  const filterShowUnmapped = document.getElementById("dash-filter-show-unmapped");
   if (filterPolygon) filterPolygon.checked = cachedDashMatchFilter.includes("polygon");
   if (filterDistance) filterDistance.checked = cachedDashMatchFilter.includes("distance");
   if (filterCountry) filterCountry.checked = cachedDashMatchFilter.includes("country");
+  if (filterShowUnmapped) filterShowUnmapped.checked = cachedDashShowUnmapped;
 
   // GDACS distance thresholds → fill settings inputs
   if (gdacs_distance_thresholds) {
@@ -5782,10 +5791,11 @@ async function loadDashboard() {
   const dashAlertsBody = document.getElementById("dash-alerts-body");
 
   const matchFilter = cachedDashMatchFilter.join(",");
+  const showUnmappedFlag = cachedDashShowUnmapped ? "1" : "0";
   const [newsResult, alertsResult, aasOverviewResult, indEvalResult, scoreResult] = await Promise.all([
     apiRequest("/apps/resilience/api/news?limit=8"),
     apiRequest("/apps/resilience/api/gdacs/alerts?limit=8"),
-    apiRequest(`/apps/resilience/api/gdacs/aas-overview?match_filter=${encodeURIComponent(matchFilter)}`),
+    apiRequest(`/apps/resilience/api/gdacs/aas-overview?match_filter=${encodeURIComponent(matchFilter)}&show_unmapped=${showUnmappedFlag}`),
     apiRequest("/apps/resilience/api/indicators/dashboard-evaluate"),
     apiRequest("/apps/resilience/api/score/dashboard-evaluate"),
   ]);
@@ -6097,7 +6107,9 @@ function renderDashAasRows(items, columns) {
         return `<span class="dash-aas-col-cell" title="${escapeHtml(p)}: ${escapeHtml(val)}">${escapeHtml(val) || "\u2014"}</span>`;
       }).join("");
     }
-    const alertsHtml = row.alerts.map((a) => {
+    const alertsHtml = row.alerts.length === 0
+      ? `<span class="dash-aas-alerts-empty" title="${escapeHtml(t("dashAasNoMatches"))}">—</span>`
+      : row.alerts.map((a) => {
       const icon = GDACS_TYPE_ICONS[a.eventtype] || "";
       const ac = a.alertlevel === "Red" ? "alert-red" : a.alertlevel === "Orange" ? "alert-orange" : "alert-green";
       const link = a.url ? ` href="${escapeHtml(a.url)}" target="_blank" rel="noopener"` : "";
@@ -6136,7 +6148,8 @@ document.getElementById("dash-aas-body").addEventListener("click", (e) => {
 async function loadDashAasPage(page) {
   dashAasPage = page;
   const mf = cachedDashMatchFilter.join(",");
-  let url = `/apps/resilience/api/gdacs/aas-overview?limit=20&offset=${page * 20}&match_filter=${encodeURIComponent(mf)}`;
+  const su = cachedDashShowUnmapped ? "1" : "0";
+  let url = `/apps/resilience/api/gdacs/aas-overview?limit=20&offset=${page * 20}&match_filter=${encodeURIComponent(mf)}&show_unmapped=${su}`;
   if (dashAasSortBy) url += `&sort=${encodeURIComponent(dashAasSortBy)}&sort_dir=${dashAasSortDir}`;
   const res = await apiRequest(url);
   if (!res.ok || !res.payload) return;
@@ -6830,6 +6843,7 @@ document.getElementById("dash-aas-settings-btn").addEventListener("click", () =>
   document.getElementById("dash-filter-polygon").checked = cachedDashMatchFilter.includes("polygon");
   document.getElementById("dash-filter-distance").checked = cachedDashMatchFilter.includes("distance");
   document.getElementById("dash-filter-country").checked = cachedDashMatchFilter.includes("country");
+  document.getElementById("dash-filter-show-unmapped").checked = cachedDashShowUnmapped;
   updateGdacsColsDisplay(cachedGdacsColumns);
   // Show extra sections + delete only when matching is configured
   document.getElementById("dash-aas-extra-sections").hidden = !cachedMatchingConfigured;
@@ -6846,12 +6860,14 @@ document.getElementById("dash-aas-settings-save").addEventListener("click", asyn
   if (document.getElementById("dash-filter-polygon").checked) filter.push("polygon");
   if (document.getElementById("dash-filter-distance").checked) filter.push("distance");
   if (document.getElementById("dash-filter-country").checked) filter.push("country");
+  const showUnmapped = document.getElementById("dash-filter-show-unmapped").checked;
   cachedDashMatchFilter = filter;
+  cachedDashShowUnmapped = showUnmapped;
   const btn = document.getElementById("dash-aas-settings-save");
   btn.disabled = true;
   await apiRequest("/apps/resilience/api/settings", {
     method: "PUT",
-    body: { dash_aas_match_filter: filter },
+    body: { dash_aas_match_filter: filter, dash_aas_show_unmapped: showUnmapped },
   });
   btn.disabled = false;
   dashAasSettingsModal.close();
@@ -6869,6 +6885,7 @@ document.getElementById("dash-aas-settings-delete").addEventListener("click", as
       matching_params: { group_id: "", country_path: "", city_path: "", lat_path: "", lon_path: "" },
       gdacs_aas_columns: [],
       dash_aas_match_filter: ["polygon", "distance"],
+      dash_aas_show_unmapped: false,
     },
   });
   btn.disabled = false;
@@ -6876,6 +6893,7 @@ document.getElementById("dash-aas-settings-delete").addEventListener("click", as
   cachedGdacsColumns = [];
   updateGdacsColsDisplay([]);
   cachedDashMatchFilter = ["polygon", "distance"];
+  cachedDashShowUnmapped = false;
   dashAasSettingsModal.close();
   dashAasPage = 0;
   loadDashboard();
@@ -8696,6 +8714,7 @@ async function init() {
   if (preSettings.ok && preSettings.payload) {
     const ps = preSettings.payload;
     cachedDashMatchFilter = ps.dash_aas_match_filter || ["polygon", "distance"];
+    cachedDashShowUnmapped = !!ps.dash_aas_show_unmapped;
     updateGdacsColsDisplay(ps.gdacs_aas_columns || []);
     if (ps.matching_group_id) {
       updateMatchingDisplay(ps.matching_group_name || ps.matching_group_id, {

@@ -1829,6 +1829,10 @@ body.sidebar-collapsed .sidebar-foot {
 .dash-aas-alert-chip:hover {
   background: var(--surface-3);
 }
+.dash-aas-alerts-empty {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
 .dash-aas-footer {
   display: flex;
   align-items: center;

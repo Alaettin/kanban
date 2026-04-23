@@ -376,6 +376,7 @@ async function initResilienceTables() {
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN matching_lat_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN matching_lon_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN dash_aas_match_filter TEXT NOT NULL DEFAULT '["polygon","distance"]'`); } catch { /* exists */ }
+  try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN dash_aas_show_unmapped INTEGER NOT NULL DEFAULT 0`); } catch { /* exists */ }
   // Migration: company process settings
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN company_group_id TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.run(`ALTER TABLE resilience_settings ADD COLUMN company_name_path TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
@@ -1100,7 +1101,7 @@ function mountRoutes(router) {
   router.get("/api/settings", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const settings = await db.get(
-        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter, bq_service_account FROM resilience_settings WHERE user_id = ?",
+        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter, dash_aas_show_unmapped, bq_service_account FROM resilience_settings WHERE user_id = ?",
         [req.resOwner]
       );
       const feeds = await db.all(
@@ -1138,6 +1139,7 @@ function mountRoutes(router) {
         matching_lat_path: settings?.matching_lat_path ?? "",
         matching_lon_path: settings?.matching_lon_path ?? "",
         dash_aas_match_filter: JSON.parse(settings?.dash_aas_match_filter || '["polygon","distance"]'),
+        dash_aas_show_unmapped: !!(settings?.dash_aas_show_unmapped),
         bq_has_credentials: !!(settings?.bq_service_account),
         bq_project_id: (() => { try { return JSON.parse(settings?.bq_service_account || "{}").project_id || ""; } catch { return ""; } })(),
         feeds,
@@ -1236,6 +1238,10 @@ function mountRoutes(router) {
           await db.run("UPDATE resilience_settings SET dash_aas_match_filter = ? WHERE user_id = ?",
             [JSON.stringify(f), req.resOwner]);
         }
+      }
+      if (body.dash_aas_show_unmapped !== undefined) {
+        await db.run("UPDATE resilience_settings SET dash_aas_show_unmapped = ? WHERE user_id = ?",
+          [body.dash_aas_show_unmapped ? 1 : 0, req.resOwner]);
       }
       if (body.bq_service_account !== undefined) {
         const val = (body.bq_service_account || "").trim();
@@ -1906,13 +1912,14 @@ function mountRoutes(router) {
       // Optional match_filter: comma-separated tiers (polygon,distance,country)
       const filterParam = (req.query.match_filter || "").trim();
       const tierFilter = filterParam ? new Set(filterParam.split(",").map(s => s.trim())) : null;
+      const showUnmapped = req.query.show_unmapped === "1" || req.query.show_unmapped === "true";
 
-      // Build response items — only include rows that have matches
+      // Build response items — include unmapped rows only when showUnmapped is set
       const allItems = [];
       for (const entry of aasEntries) {
         let rowAlerts = matchesByAas[entry.aas_id] || [];
         if (tierFilter) rowAlerts = rowAlerts.filter(a => tierFilter.has(a.match_tier));
-        if (!rowAlerts.length) continue;
+        if (!rowAlerts.length && !showUnmapped) continue;
         allItems.push({
           aas_id: entry.aas_id,
           country_value: entry.country_value,
