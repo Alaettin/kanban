@@ -442,7 +442,7 @@ async function seedCountryMappings(userId) {
 // GDACS fetch helper (used by search endpoint + background refresh)
 // ---------------------------------------------------------------------------
 const GDACS_CAP = 100;
-const MAX_GDACS_DEPTH = 3;
+const MAX_GDACS_DEPTH = 5;
 
 async function fetchGdacsRange(type, from, to, alertlevel, depth = 0) {
   const fmt = (d) => d.toISOString().slice(0, 10);
@@ -629,6 +629,7 @@ async function runImportJob(userId) {
     job.done++;
   }
   job.running = false;
+  invalidateAasMatchCache(userId);
 }
 
 function scheduleUserImport(userId, hours) {
@@ -736,7 +737,7 @@ async function runGeocodingJob(userId) {
     job.done++;
   }
   job.running = false;
-
+  invalidateAasMatchCache(userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +903,7 @@ async function runCompanyProcessJob(userId, groupId, companyNamePath) {
     job.done++;
   }
   job.running = false;
+  invalidateAasMatchCache(userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -1261,6 +1263,8 @@ function mountRoutes(router) {
         }
         // If val starts with "•" → keep existing (do nothing)
       }
+      // Invalidate AAS match cache — any matching/group/threshold change affects dashboard output
+      invalidateAasMatchCache(req.resOwner);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "SAVE_FAILED" });
@@ -3646,6 +3650,7 @@ function mountRoutes(router) {
       await db.run("DELETE FROM resilience_asset_groups WHERE user_id = ?", [uid]);
       await db.run("DELETE FROM resilience_country_mappings WHERE user_id = ?", [uid]);
       await db.run("DELETE FROM resilience_settings WHERE user_id = ?", [uid]);
+      invalidateAasMatchCache(uid);
       res.json({ ok: true });
     } catch (err) {
       console.error("POST /api/delete-all-data error:", err);
@@ -3751,39 +3756,94 @@ async function refreshUserGdacsAlerts(userId) {
     "SELECT country_id, name FROM resilience_gdacs_countries WHERE user_id = ?",
     [userId]
   );
+  if (!countries.length) return;
+
   const toDate = new Date();
   const fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
   const types = ["EQ", "TC", "FL", "VO", "WF", "DR"];
 
-  for (const c of countries) {
-    try {
-      const fetches = types.map((type) => fetchGdacsRange(type, fromDate, toDate, "Green;Orange;Red"));
-      const results = await Promise.all(fetches);
-      const events = parseGdacsFeatures(results.flat());
-      const countryLower = c.name.toLowerCase();
-
-      for (const ev of events) {
-        if (!ev.country.toLowerCase().includes(countryLower) && ev.iso3.toLowerCase() !== countryLower) continue;
-        if (ev.fromdate && new Date(ev.fromdate).getTime() < fromDate.getTime()) continue;
-        try {
-          await db.run(
-            `INSERT INTO resilience_gdacs_alerts
-             (user_id, country_id, eventid, eventtype, episodeid, name, country, alertlevel, alertscore, severity, fromdate, todate, url, centroid_lat, centroid_lon, affected_countries)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(user_id, eventid) DO UPDATE SET
-               alertlevel=excluded.alertlevel, alertscore=excluded.alertscore,
-               severity=excluded.severity, todate=excluded.todate,
-               centroid_lat=excluded.centroid_lat, centroid_lon=excluded.centroid_lon,
-               episodeid=excluded.episodeid, affected_countries=excluded.affected_countries`,
-            [userId, c.country_id, ev.eventid, ev.eventtype, ev.episodeid, ev.name, ev.country, ev.alertlevel, ev.alertscore, ev.severity, ev.fromdate, ev.todate, ev.url, ev.centroid_lat, ev.centroid_lon, ev.affected_countries]
-          );
-        } catch { /* skip errors */ }
-      }
-    } catch { /* skip country on error */ }
+  // Fix #1: fetch each event type ONCE globally, then filter per country in memory
+  let events;
+  try {
+    const results = await Promise.all(
+      types.map((type) => fetchGdacsRange(type, fromDate, toDate, "Green;Orange;Red"))
+    );
+    events = parseGdacsFeatures(results.flat());
+  } catch (err) {
+    console.warn(`[GDACS] fetch failed for user ${userId}:`, err.message);
+    return;
   }
 
+  // Fix #4: country normalization via mappings — expand each watched country to all name variants
+  const mappings = await db.all(
+    "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+    [userId]
+  );
+  const countryTargets = countries.map((c) => {
+    const base = (c.name || "").toLowerCase().trim();
+    const names = new Set([base]);
+    const alpha3Set = new Set();
+    // Search mappings: match base name against aas_names or gdacs_names or alpha3
+    for (const m of mappings) {
+      const aasNames = (m.aas_names || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+      const gdacsNames = (m.gdacs_names || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+      const alpha3 = (m.alpha3 || "").toLowerCase().trim();
+      const iso = (m.iso_code || "").toLowerCase().trim();
+      if (aasNames.includes(base) || gdacsNames.includes(base) || alpha3 === base || iso === base) {
+        aasNames.forEach((n) => names.add(n));
+        gdacsNames.forEach((n) => names.add(n));
+        if (alpha3) alpha3Set.add(alpha3);
+      }
+    }
+    return { country_id: c.country_id, names, alpha3Set };
+  });
+
+  let inserted = 0;
+  let skipped = 0;
+  for (const ev of events) {
+    if (ev.fromdate && new Date(ev.fromdate).getTime() < fromDate.getTime()) { skipped++; continue; }
+    const evCountryLower = (ev.country || "").toLowerCase();
+    const evIso3Lower = (ev.iso3 || "").toLowerCase();
+
+    // Determine which watched country this event belongs to
+    const target = countryTargets.find((t) => {
+      if (t.alpha3Set.has(evIso3Lower)) return true;
+      for (const n of t.names) {
+        if (n && (evCountryLower === n || evCountryLower.includes(n) || n.includes(evCountryLower))) return true;
+      }
+      return false;
+    });
+    if (!target) { skipped++; continue; }
+
+    try {
+      await db.run(
+        `INSERT INTO resilience_gdacs_alerts
+         (user_id, country_id, eventid, eventtype, episodeid, name, country, alertlevel, alertscore, severity, fromdate, todate, url, centroid_lat, centroid_lon, affected_countries)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, eventid) DO UPDATE SET
+           alertlevel=excluded.alertlevel, alertscore=excluded.alertscore,
+           severity=excluded.severity, todate=excluded.todate,
+           centroid_lat=excluded.centroid_lat, centroid_lon=excluded.centroid_lon,
+           episodeid=excluded.episodeid, affected_countries=excluded.affected_countries`,
+        [userId, target.country_id, ev.eventid, ev.eventtype, ev.episodeid, ev.name, ev.country, ev.alertlevel, ev.alertscore, ev.severity, ev.fromdate, ev.todate, ev.url, ev.centroid_lat, ev.centroid_lon, ev.affected_countries]
+      );
+      inserted++;
+    } catch (err) {
+      console.warn(`[GDACS] insert failed for event ${ev.eventid}:`, err.message);
+    }
+  }
+
+  if (inserted > 0 || skipped > 0) {
+    console.log(`[GDACS] refresh user=${userId} upserted=${inserted} skipped=${skipped} total_events=${events.length}`);
+  }
+
+  // Invalidate per-user match cache so dashboard recomputes with fresh alerts
+  invalidateAasMatchCache(userId);
+
   // Fire polygon fetch as background task (matching is computed on-the-fly in dashboard)
-  fetchAlertPolygons(userId).catch(() => {});
+  fetchAlertPolygons(userId).catch((err) => {
+    console.warn(`[GDACS] polygon fetch failed for user ${userId}:`, err.message);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -3829,16 +3889,37 @@ async function fetchAlertPolygons(userId) {
 }
 
 // ---------------------------------------------------------------------------
+// In-memory cache for buildAasAlertData — avoids O(AAS × Alerts × Polygons)
+// recompute on every dashboard/map request. Invalidated after GDACS refresh,
+// settings write, and AAS import changes.
+// ---------------------------------------------------------------------------
+const aasMatchCache = new Map();
+const AAS_MATCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes safety TTL
+
+function invalidateAasMatchCache(userId) {
+  if (userId) aasMatchCache.delete(userId);
+  else aasMatchCache.clear();
+}
+
+// ---------------------------------------------------------------------------
 // On-the-fly: build AAS entries + alert matches from source data
 // ---------------------------------------------------------------------------
 async function buildAasAlertData(userId) {
+  const cached = aasMatchCache.get(userId);
+  if (cached && (Date.now() - cached.fetchedAt) < AAS_MATCH_CACHE_TTL) {
+    return cached.data;
+  }
+
   const settings = await db.get(
     `SELECT gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns,
             geocoding_city_path, matching_lat_path, matching_lon_path,
             gdacs_distance_thresholds
      FROM resilience_settings WHERE user_id = ?`, [userId]);
-  if (!settings?.gdacs_aas_group_id || !settings?.gdacs_aas_path)
-    return { aasEntries: [], matches: [], columns: [] };
+  if (!settings?.gdacs_aas_group_id || !settings?.gdacs_aas_path) {
+    const empty = { aasEntries: [], matches: [], columns: [], totalMembers: 0 };
+    aasMatchCache.set(userId, { data: empty, fetchedAt: Date.now() });
+    return empty;
+  }
 
   const columns = JSON.parse(settings.gdacs_aas_columns || "[]");
   const columnPaths = columns.map(c => typeof c === "string" ? c : c.path);
@@ -3847,10 +3928,20 @@ async function buildAasAlertData(userId) {
   const latPath = settings.matching_lat_path || "";
   const lonPath = settings.matching_lon_path || "";
 
-  const members = await db.all(
-    "SELECT aas_id FROM resilience_asset_group_members WHERE group_id = ?",
-    [settings.gdacs_aas_group_id]);
-  if (!members.length) return { aasEntries: [], matches: [], columns };
+  // Single JOIN instead of N+1: fetch all members' submodels at once
+  const memberRows = await db.all(
+    `SELECT gm.aas_id, imp.submodels_data
+     FROM resilience_asset_group_members gm
+     LEFT JOIN resilience_aas_imports imp
+       ON imp.aas_id = gm.aas_id AND imp.user_id = ?
+     WHERE gm.group_id = ?`,
+    [userId, settings.gdacs_aas_group_id]);
+  const totalMembers = memberRows.length;
+  if (!totalMembers) {
+    const empty = { aasEntries: [], matches: [], columns, totalMembers: 0 };
+    aasMatchCache.set(userId, { data: empty, fetchedAt: Date.now() });
+    return empty;
+  }
 
   const mappingRows = await db.all(
     "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
@@ -3858,18 +3949,15 @@ async function buildAasAlertData(userId) {
 
   // Extract AAS data from imports
   const aasEntries = [];
-  for (const m of members) {
-    const imp = await db.get(
-      "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-      [m.aas_id, userId]);
-    if (!imp?.submodels_data) continue;
+  for (const m of memberRows) {
+    if (!m.submodels_data) continue;
 
     let countryValue = "", isoCode = "", cityValue = "";
     let directLat = null, directLon = null;
     const colData = {};
     let submodels;
     try {
-      submodels = JSON.parse(imp.submodels_data);
+      submodels = JSON.parse(m.submodels_data);
       countryValue = extractFirstValue(submodels, settings.gdacs_aas_path);
       if (countryValue) isoCode = matchCountryValue(countryValue, mappingRows);
       if (cityPath) cityValue = extractFirstValue(submodels, cityPath);
@@ -3964,7 +4052,9 @@ async function buildAasAlertData(userId) {
     }
   }
 
-  return { aasEntries, matches, columns, totalMembers: members.length };
+  const data = { aasEntries, matches, columns, totalMembers };
+  aasMatchCache.set(userId, { data, fetchedAt: Date.now() });
+  return data;
 }
 
 // ---------------------------------------------------------------------------
