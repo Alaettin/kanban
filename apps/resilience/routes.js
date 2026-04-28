@@ -655,15 +655,69 @@ async function scheduleImports() {
 const geocodingJobs = {}; // { userId: { total, done, errors, running } }
 
 function buildGeocodingSubmodel(cityRaw, countryIso, result) {
+  const geoCountry = result?.address?.country || "";
+  const geoCountryCode = result?.address?.country_code ? String(result.address.country_code).toUpperCase() : "";
+  const effectiveIso = countryIso || geoCountryCode;
   const els = [
     { idShort: "CityRaw", modelType: "Property", valueType: "xs:string", value: cityRaw || "" },
-    { idShort: "CountryISO", modelType: "Property", valueType: "xs:string", value: countryIso || "" },
+    { idShort: "CountryISO", modelType: "Property", valueType: "xs:string", value: effectiveIso },
+    { idShort: "Country", modelType: "Property", valueType: "xs:string", value: geoCountry },
+    { idShort: "CountryCodeFromGeo", modelType: "Property", valueType: "xs:string", value: geoCountryCode },
     { idShort: "Latitude", modelType: "Property", valueType: "xs:double", value: result ? String(result.lat) : "" },
     { idShort: "Longitude", modelType: "Property", valueType: "xs:double", value: result ? String(result.lon) : "" },
     { idShort: "DisplayName", modelType: "Property", valueType: "xs:string", value: result ? (result.display_name || "") : "" },
     { idShort: "Status", modelType: "Property", valueType: "xs:string", value: result ? "ok" : "error" },
   ];
   return { idShort: "Geocoding", modelType: "Submodel", submodelElements: els };
+}
+
+// Country-safe Nominatim lookup. Never falls back to an unconstrained query when
+// an isoCode is known — a wrong city in the right country is worse than no result.
+async function geocodeOnce(cityRaw, countryRaw, isoCode) {
+  const city = (cityRaw || "").trim();
+  const country = (countryRaw || "").trim();
+  if (!city && !country) return null;
+
+  const fetchOpts = {
+    signal: AbortSignal.timeout(15000),
+    headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" },
+  };
+
+  const buildUrl = (params) => {
+    const sp = new URLSearchParams({ format: "json", limit: "1", addressdetails: "1", ...params });
+    return `https://nominatim.openstreetmap.org/search?${sp.toString()}`;
+  };
+
+  const tryFetch = async (url) => {
+    try {
+      const resp = await fetch(url, fetchOpts);
+      if (!resp.ok) return null;
+      const arr = await resp.json();
+      return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // 1. Structured query: city + country constraint
+  const primary = {};
+  if (city) primary.city = city;
+  if (isoCode) primary.countrycodes = isoCode.toLowerCase();
+  else if (country) primary.country = country;
+  let result = await tryFetch(buildUrl(primary));
+  if (result) return result;
+
+  // 2. Country-bound free-form retry. Only allowed if we still have a country
+  //    constraint — never search globally.
+  if (city && (isoCode || country)) {
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    const fb = { q: `${city}, ${country || isoCode}` };
+    if (isoCode) fb.countrycodes = isoCode.toLowerCase();
+    result = await tryFetch(buildUrl(fb));
+    if (result) return result;
+  }
+
+  return null;
 }
 
 async function runGeocodingJob(userId) {
@@ -702,25 +756,9 @@ async function runGeocodingJob(userId) {
       const cityRaw = extractFirstValue(submodels, settings.geocoding_city_path);
       const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
 
-      let geoResult = null;
-      const queryTerm = cityRaw || countryRaw;
-      if (queryTerm) {
-        const baseUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryTerm)}`;
-        const fetchOpts = { signal: AbortSignal.timeout(15000), headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" } };
-        try {
-          let url = isoCode ? `${baseUrl}&countrycodes=${isoCode.toLowerCase()}` : baseUrl;
-          let resp = await fetch(url, fetchOpts);
-          if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
-          // Retry without countrycodes if filtered query returned nothing
-          if (!geoResult && isoCode) {
-            await new Promise(resolve => setTimeout(resolve, 1100));
-            resp = await fetch(baseUrl, fetchOpts);
-            if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
-          }
-        } catch { /* timeout or network error */ }
-        // Rate limit: 1 request/second
-        await new Promise(resolve => setTimeout(resolve, 1100));
-      }
+      const geoResult = (cityRaw || countryRaw) ? await geocodeOnce(cityRaw, countryRaw, isoCode) : null;
+      // Rate limit: 1 request/second between assets
+      if (cityRaw || countryRaw) await new Promise(resolve => setTimeout(resolve, 1100));
 
       if (!geoResult) job.errors++;
 
@@ -3311,22 +3349,7 @@ function mountRoutes(router) {
       );
       const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
 
-      let geoResult = null;
-      const queryTerm = cityRaw || countryRaw;
-      if (queryTerm) {
-        const baseUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryTerm)}`;
-        const fetchOpts = { signal: AbortSignal.timeout(15000), headers: { "User-Agent": "KanbanResilienceApp/1.0", Accept: "application/json" } };
-        try {
-          let url = isoCode ? `${baseUrl}&countrycodes=${isoCode.toLowerCase()}` : baseUrl;
-          let resp = await fetch(url, fetchOpts);
-          if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
-          // Retry without countrycodes if filtered query returned nothing
-          if (!geoResult && isoCode) {
-            resp = await fetch(baseUrl, fetchOpts);
-            if (resp.ok) { const r = await resp.json(); if (r.length > 0) geoResult = r[0]; }
-          }
-        } catch { /* timeout or network error */ }
-      }
+      const geoResult = (cityRaw || countryRaw) ? await geocodeOnce(cityRaw, countryRaw, isoCode) : null;
 
       // 3. Geocoding-Submodel injizieren + DB-Update
       submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
