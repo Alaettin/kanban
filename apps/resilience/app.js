@@ -132,6 +132,7 @@ const alertsContent = document.getElementById("alerts-content");
 const alertsEmpty = document.getElementById("alerts-empty");
 const alertsPagination = document.getElementById("alerts-pagination");
 const alertsRefreshBtn = document.getElementById("alerts-refresh-btn");
+const alertsClearBtn = document.getElementById("alerts-clear-btn");
 
 // Docs DOM refs
 const docsNav = document.getElementById("docs-nav");
@@ -1766,6 +1767,7 @@ function applyLocaleToUI() {
 
   // GDACS Alerts page labels
   document.getElementById("alerts-refresh-label").textContent = t("alertsRefresh");
+  document.getElementById("alerts-clear-label").textContent = t("gdacsPurge");
   document.getElementById("alerts-empty-text").textContent = t("alertsEmpty");
 
   // Dashboard edit button
@@ -8004,6 +8006,17 @@ alertsRefreshBtn.addEventListener("click", async () => {
 
   alertsPage = 0;
   await loadGdacsAlerts();
+});
+
+alertsClearBtn.addEventListener("click", async () => {
+  if (!confirm(t("gdacsPurgeConfirm"))) return;
+  alertsClearBtn.disabled = true;
+  const result = await apiRequest("/apps/resilience/api/gdacs/alerts", { method: "DELETE" });
+  alertsClearBtn.disabled = false;
+  if (result.ok) {
+    alertsPage = 0;
+    await loadGdacsAlerts();
+  }
 });
 
 async function loadGdacsAlerts() {

@@ -3827,12 +3827,27 @@ async function refreshUserGdacsAlerts(userId) {
     if (ev.fromdate && new Date(ev.fromdate).getTime() < fromDate.getTime()) { skipped++; continue; }
     const evCountryLower = (ev.country || "").toLowerCase();
     const evIso3Lower = (ev.iso3 || "").toLowerCase();
+    let affectedIso3s = [];
+    try {
+      affectedIso3s = JSON.parse(ev.affected_countries || "[]")
+        .map(c => (c && c.iso3 ? String(c.iso3).toLowerCase() : ""))
+        .filter(Boolean);
+    } catch { /* malformed JSON — fall through with empty array */ }
+
+    // Ocean events without any country attribution belong nowhere — skip.
+    if (!evCountryLower && !evIso3Lower && !affectedIso3s.length) { skipped++; continue; }
 
     // Determine which watched country this event belongs to
     const target = countryTargets.find((t) => {
-      if (t.alpha3Set.has(evIso3Lower)) return true;
+      if (evIso3Lower && t.alpha3Set.has(evIso3Lower)) return true;
+      if (affectedIso3s.some(iso => t.alpha3Set.has(iso))) return true;
+      if (!evCountryLower) return false;
       for (const n of t.names) {
-        if (n && (evCountryLower === n || evCountryLower.includes(n) || n.includes(evCountryLower))) return true;
+        if (!n) continue;
+        if (evCountryLower === n) return true;
+        // length>=4 prevents 2-letter codes like "us"/"de" from matching as substring inside unrelated names
+        if (n.length >= 4 && evCountryLower.includes(n)) return true;
+        if (evCountryLower.length >= 4 && n.includes(evCountryLower)) return true;
       }
       return false;
     });
