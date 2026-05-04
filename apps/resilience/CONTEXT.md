@@ -40,7 +40,7 @@
 | `page-aas-data` | AAS imports, sources, groups | overview \| sources \| groups \| assign |
 | `page-news-feeds` | RSS news list/detail | — |
 | `page-gdacs-alerts` | GDACS alert table | — |
-| `page-settings` | App configuration | feeds \| gdacs \| aas-import \| country-codes \| gdelt-bq \| danger-zone |
+| `page-settings` | App configuration | feeds \| gdacs \| country-codes \| gdelt-bq \| danger-zone |
 | `page-docs` | Documentation | overview + topic pages |
 
 ## Key API Endpoints
@@ -73,7 +73,6 @@
 - `cleanupExpiredItems()` — respects retention_days
 - `refreshAllGdacsAlerts()` — respects gdacs_refresh_minutes
 - `cleanupGdacsAlerts()` — respects gdacs_retention_days
-- `scheduleUserImport()` — recurring AAS import (import_interval_hours)
 - `runGeocodingJob()` — Nominatim batch geocode (1.1s rate limit)
 - `runCompanyProcessJob()` — AI alias extraction in batches of 50
 

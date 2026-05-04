@@ -156,13 +156,6 @@ async function initResilienceTables() {
     // column already exists
   }
 
-  // Migration: add import_interval_hours to settings
-  try {
-    await db.run(`ALTER TABLE resilience_settings ADD COLUMN import_interval_hours INTEGER NOT NULL DEFAULT 0`);
-  } catch {
-    // column already exists
-  }
-
   // Migration: add gdacs_aas_group_id + gdacs_aas_path to settings
   try {
     await db.run(`ALTER TABLE resilience_settings ADD COLUMN gdacs_aas_group_id TEXT NOT NULL DEFAULT ''`);
@@ -573,7 +566,6 @@ function toBase64Url(str) {
 // AAS Import: server-side background job
 // ---------------------------------------------------------------------------
 const importJobs = {}; // { userId: { total, done, errors, running } }
-const importTimers = {}; // { userId: timerId }
 
 async function runImportJob(userId) {
   if (importJobs[userId]?.running) return;
@@ -590,63 +582,49 @@ async function runImportJob(userId) {
   const job = { total: entries.length, done: 0, errors: 0, running: true };
   importJobs[userId] = job;
 
-  for (const entry of entries) {
-    try {
-      const baseUrl = entry.base_url.replace(/\/+$/, "");
-      const encoded = toBase64Url(entry.aas_id);
-      const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
-        signal: AbortSignal.timeout(15000),
-        headers: { Accept: "application/json" },
-      });
-      if (!shellResp.ok) { job.errors++; job.done++; continue; }
-      const shellData = await shellResp.json();
-
-      const submodelRefs = shellData.submodels || [];
-      const submodels = [];
-      for (const ref of submodelRefs) {
-        const smId = ref.keys?.[0]?.value;
-        if (!smId) continue;
-        try {
-          const smEncoded = toBase64Url(smId);
-          const smResp = await fetch(`${baseUrl}/shells/${encoded}/submodels/${smEncoded}`, {
-            signal: AbortSignal.timeout(15000),
-            headers: { Accept: "application/json" },
-          });
-          if (smResp.ok) submodels.push(await smResp.json());
-        } catch { /* skip */ }
-      }
-
-      const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-      await db.run(
-        `INSERT INTO resilience_aas_imports (aas_id, user_id, source_id, shell_data, submodels_data, imported_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(user_id, aas_id) DO UPDATE SET
-           source_id=excluded.source_id, shell_data=excluded.shell_data,
-           submodels_data=excluded.submodels_data, imported_at=excluded.imported_at`,
-        [entry.aas_id, userId, entry.source_id, JSON.stringify(shellData), JSON.stringify(submodels), now]
-      );
-    } catch { job.errors++; }
-    job.done++;
-  }
-  job.running = false;
-  invalidateAasMatchCache(userId);
-}
-
-function scheduleUserImport(userId, hours) {
-  if (importTimers[userId]) clearInterval(importTimers[userId]);
-  if (!hours || hours <= 0) { delete importTimers[userId]; return; }
-  const ms = hours * 60 * 60 * 1000;
-  importTimers[userId] = setInterval(() => runImportJob(userId), ms);
-  console.log(`[Resilience] Scheduled import for user ${userId} every ${hours}h`);
-}
-
-async function scheduleImports() {
   try {
-    const users = await db.all(
-      "SELECT user_id, import_interval_hours FROM resilience_settings WHERE import_interval_hours > 0"
-    );
-    for (const u of users) scheduleUserImport(u.user_id, u.import_interval_hours);
-  } catch { /* table may not have column yet */ }
+    for (const entry of entries) {
+      try {
+        const baseUrl = entry.base_url.replace(/\/+$/, "");
+        const encoded = toBase64Url(entry.aas_id);
+        const shellResp = await fetch(`${baseUrl}/shells/${encoded}`, {
+          signal: AbortSignal.timeout(15000),
+          headers: { Accept: "application/json" },
+        });
+        if (!shellResp.ok) { job.errors++; job.done++; continue; }
+        const shellData = await shellResp.json();
+
+        const submodelRefs = shellData.submodels || [];
+        const submodels = [];
+        for (const ref of submodelRefs) {
+          const smId = ref.keys?.[0]?.value;
+          if (!smId) continue;
+          try {
+            const smEncoded = toBase64Url(smId);
+            const smResp = await fetch(`${baseUrl}/shells/${encoded}/submodels/${smEncoded}`, {
+              signal: AbortSignal.timeout(15000),
+              headers: { Accept: "application/json" },
+            });
+            if (smResp.ok) submodels.push(await smResp.json());
+          } catch { /* skip */ }
+        }
+
+        const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+        await db.run(
+          `INSERT INTO resilience_aas_imports (aas_id, user_id, source_id, shell_data, submodels_data, imported_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, aas_id) DO UPDATE SET
+             source_id=excluded.source_id, shell_data=excluded.shell_data,
+             submodels_data=excluded.submodels_data, imported_at=excluded.imported_at`,
+          [entry.aas_id, userId, entry.source_id, JSON.stringify(shellData), JSON.stringify(submodels), now]
+        );
+      } catch { job.errors++; }
+      job.done++;
+    }
+  } finally {
+    job.running = false;
+    invalidateAasMatchCache(userId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -738,44 +716,47 @@ async function runGeocodingJob(userId) {
   const job = { total: members.length, done: 0, errors: 0, running: true };
   geocodingJobs[userId] = job;
 
-  const mappingRows = await db.all(
-    "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
-    [userId]
-  );
+  try {
+    const mappingRows = await db.all(
+      "SELECT iso_code, alpha3, numeric, aas_names, gdacs_names FROM resilience_country_mappings WHERE user_id = ?",
+      [userId]
+    );
 
-  for (const m of members) {
-    try {
-      const imp = await db.get(
-        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-        [m.aas_id, userId]
-      );
-      if (!imp?.submodels_data) { job.errors++; job.done++; continue; }
+    for (const m of members) {
+      try {
+        const imp = await db.get(
+          "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+          [m.aas_id, userId]
+        );
+        if (!imp?.submodels_data) { job.errors++; job.done++; continue; }
 
-      let submodels = JSON.parse(imp.submodels_data);
-      const countryRaw = extractFirstValue(submodels, settings.geocoding_country_path);
-      const cityRaw = extractFirstValue(submodels, settings.geocoding_city_path);
-      const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
+        let submodels = JSON.parse(imp.submodels_data);
+        const countryRaw = extractFirstValue(submodels, settings.geocoding_country_path);
+        const cityRaw = extractFirstValue(submodels, settings.geocoding_city_path);
+        const isoCode = countryRaw ? matchCountryValue(countryRaw, mappingRows) : "";
 
-      const geoResult = (cityRaw || countryRaw) ? await geocodeOnce(cityRaw, countryRaw, isoCode) : null;
-      // Rate limit: 1 request/second between assets
-      if (cityRaw || countryRaw) await new Promise(resolve => setTimeout(resolve, 1100));
+        const geoResult = (cityRaw || countryRaw) ? await geocodeOnce(cityRaw, countryRaw, isoCode) : null;
+        // Rate limit: 1 request/second between assets
+        if (cityRaw || countryRaw) await new Promise(resolve => setTimeout(resolve, 1100));
 
-      if (!geoResult) job.errors++;
+        if (!geoResult) job.errors++;
 
-      // Inject Geocoding submodel
-      submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
-      submodels.push(buildGeocodingSubmodel(cityRaw || countryRaw, isoCode, geoResult));
-      await db.run(
-        "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
-        [JSON.stringify(submodels), geoResult ? "ok" : "error", m.aas_id, userId]
-      );
-    } catch {
-      job.errors++;
+        // Inject Geocoding submodel
+        submodels = submodels.filter(sm => sm.idShort !== "Geocoding");
+        submodels.push(buildGeocodingSubmodel(cityRaw || countryRaw, isoCode, geoResult));
+        await db.run(
+          "UPDATE resilience_aas_imports SET submodels_data = ?, geocoded_status = ? WHERE aas_id = ? AND user_id = ?",
+          [JSON.stringify(submodels), geoResult ? "ok" : "error", m.aas_id, userId]
+        );
+      } catch {
+        job.errors++;
+      }
+      job.done++;
     }
-    job.done++;
+  } finally {
+    job.running = false;
+    invalidateAasMatchCache(userId);
   }
-  job.running = false;
-  invalidateAasMatchCache(userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -889,59 +870,62 @@ async function runCompanyProcessJob(userId, groupId, companyNamePath) {
   const job = { total: members.length, done: 0, errors: 0, running: true, phase: "extract", batchDone: 0, batchTotal: 0 };
   companyProcessJobs[userId] = job;
 
-  // Pass 1: Extract all unique company names
-  const aasNameMap = new Map(); // aas_id → { submodels, companyName }
-  let extractFails = 0;
-  for (const m of members) {
-    try {
-      const imp = await db.get(
-        "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
-        [m.aas_id, userId]
-      );
-      if (!imp?.submodels_data) { extractFails++; continue; }
-      const submodels = JSON.parse(imp.submodels_data);
-      const companyName = extractFirstValue(submodels, companyNamePath);
-      if (companyName) aasNameMap.set(m.aas_id, { submodels, companyName });
-      else extractFails++;
-    } catch { extractFails++; }
-  }
-
-  const uniqueNames = [...new Set([...aasNameMap.values()].map(v => v.companyName))];
-  console.log("[CompanyProcess] Pass 1 done — extracted:", aasNameMap.size, "failed:", extractFails, "unique names:", uniqueNames.length);
-  if (uniqueNames.length > 0) console.log("[CompanyProcess] Sample names:", uniqueNames.slice(0, 5));
-
-  // Pass 2: One AI call for all unique names (if AI configured)
-  const aiSettings = await db.get(
-    "SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?",
-    [userId]
-  );
-  console.log("[CompanyProcess] AI configured:", !!(aiSettings?.provider && aiSettings?.api_key), aiSettings?.provider || "none");
-  job.phase = "ai";
-  const aliasMap = await generateCompanyAliases(uniqueNames, aiSettings, job);
-  console.log("[CompanyProcess] Pass 2 done — aliases generated:", aliasMap.size);
-  if (aliasMap.size > 0) console.log("[CompanyProcess] Sample alias:", [...aliasMap.entries()][0]);
-
-  // Pass 3: Apply results to each AAS
-  job.phase = "save";
-  for (const m of members) {
-    try {
-      const data = aasNameMap.get(m.aas_id);
-      if (!data) { job.errors++; job.done++; continue; }
-
-      const alias = aliasMap.get(data.companyName) || "";
-      let submodels = data.submodels.filter(sm => sm.idShort !== "Company");
-      submodels.push(buildCompanySubmodel(data.companyName, alias));
-      await db.run(
-        "UPDATE resilience_aas_imports SET submodels_data = ?, company_status = ? WHERE aas_id = ? AND user_id = ?",
-        [JSON.stringify(submodels), "ok", m.aas_id, userId]
-      );
-    } catch {
-      job.errors++;
+  try {
+    // Pass 1: Extract all unique company names
+    const aasNameMap = new Map(); // aas_id → { submodels, companyName }
+    let extractFails = 0;
+    for (const m of members) {
+      try {
+        const imp = await db.get(
+          "SELECT submodels_data FROM resilience_aas_imports WHERE aas_id = ? AND user_id = ?",
+          [m.aas_id, userId]
+        );
+        if (!imp?.submodels_data) { extractFails++; continue; }
+        const submodels = JSON.parse(imp.submodels_data);
+        const companyName = extractFirstValue(submodels, companyNamePath);
+        if (companyName) aasNameMap.set(m.aas_id, { submodels, companyName });
+        else extractFails++;
+      } catch { extractFails++; }
     }
-    job.done++;
+
+    const uniqueNames = [...new Set([...aasNameMap.values()].map(v => v.companyName))];
+    console.log("[CompanyProcess] Pass 1 done — extracted:", aasNameMap.size, "failed:", extractFails, "unique names:", uniqueNames.length);
+    if (uniqueNames.length > 0) console.log("[CompanyProcess] Sample names:", uniqueNames.slice(0, 5));
+
+    // Pass 2: One AI call for all unique names (if AI configured)
+    const aiSettings = await db.get(
+      "SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?",
+      [userId]
+    );
+    console.log("[CompanyProcess] AI configured:", !!(aiSettings?.provider && aiSettings?.api_key), aiSettings?.provider || "none");
+    job.phase = "ai";
+    const aliasMap = await generateCompanyAliases(uniqueNames, aiSettings, job);
+    console.log("[CompanyProcess] Pass 2 done — aliases generated:", aliasMap.size);
+    if (aliasMap.size > 0) console.log("[CompanyProcess] Sample alias:", [...aliasMap.entries()][0]);
+
+    // Pass 3: Apply results to each AAS
+    job.phase = "save";
+    for (const m of members) {
+      try {
+        const data = aasNameMap.get(m.aas_id);
+        if (!data) { job.errors++; job.done++; continue; }
+
+        const alias = aliasMap.get(data.companyName) || "";
+        let submodels = data.submodels.filter(sm => sm.idShort !== "Company");
+        submodels.push(buildCompanySubmodel(data.companyName, alias));
+        await db.run(
+          "UPDATE resilience_aas_imports SET submodels_data = ?, company_status = ? WHERE aas_id = ? AND user_id = ?",
+          [JSON.stringify(submodels), "ok", m.aas_id, userId]
+        );
+      } catch {
+        job.errors++;
+      }
+      job.done++;
+    }
+  } finally {
+    job.running = false;
+    invalidateAasMatchCache(userId);
   }
-  job.running = false;
-  invalidateAasMatchCache(userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -1141,7 +1125,7 @@ function mountRoutes(router) {
   router.get("/api/settings", auth.requireAuth, resolveWorkspace, async (req, res) => {
     try {
       const settings = await db.get(
-        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter, dash_aas_show_unmapped, bq_service_account FROM resilience_settings WHERE user_id = ?",
+        "SELECT retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, gdacs_aas_group_id, gdacs_aas_path, gdacs_aas_columns, geocoding_group_id, geocoding_country_path, geocoding_city_path, gdacs_distance_thresholds, matching_lat_path, matching_lon_path, dash_aas_match_filter, dash_aas_show_unmapped, bq_service_account FROM resilience_settings WHERE user_id = ?",
         [req.resOwner]
       );
       const feeds = await db.all(
@@ -1164,7 +1148,6 @@ function mountRoutes(router) {
         refresh_minutes: settings?.refresh_minutes ?? 60,
         gdacs_refresh_minutes: settings?.gdacs_refresh_minutes ?? 60,
         gdacs_retention_days: settings?.gdacs_retention_days ?? 30,
-        import_interval_hours: settings?.import_interval_hours ?? 0,
         gdacs_aas_group_id: settings?.gdacs_aas_group_id ?? "",
         gdacs_aas_path: settings?.gdacs_aas_path ?? "",
         gdacs_aas_columns: JSON.parse(settings?.gdacs_aas_columns || "[]"),
@@ -1211,12 +1194,6 @@ function mountRoutes(router) {
       if (body.gdacs_retention_days !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_retention_days = ? WHERE user_id = ?",
           [parseInt(body.gdacs_retention_days) || 30, req.resOwner]);
-      }
-      if (body.import_interval_hours !== undefined) {
-        const hours = parseInt(body.import_interval_hours) || 0;
-        await db.run("UPDATE resilience_settings SET import_interval_hours = ? WHERE user_id = ?",
-          [hours, req.resOwner]);
-        scheduleUserImport(req.resOwner, hours);
       }
       if (body.gdacs_aas_group_id !== undefined) {
         await db.run("UPDATE resilience_settings SET gdacs_aas_group_id = ? WHERE user_id = ?",
@@ -4195,4 +4172,4 @@ function extractFirstValue(submodels, pathStr) {
   return [...values].find(Boolean) || "";
 }
 
-module.exports = { initResilienceTables, mountRoutes, refreshAllFeeds, cleanupExpiredItems, refreshAllGdacsAlerts, cleanupGdacsAlerts, scheduleImports };
+module.exports = { initResilienceTables, mountRoutes, refreshAllFeeds, cleanupExpiredItems, refreshAllGdacsAlerts, cleanupGdacsAlerts };

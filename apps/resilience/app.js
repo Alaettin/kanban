@@ -30,14 +30,11 @@ const gdacsCountryListEmpty = document.getElementById("gdacs-country-list-empty"
 const gdacsRefreshSelect = document.getElementById("gdacs-refresh-select");
 const gdacsRetentionSelect = document.getElementById("gdacs-retention-select");
 const gdacsSettingsSaveBtn = document.getElementById("gdacs-settings-save-btn");
-const importIntervalSelect = document.getElementById("import-interval-select");
-const importSettingsSaveBtn = document.getElementById("import-settings-save-btn");
 
 // Country Mappings DOM refs
 const settingsNav = document.getElementById("settings-nav");
 const settingsNavFeeds = document.getElementById("settings-nav-feeds");
 const settingsNavGdacs = document.getElementById("settings-nav-gdacs");
-const settingsNavAasImport = document.getElementById("settings-nav-aas-import");
 const settingsNavCC = document.getElementById("settings-nav-country-codes");
 const settingsNavGdeltBq = document.getElementById("settings-nav-gdelt-bq");
 const settingsNavDangerZone = document.getElementById("settings-nav-danger-zone");
@@ -629,18 +626,10 @@ const I18N = {
     aasOvImport: "Import",
     aasImportErrors: "Fehler beim Import",
     aasImportDone: "Import abgeschlossen",
-    aasImportSaved: "Gespeichert",
     aasOvView: "Importierte Daten anzeigen",
-    importSettingsTitle: "AAS Import",
-    importIntervalLabel: "Auto-Import Intervall",
-    importIntervalOff: "Aus",
-    importInterval6: "6 Std.",
-    importInterval12: "12 Std.",
-    importInterval24: "24 Std.",
     importSettingsSave: "Speichern",
     settingsNavFeeds: "News Feeds",
     settingsNavGdacs: "GDACS",
-    settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Ländercodes",
     settingsNavGdelt: "GDELT",
     settingsNavDanger: "Danger Zone",
@@ -1284,18 +1273,10 @@ const I18N = {
     aasOvImport: "Import",
     aasImportErrors: "Import errors",
     aasImportDone: "Import complete",
-    aasImportSaved: "Saved",
     aasOvView: "View imported data",
-    importSettingsTitle: "AAS Import",
-    importIntervalLabel: "Auto-Import Interval",
-    importIntervalOff: "Off",
-    importInterval6: "6 hrs",
-    importInterval12: "12 hrs",
-    importInterval24: "24 hrs",
     importSettingsSave: "Save",
     settingsNavFeeds: "News Feeds",
     settingsNavGdacs: "GDACS",
-    settingsNavAasImport: "AAS Import",
     settingsNavCountryCodes: "Country Codes",
     settingsNavGdelt: "GDELT",
     settingsNavDanger: "Danger Zone",
@@ -1706,19 +1687,9 @@ function applyLocaleToUI() {
   }
 
   // Import settings labels
-  document.getElementById("import-settings-title").textContent = t("importSettingsTitle");
-  document.getElementById("import-interval-label").textContent = t("importIntervalLabel");
-  document.getElementById("import-settings-save-label").textContent = t("importSettingsSave");
-  const impOpts = importIntervalSelect.options;
-  impOpts[0].textContent = t("importIntervalOff");
-  impOpts[1].textContent = t("importInterval6");
-  impOpts[2].textContent = t("importInterval12");
-  impOpts[3].textContent = t("importInterval24");
-
   // Settings nav labels
   document.getElementById("settings-nav-feeds-btn").textContent = t("settingsNavFeeds");
   document.getElementById("settings-nav-gdacs-btn").textContent = t("settingsNavGdacs");
-  document.getElementById("settings-nav-aas-btn").textContent = t("settingsNavAasImport");
   document.getElementById("settings-nav-cc-btn").textContent = t("settingsNavCountryCodes");
   document.getElementById("settings-nav-gdelt-btn").textContent = t("settingsNavGdelt");
   document.getElementById("settings-nav-danger-btn").textContent = t("settingsNavDanger");
@@ -2030,7 +2001,7 @@ async function loadSettings() {
   const result = await apiRequest("/apps/resilience/api/settings");
   if (!result.ok || !result.payload) return;
 
-  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, import_interval_hours, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter, dash_aas_show_unmapped, bq_has_credentials, bq_project_id } = result.payload;
+  const { retention_days, refresh_minutes, feeds, gdacs_refresh_minutes, gdacs_retention_days, gdacs_countries, gdacs_aas_columns, gdacs_distance_thresholds, matching_group_id, matching_group_name, matching_country_path, matching_city_path, matching_lat_path, matching_lon_path, dash_aas_match_filter, dash_aas_show_unmapped, bq_has_credentials, bq_project_id } = result.payload;
   cachedFeeds = feeds || [];
   cachedGdacsCountries = gdacs_countries || [];
   cachedDashMatchFilter = dash_aas_match_filter || ["polygon", "distance"];
@@ -2040,7 +2011,6 @@ async function loadSettings() {
   refreshSelect.value = String(refresh_minutes);
   gdacsRefreshSelect.value = String(gdacs_refresh_minutes || 60);
   gdacsRetentionSelect.value = String(gdacs_retention_days || 30);
-  importIntervalSelect.value = String(import_interval_hours || 0);
 
   // Matching-Parameter display
   if (matching_group_id) {
@@ -2344,20 +2314,6 @@ document.getElementById("gdacs-aas-fill-btn").addEventListener("click", async ()
   setTimeout(hideGdacsCountryHint, 4000);
 });
 
-// Save import interval settings
-importSettingsSaveBtn.addEventListener("click", async () => {
-  importSettingsSaveBtn.disabled = true;
-  const result = await apiRequest("/apps/resilience/api/settings", {
-    method: "PUT",
-    body: { import_interval_hours: parseInt(importIntervalSelect.value) },
-  });
-  importSettingsSaveBtn.disabled = false;
-  if (result.ok) {
-    importSettingsSaveBtn.textContent = t("aasImportSaved");
-    setTimeout(() => { importSettingsSaveBtn.textContent = t("importSettingsSave"); }, 2000);
-  }
-});
-
 // Save GDELT BigQuery credentials
 bqSaSaveBtn.addEventListener("click", async () => {
   bqSaSaveBtn.disabled = true;
@@ -2490,13 +2446,12 @@ function switchSettingsNav(nav) {
   });
   settingsNavFeeds.hidden = nav !== "feeds";
   settingsNavGdacs.hidden = nav !== "gdacs";
-  settingsNavAasImport.hidden = nav !== "aas-import";
   settingsNavCC.hidden = nav !== "country-codes";
   settingsNavGdeltBq.hidden = nav !== "gdelt-bq";
   settingsNavDangerZone.hidden = nav !== "danger-zone";
   settingsNavSharing.hidden = nav !== "sharing";
 
-  if (nav === "feeds" || nav === "gdacs" || nav === "aas-import" || nav === "gdelt-bq") {
+  if (nav === "feeds" || nav === "gdacs" || nav === "gdelt-bq") {
     loadSettings();
   } else if (nav === "country-codes") {
     loadCountryMappings();
@@ -4830,7 +4785,8 @@ function startImportPolling() {
 // Check if import is running on page load (survives F5)
 (async () => {
   const result = await apiRequest("/apps/resilience/api/aas-import-status");
-  if (result.ok && result.payload?.running) startImportPolling();
+  const p = result.payload;
+  if (result.ok && p?.running && (p.total === 0 || p.done < p.total)) startImportPolling();
 })();
 
 // ── Geocoding polling ─────────────────────────────────────────────
@@ -4870,7 +4826,8 @@ function startGeocodingPolling() {
 // Check if geocoding is running on page load (survives F5)
 (async () => {
   const result = await apiRequest("/apps/resilience/api/geocoding/status");
-  if (result.ok && result.payload?.running) startGeocodingPolling();
+  const p = result.payload;
+  if (result.ok && p?.running && (p.total === 0 || p.done < p.total)) startGeocodingPolling();
 })();
 
 // ── Company Process polling ──────────────────────────────────────
@@ -4921,7 +4878,8 @@ function startCompanyProcessPolling() {
 // Check if company process is running on page load
 (async () => {
   const result = await apiRequest("/apps/resilience/api/company-process/status");
-  if (result.ok && result.payload?.running) startCompanyProcessPolling();
+  const p = result.payload;
+  if (result.ok && p?.running && (p.total === 0 || p.done < p.total)) startCompanyProcessPolling();
 })();
 
 // Overview table click handler (copy, view, import, geo, AAS ID cell)

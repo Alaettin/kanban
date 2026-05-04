@@ -565,7 +565,6 @@ async function start() {
   await aasWrapperRoutes.initAasWrapperTables();
   await edcRoutes.initEdcTables();
   await bmecatRoutes.initBmecatReaderTables();
-  resilienceRoutes.scheduleImports();
   auth.startMaintenanceJobs();
 
   // Also run invite cleanup periodically

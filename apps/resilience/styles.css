@@ -3344,7 +3344,7 @@ body.sidebar-collapsed .sidebar-foot {
 }
 
 /* ── Country Mappings ── */
-#settings-nav-feeds, #settings-nav-gdacs, #settings-nav-aas-import { max-width: 720px; }
+#settings-nav-feeds, #settings-nav-gdacs { max-width: 720px; }
 .cm-th-iso, .cm-th-alpha3, .cm-th-numeric { width: 80px; }
 .cm-td-iso, .cm-td-alpha3, .cm-td-numeric { font-weight: 700; white-space: nowrap; color: var(--text-2); }
 .cm-td-editable { cursor: pointer; min-width: 150px; }

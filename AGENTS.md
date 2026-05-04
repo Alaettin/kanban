@@ -63,7 +63,7 @@ Use this file as the default operating guide for any coding agent working in thi
 - `index.html` / `styles.css`: All pages with internal navbars (docs-layout pattern)
 - **Pages:** Dashboard (overview cards), Indicators (classes + indicator CRUD with rule groups), GDACS Search (live search + country filter), AAS Daten (overview/sources/groups/assign with internal nav), News Feeds (table + search + pagination), GDACS Alerts (country-grouped alerts), Settings (general + country codes with internal nav), Dokumentation
 - **DB Tables:** `resilience_settings`, `resilience_feeds`, `resilience_feed_items`, `resilience_gdacs_countries`, `resilience_gdacs_alerts`, `resilience_aas_sources`, `resilience_aas_source_ids`, `resilience_aas_groups`, `resilience_aas_imports`, `resilience_indicator_classes`, `resilience_indicators`, `resilience_country_mappings`
-- **Background Jobs (server.js):** `refreshAllFeeds()` + `refreshAllGdacsAlerts()` every 60s, `cleanupExpiredItems()` + `cleanupGdacsAlerts()` per-user retention, `scheduleImports()` per-user auto-import interval
+- **Background Jobs (server.js):** `refreshAllFeeds()` + `refreshAllGdacsAlerts()` every 60s, `cleanupExpiredItems()` + `cleanupGdacsAlerts()` per-user retention
 - **Server-side import:** In-memory `importJobs` map, `POST /api/aas-import` starts background job, `GET /api/aas-import-status` for polling, survives browser refresh
 - **Features:** RSS/Atom/JSON feed aggregation, GDACS disaster alerts with country watchlist, AAS shell+submodel import with progress, indicator rule engine (OR-groups with AND-conditions), country name mapping (ISO↔AAS↔GDACS)
 
@@ -275,7 +275,7 @@ Tool source routing: `DTI_TOOL_NAMES.has() ? "dti" : KB_TOOL_NAMES.has() ? "kb" 
 - `kb_settings` (user_id, base_prompt)
 
 ### Resilience tables
-- `resilience_settings` (user_id PK, retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days, import_interval_hours)
+- `resilience_settings` (user_id PK, retention_days, refresh_minutes, gdacs_refresh_minutes, gdacs_retention_days)
 - `resilience_feeds` (feed_id, user_id, url, title, last_fetched_at, last_error, created_at)
 - `resilience_feed_items` (item_id, feed_id, user_id, guid, title, link, description, content, pub_date, created_at; UNIQUE(feed_id, guid))
 - `resilience_gdacs_countries` (country_id, user_id, name, created_at)
