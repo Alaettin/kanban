@@ -333,6 +333,8 @@ app.get("/apps/resilience/app.js", (req, res) => {
   res.sendFile(path.join(resilienceDir, "app.js"));
 });
 
+app.use("/apps/resilience/vendor", express.static(path.join(resilienceDir, "vendor")));
+
 app.get("/apps/resilience", auth.requireAuthPage, requireAppAccess("resilience"), (req, res) => {
   res.sendFile(path.join(resilienceDir, "index.html"));
 });

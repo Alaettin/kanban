@@ -1,4 +1,7 @@
 const crypto = require("crypto");
+const path = require("path");
+const fs = require("fs");
+const { spawn } = require("child_process");
 const db = require("../../shared/db");
 const auth = require("../../shared/auth");
 const RssParser = require("rss-parser");
@@ -6,6 +9,169 @@ const { BigQuery } = require("@google-cloud/bigquery");
 const ISO_COUNTRIES = require("./iso-countries");
 
 const rssParser = new RssParser({ timeout: 15000 });
+
+// ---------------------------------------------------------------------------
+// PySD Simulation bridge (apps/resilience → simulation_rl/web/web_simulation.py)
+// ---------------------------------------------------------------------------
+const SIM_RL_PATH = process.env.SIMULATION_RL_PATH
+  || path.join(__dirname, "..", "..", "..", "Neuer Ordner", "simulation_rl", "simulation_rl");
+const SIM_PYTHON_BIN = process.env.SIMULATION_PYTHON
+  || path.join(SIM_RL_PATH, ".venv", "Scripts", "python.exe");
+const SIM_WRAPPER = path.join(SIM_RL_PATH, "web", "web_simulation.py");
+
+const SIM_ALLOWED_STEPS = new Set(["calibration", "disruption", "measures"]);
+const SIM_ALLOWED_DISRUPTIONS = new Set([
+  "MA_Knappheit", "Grenzschließung", "Containershortage", "Wintersturm",
+  "Lagertechnik", "Erdbeben", "Hacker", "VariableDisruption",
+]);
+const SIM_ALLOWED_PARAM_NAMES = /^[A-Za-z][A-Za-z0-9_]+$/;
+const SIM_TIMEOUT_MS = 60_000;
+const SIM_CACHE_TTL_MS = 15 * 60 * 1000;
+
+const SIM_OPTIMIZE_CFG = {
+  calibration: path.join(SIM_RL_PATH, "web", "optimize_calibration_cfg.json"),
+  disruption:  path.join(SIM_RL_PATH, "web", "optimize_resilience_cfg.json"),
+};
+const SIM_OPTIMIZE_SPEEDS = {
+  fast:      { tpe: 10, bayes: 15 },
+  standard:  { tpe: 20, bayes: 30 },
+  thorough:  { tpe: 50, bayes: 50 },
+};
+const SIM_OPTIMIZE_PARAM_COUNT = 4;  // LagerLimit_MQ, Sicherheitsbestand_MQ, ProductionLimit_MQ, MaterialOrderDelay_MQ
+const SIM_OPTIMIZE_TIMEOUT_MS = 90 * 60 * 1000;   // hard cap 90 min
+
+// Module-global single-job lock and result cache
+let simCurrentJob = null;          // { simId, child, startedAt, type }
+const simResults = new Map();      // simId → { payload, expiresAt, userId, step }
+const optimizeJobs = new Map();    // jobId → { ...full state, see below }
+
+// main.py creates a timestamped subfolder inside out_path, so we have to
+// resolve the actual write target after the spawn (returns null until the
+// subfolder exists). Caches once found.
+function resolveActualWorkdir(workdir) {
+  try {
+    const entries = fs.readdirSync(workdir, { withFileTypes: true });
+    const subdirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+    if (subdirs.length === 0) return null;
+    // Pick the newest subfolder (in case multiple ever exist; shouldn't normally)
+    subdirs.sort();
+    return path.join(workdir, subdirs[subdirs.length - 1]);
+  } catch (_) {
+    return null;
+  }
+}
+
+function readOptunaLog(actualDir, alreadyRead) {
+  if (!actualDir) return { newEntries: [], totalBytes: alreadyRead };
+  // al_opt.json is JSON-lines, one trial per line; new lines may appear continuously
+  const logPath = path.join(actualDir, "al_opt.json");
+  if (!fs.existsSync(logPath)) return { newEntries: [], totalBytes: alreadyRead };
+  const stat = fs.statSync(logPath);
+  if (stat.size <= alreadyRead) return { newEntries: [], totalBytes: stat.size };
+  const fd = fs.openSync(logPath, "r");
+  const buf = Buffer.alloc(stat.size - alreadyRead);
+  fs.readSync(fd, buf, 0, buf.length, alreadyRead);
+  fs.closeSync(fd);
+  const text = buf.toString("utf-8");
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const newEntries = [];
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (obj && typeof obj.target !== "undefined") newEntries.push(obj);
+    } catch (_) { /* ignore partial/last line */ }
+  }
+  return { newEntries, totalBytes: stat.size };
+}
+
+function readFinalParams(actualDir) {
+  if (!actualDir) return null;
+  const finalPath = path.join(actualDir, "final_params.json");
+  if (!fs.existsSync(finalPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(finalPath, "utf-8"));
+  } catch (_) { return null; }
+}
+
+function sanitizeOverrides(overrides) {
+  if (!overrides || typeof overrides !== "object") return {};
+  const out = {};
+  for (const [k, v] of Object.entries(overrides)) {
+    if (!SIM_ALLOWED_PARAM_NAMES.test(k)) continue;
+    const num = Number(v);
+    if (!Number.isFinite(num)) continue;
+    out[k] = num;
+  }
+  return out;
+}
+
+function pruneSimCache() {
+  const now = Date.now();
+  for (const [id, entry] of simResults) {
+    if (entry.expiresAt < now) simResults.delete(id);
+  }
+}
+
+function runPySim(config) {
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const child = spawn(SIM_PYTHON_BIN, [SIM_WRAPPER], {
+      cwd: path.dirname(SIM_WRAPPER),
+      windowsHide: true,
+    });
+
+    console.log(`[Sim] PYTHON PID=${child.pid} bin=${SIM_PYTHON_BIN} wrapper=${SIM_WRAPPER}`);
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill("SIGKILL"); } catch (_) { /* noop */ }
+      reject(new Error(`Simulation timeout after ${SIM_TIMEOUT_MS} ms`));
+    }, SIM_TIMEOUT_MS);
+
+    child.stdout.on("data", (d) => { stdout += d.toString("utf-8"); });
+    child.stderr.on("data", (d) => {
+      const txt = d.toString("utf-8");
+      stderr += txt;
+      // forward python stderr to server log for live diagnostics
+      txt.split(/\r?\n/).filter(Boolean).forEach(line => console.log(`[Sim:py] ${line}`));
+    });
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code !== 0) {
+        let parsed = null;
+        try { parsed = JSON.parse(stdout); } catch (_) { /* noop */ }
+        const msg = parsed && parsed.error ? parsed.error : (stderr || `exit ${code}`);
+        return reject(new Error(msg));
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (err) {
+        reject(new Error("Could not parse simulation output: " + err.message));
+      }
+    });
+
+    try {
+      child.stdin.write(JSON.stringify(config));
+      child.stdin.end();
+    } catch (err) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Unified feed parser (RSS/Atom via rss-parser, JSON Feed via fetch)
@@ -3656,6 +3822,368 @@ function mountRoutes(router) {
       console.error("POST /api/delete-all-data error:", err);
       res.status(500).json({ error: "DELETE_ALL_FAILED" });
     }
+  });
+
+  // ── Supply-Chain Simulation (PySD bridge) ─────────────────────────
+  router.post("/api/simulation/run", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    try {
+      pruneSimCache();
+
+      if (simCurrentJob) {
+        return res.status(429).json({
+          error: "SIMULATION_BUSY",
+          message: "A simulation is already running. Please wait until it finishes.",
+        });
+      }
+
+      const body = req.body || {};
+      const step = body.step;
+      if (!SIM_ALLOWED_STEPS.has(step)) {
+        return res.status(400).json({ error: "INVALID_STEP", message: `step must be one of ${[...SIM_ALLOWED_STEPS].join(", ")}` });
+      }
+
+      const locale = body.locale === "en" ? "en" : "de";
+      const finalTime = Number.isFinite(Number(body.final_time))
+        ? Math.min(365, Math.max(30, Number(body.final_time)))
+        : 365;
+
+      const userOverrides = sanitizeOverrides(body.user_overrides);
+      const measureOverrides = sanitizeOverrides(body.measure_overrides);
+
+      let disruptionType = null;
+      if (step === "disruption" || step === "measures") {
+        disruptionType = body.disruption_type;
+        if (!SIM_ALLOWED_DISRUPTIONS.has(disruptionType)) {
+          return res.status(400).json({
+            error: "INVALID_DISRUPTION",
+            message: `disruption_type must be one of ${[...SIM_ALLOWED_DISRUPTIONS].join(", ")}`,
+          });
+        }
+      }
+
+      const simId = crypto.randomUUID();
+      const config = {
+        step,
+        user_overrides: userOverrides,
+        measure_overrides: measureOverrides,
+        disruption_type: disruptionType,
+        final_time: finalTime,
+        locale,
+      };
+
+      console.log(`[Sim] START id=${simId} step=${step} disruption=${disruptionType || "-"} user=${JSON.stringify(userOverrides)} measures=${JSON.stringify(measureOverrides)}`);
+
+      simCurrentJob = { simId, startedAt: Date.now() };
+      const t0 = Date.now();
+      let result;
+      try {
+        result = await runPySim(config);
+      } catch (errInner) {
+        simCurrentJob = null;
+        console.log(`[Sim] ERROR id=${simId} message=${errInner.message}`);
+        return res.status(500).json({ error: "SIMULATION_ERROR", message: errInner.message });
+      } finally {
+        simCurrentJob = null;
+      }
+
+      const durationMs = Date.now() - t0;
+
+      if (!result || result.ok !== true) {
+        console.log(`[Sim] ERROR id=${simId} message=${(result && result.error) || "unknown"}`);
+        return res.status(500).json({
+          error: "SIMULATION_FAILED",
+          message: (result && result.error) || "Unknown simulation error",
+        });
+      }
+
+      const shortMetrics = step === "calibration"
+        ? `loss=${result.metrics.loss.toFixed(4)}`
+        : step === "disruption"
+          ? `score=${result.metrics.score.toFixed(2)} min_prod=${result.metrics.min_productivity.toFixed(3)} day=${result.metrics.min_day}`
+          : `delta=${result.metrics.delta_score.toFixed(3)}`;
+      console.log(`[Sim] DONE  id=${simId} step=${step} duration=${durationMs}ms ${shortMetrics}`);
+
+      const payload = {
+        sim_id: simId,
+        step,
+        metrics: result.metrics,
+        plots: result.plots,
+        received_config: result.received_config || null,
+        duration_ms: durationMs,
+      };
+      simResults.set(simId, {
+        payload,
+        expiresAt: Date.now() + SIM_CACHE_TTL_MS,
+        userId: req.user && req.user.id,
+        step,
+      });
+      res.json(payload);
+    } catch (err) {
+      simCurrentJob = null;
+      console.error("POST /api/simulation/run error:", err);
+      res.status(500).json({ error: "SIMULATION_ERROR", message: err.message });
+    }
+  });
+
+  router.get("/api/simulation/:simId", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    pruneSimCache();
+    const entry = simResults.get(req.params.simId);
+    if (!entry) return res.status(404).json({ error: "NOT_FOUND" });
+    res.json(entry.payload);
+  });
+
+  router.get("/api/simulations", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    pruneSimCache();
+    const list = [...simResults.entries()].map(([id, e]) => ({
+      sim_id: id,
+      step: e.step,
+      expires_at: e.expiresAt,
+    }));
+    res.json({
+      busy: !!simCurrentJob,
+      current_job: simCurrentJob ? { sim_id: simCurrentJob.simId, started_at: simCurrentJob.startedAt } : null,
+      cached: list,
+    });
+  });
+
+  router.delete("/api/simulation/:simId", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const removed = simResults.delete(req.params.simId);
+    res.json({ ok: true, removed });
+  });
+
+  // ── Optimization (long-running PySD parameter search via main.py) ─────
+  router.post("/api/simulation/optimize", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    try {
+      if (simCurrentJob) {
+        return res.status(429).json({
+          error: "BUSY",
+          message: "A simulation or optimization is already running.",
+        });
+      }
+
+      const body = req.body || {};
+      const step = body.step;
+      const speedKey = body.speed || "standard";
+      const disruptionType = body.disruption_type || null;
+
+      if (!SIM_OPTIMIZE_CFG[step]) {
+        return res.status(400).json({ error: "INVALID_STEP", message: "step must be 'calibration' or 'disruption'" });
+      }
+      const speed = SIM_OPTIMIZE_SPEEDS[speedKey];
+      if (!speed) {
+        return res.status(400).json({ error: "INVALID_SPEED", message: "speed must be 'fast', 'standard', or 'thorough'" });
+      }
+      if (step === "disruption" && !SIM_ALLOWED_DISRUPTIONS.has(disruptionType)) {
+        return res.status(400).json({ error: "INVALID_DISRUPTION" });
+      }
+
+      const cfgPath = SIM_OPTIMIZE_CFG[step];
+      const jobId = crypto.randomUUID();
+      const workdir = path.join(SIM_RL_PATH, "out", `web_${jobId}`);
+      fs.mkdirSync(workdir, { recursive: true });
+
+      const totalTrials = SIM_OPTIMIZE_PARAM_COUNT * speed.tpe + SIM_OPTIMIZE_PARAM_COUNT * speed.bayes;
+      const estSeconds = Math.round(totalTrials * 6);   // ~6 s per trial empirically
+
+      const args = [
+        path.join(SIM_RL_PATH, "main.py"),
+        "-c", cfgPath,
+        "optimization.out_path", workdir,
+        "optimization.name", "",
+        "bayes_tpe_params.num_iter_tpe_per_param", String(speed.tpe),
+        "bayes_tpe_params.num_iter_bayes_per_param", String(speed.bayes),
+      ];
+      if (step === "disruption" && disruptionType) {
+        args.push("sim_config.disruption", disruptionType);
+      }
+
+      console.log(`[Opt] START job=${jobId} step=${step} speed=${speedKey} expected=${totalTrials} trials cfg=${cfgPath}`);
+
+      const child = spawn(SIM_PYTHON_BIN, args, {
+        cwd: SIM_RL_PATH,
+        windowsHide: true,
+      });
+
+      const job = {
+        jobId,
+        step,
+        speed: speedKey,
+        disruptionType,
+        startedAt: Date.now(),
+        endedAt: null,
+        child,
+        workdir,
+        actualWorkdir: null,        // resolved lazily once main.py creates the timestamped subfolder
+        totalTrials,
+        estSeconds,
+        status: "running",
+        history: [],            // list of { trial, target, params }
+        bestParams: null,
+        bestMetric: null,
+        bytesRead: 0,
+        error: null,
+        finalParams: null,
+        cwdLine: workdir,
+      };
+      optimizeJobs.set(jobId, job);
+      simCurrentJob = { simId: jobId, startedAt: Date.now(), type: "optimize" };
+
+      // Hard timeout
+      const hardTimer = setTimeout(() => {
+        if (job.status === "running") {
+          try { child.kill("SIGKILL"); } catch (_) {}
+          job.status = "error";
+          job.error = `Optimization timeout after ${SIM_OPTIMIZE_TIMEOUT_MS / 1000}s`;
+          job.endedAt = Date.now();
+          console.log(`[Opt] TIMEOUT job=${jobId}`);
+          if (simCurrentJob && simCurrentJob.simId === jobId) simCurrentJob = null;
+        }
+      }, SIM_OPTIMIZE_TIMEOUT_MS);
+
+      let stderrBuf = "";
+      child.stderr.on("data", (d) => {
+        const txt = d.toString("utf-8");
+        stderrBuf += txt;
+        txt.split(/\r?\n/).filter(Boolean).forEach(line => console.log(`[Opt:py] ${line}`));
+      });
+      child.stdout.on("data", (d) => {
+        const txt = d.toString("utf-8");
+        txt.split(/\r?\n/).filter(Boolean).forEach(line => console.log(`[Opt:out] ${line}`));
+      });
+
+      child.on("close", (code) => {
+        clearTimeout(hardTimer);
+        // Final read of al_opt.json
+        try {
+          if (!job.actualWorkdir) job.actualWorkdir = resolveActualWorkdir(job.workdir);
+          const { newEntries, totalBytes } = readOptunaLog(job.actualWorkdir, job.bytesRead);
+          for (const e of newEntries) {
+            job.history.push({ trial: job.history.length + 1, target: e.target, params: e.params });
+            if (job.bestMetric == null || e.target > job.bestMetric) {
+              job.bestMetric = e.target;
+              job.bestParams = e.params;
+            }
+          }
+          job.bytesRead = totalBytes;
+          job.finalParams = readFinalParams(job.actualWorkdir);
+          // If final_params.json is more authoritative (after Bayes refinement), prefer it
+          if (job.finalParams && typeof job.finalParams === "object") {
+            // final_params.json has all params; pick our 4 optimizable ones into bestParams (if available)
+            const overlay = {};
+            for (const k of ["LagerLimit_MQ", "Sicherheitsbestand_MQ", "ProductionLimit_MQ", "MaterialOrderDelay_MQ"]) {
+              if (job.finalParams[k] != null) overlay[k] = job.finalParams[k];
+            }
+            if (Object.keys(overlay).length > 0) {
+              job.bestParams = { ...(job.bestParams || {}), ...overlay };
+            }
+          }
+        } catch (e) { /* ignore */ }
+
+        if (job.status === "running") {
+          if (code === 0) {
+            job.status = "done";
+          } else {
+            job.status = "error";
+            job.error = `Exited with code ${code}: ${stderrBuf.slice(-500)}`;
+          }
+        }
+        job.endedAt = Date.now();
+        if (simCurrentJob && simCurrentJob.simId === jobId) simCurrentJob = null;
+        console.log(`[Opt] DONE job=${jobId} status=${job.status} duration=${job.endedAt - job.startedAt}ms trials=${job.history.length} best=${job.bestMetric}`);
+      });
+
+      res.json({
+        job_id: jobId,
+        step,
+        speed: speedKey,
+        total_trials: totalTrials,
+        est_seconds: estSeconds,
+        workdir,
+      });
+    } catch (err) {
+      simCurrentJob = null;
+      console.error("POST /api/simulation/optimize error:", err);
+      res.status(500).json({ error: "OPTIMIZE_ERROR", message: err.message });
+    }
+  });
+
+  router.get("/api/simulation/optimize/:jobId", auth.requireAuth, resolveWorkspace, async (req, res) => {
+    const job = optimizeJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: "NOT_FOUND" });
+
+    // Incrementally read new al_opt.json entries — find actual subdir lazily
+    try {
+      if (!job.actualWorkdir) job.actualWorkdir = resolveActualWorkdir(job.workdir);
+      const { newEntries, totalBytes } = readOptunaLog(job.actualWorkdir, job.bytesRead);
+      for (const e of newEntries) {
+        job.history.push({ trial: job.history.length + 1, target: e.target, params: e.params });
+        // Both calibration (target=-loss) and disruption (target=score) use higher=better
+        if (job.bestMetric == null || e.target > job.bestMetric) {
+          job.bestMetric = e.target;
+          job.bestParams = e.params;
+        }
+      }
+      job.bytesRead = totalBytes;
+      if (!job.finalParams) {
+        job.finalParams = readFinalParams(job.actualWorkdir);
+        // When final_params.json appears (after Bayes refinement), prefer those 4 keys
+        if (job.finalParams && typeof job.finalParams === "object") {
+          const overlay = {};
+          for (const k of ["LagerLimit_MQ", "Sicherheitsbestand_MQ", "ProductionLimit_MQ", "MaterialOrderDelay_MQ"]) {
+            if (job.finalParams[k] != null) overlay[k] = job.finalParams[k];
+          }
+          if (Object.keys(overlay).length > 0) {
+            job.bestParams = { ...(job.bestParams || {}), ...overlay };
+            console.log(`[Opt] FINAL-PARAMS overlay job=${job.jobId}`, overlay);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Diagnostic: only log when status becomes done so we can confirm bestParams payload
+    if (job.status !== "running" && !job._loggedDone) {
+      job._loggedDone = true;
+      console.log(`[Opt] GET returning best_params for job=${job.jobId}:`, job.bestParams);
+    }
+
+    // Translate best target → user-friendly metric
+    let bestDisplay = null;
+    if (job.bestMetric != null) {
+      if (job.step === "calibration") {
+        bestDisplay = { kind: "loss", value: Math.abs(job.bestMetric) };
+      } else {
+        bestDisplay = { kind: "score", value: job.bestMetric };
+      }
+    }
+
+    res.json({
+      job_id: job.jobId,
+      step: job.step,
+      speed: job.speed,
+      disruption_type: job.disruptionType,
+      status: job.status,
+      current_trial: job.history.length,
+      total_trials: job.totalTrials,
+      est_seconds: job.estSeconds,
+      duration_ms: (job.endedAt || Date.now()) - job.startedAt,
+      best_metric: job.bestMetric,
+      best_display: bestDisplay,
+      best_params: job.bestParams,
+      history: job.history.slice(-200),   // last 200 trials for the live chart
+      error: job.error,
+    });
+  });
+
+  router.post("/api/simulation/optimize/:jobId/cancel", auth.requireAuth, resolveWorkspace, writeGuard(), async (req, res) => {
+    const job = optimizeJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: "NOT_FOUND" });
+    if (job.status !== "running") return res.json({ ok: true, killed: false, status: job.status });
+    try { job.child.kill("SIGKILL"); } catch (_) {}
+    job.status = "cancelled";
+    job.endedAt = Date.now();
+    if (simCurrentJob && simCurrentJob.simId === job.jobId) simCurrentJob = null;
+    console.log(`[Opt] CANCEL job=${job.jobId}`);
+    res.json({ ok: true, killed: true, status: job.status });
   });
 
 }

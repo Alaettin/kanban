@@ -9024,47 +9024,136 @@ init();
 
 })(); // end initChatWidget
 
-// ======================= SIMULATION WIZARD =======================
+// ======================= SIMULATION WIZARD (real PySD backend) =======================
 
-const SIM_MATERIALS = [
-  { id: "alu", name: "Aluminium-Gehäuse", supplier: "MetalWorks GmbH, Stuttgart", qty: "2.400 Einheiten/Monat", delivery: "KW 12–14, 2026" },
-  { id: "lithium", name: "Lithium-Zellen", supplier: "BatteryTech AG, München", qty: "5.000 Zellen/Monat", delivery: "KW 10–12, 2026" },
-  { id: "copper", name: "Kupfer-Leiterplatten", supplier: "CircuitPro Ltd, Shenzhen", qty: "8.000 Stück/Monat", delivery: "KW 13–16, 2026" },
-  { id: "steel", name: "Stahl-Chassis", supplier: "SteelForge GmbH, Essen", qty: "1.200 Einheiten/Monat", delivery: "KW 11–13, 2026" },
+// Add translations to existing I18N tables (German + English)
+Object.assign(I18N.de, {
+  simSubtitle: "Echte PySD-Supply-Chain-Simulation (MQ-Hersteller, 365 Tage)",
+  simStep1: "Modell + Parameter",
+  simStep2: "Störung",
+  simStep3: "Maßnahmen",
+  simNext: "Weiter",
+  simBack: "Zurück",
+  simResimulate: "Neu simulieren",
+  simStartSim: "Modell prüfen",
+  simStartDisruption: "Krise simulieren",
+  simWithMeasures: "Vergleichen",
+  simFinish: "Neue Simulation",
+  simInfoBanner: "MQ-Hersteller — kalibriert auf reale Excel-Daten (365 Tage). Die Slider passen einzelne PySD-Parameter an.",
+  simParamSection: "Modell-Parameter",
+  simSelectDisruption: "Wähle eine Krise (eine pro Lauf)",
+  simMeasuresSection: "Gegenmaßnahmen — wirken zusätzlich auf die Krise",
+  simLoadingCalibration: "Modell wird kalibriert — bis zu 30 Sek …",
+  simLoadingDisruption: "Krise wird simuliert — bis zu 30 Sek …",
+  simLoadingMeasures: "Vergleich wird gerechnet — bis zu 60 Sek …",
+  simResultLoss: "Modell-Fehler vs. Realität",
+  simResultLossDesc: "{pct}% — gibt an, wie weit die Simulation von den realen MQ-Excel-Daten abweicht (95-Perzentil).",
+  simResultScore: "Resilience-Score",
+  simResultScoreDesc: "Gewichtete Summe: R + Re + 50·Red + Ra",
+  simMetricRobustness: "Robustness",
+  simMetricRedundancy: "Redundancy",
+  simMetricResourcefulness: "Resourcefulness",
+  simMetricRapidity: "Rapidity",
+  simMinProductivity: "Min. Lieferfähigkeit",
+  simMinDay: "am Tag {day}",
+  simDeltaScore: "Veränderung Score",
+  simBefore: "Vorher",
+  simAfter: "Nachher",
+  simError: "Simulation fehlgeschlagen",
+  simErrorBusy: "Eine Simulation läuft bereits. Bitte warte, bis sie fertig ist.",
+  simNoDisruption: "Bitte wähle zuerst eine Krise aus.",
+});
+
+Object.assign(I18N.en, {
+  simSubtitle: "Real PySD supply-chain simulation (MQ manufacturer, 365 days)",
+  simStep1: "Model + Parameters",
+  simStep2: "Disruption",
+  simStep3: "Measures",
+  simNext: "Next",
+  simBack: "Back",
+  simResimulate: "Re-simulate",
+  simStartSim: "Check model",
+  simStartDisruption: "Simulate disruption",
+  simWithMeasures: "Compare",
+  simFinish: "New simulation",
+  simInfoBanner: "MQ manufacturer — calibrated against real Excel data (365 days). Sliders tune individual PySD parameters.",
+  simParamSection: "Model parameters",
+  simSelectDisruption: "Choose one disruption per run",
+  simMeasuresSection: "Countermeasures — applied on top of the disruption",
+  simLoadingCalibration: "Calibrating model — up to 30 seconds …",
+  simLoadingDisruption: "Simulating disruption — up to 30 seconds …",
+  simLoadingMeasures: "Computing comparison — up to 60 seconds …",
+  simResultLoss: "Model error vs. reality",
+  simResultLossDesc: "{pct}% — how far the simulation deviates from real MQ data (95th percentile).",
+  simResultScore: "Resilience score",
+  simResultScoreDesc: "Weighted sum: R + Re + 50·Red + Ra",
+  simMetricRobustness: "Robustness",
+  simMetricRedundancy: "Redundancy",
+  simMetricResourcefulness: "Resourcefulness",
+  simMetricRapidity: "Rapidity",
+  simMinProductivity: "Min. delivery rate",
+  simMinDay: "on day {day}",
+  simDeltaScore: "Score change",
+  simBefore: "Before",
+  simAfter: "After",
+  simError: "Simulation failed",
+  simErrorBusy: "A simulation is already running. Please wait until it finishes.",
+  simNoDisruption: "Please select a disruption first.",
+});
+
+// ── Real PySD parameter definitions ────────────────────────────────────────
+const SIM_PARAMS = [
+  { id: "LagerLimit_MQ",            labelDE: "Lagerlimit (Einheiten)",      labelEN: "Storage limit (units)",   min: 10000, max: 300000, step: 5000, defaultVal: 230000, unit: "" },
+  { id: "Sicherheitsbestand_MQ",    labelDE: "Sicherheitsbestand (Einheiten)", labelEN: "Safety stock (units)",   min: 0,     max: 100000, step: 2000, defaultVal: 50000,  unit: "" },
+  { id: "ProductionLimit_MQ",       labelDE: "Produktionskapazität (Einh./Tag)", labelEN: "Production limit (units/day)", min: 1000, max: 30000, step: 500, defaultVal: 15000, unit: "" },
+  { id: "MaterialOrderDelay_MQ",    labelDE: "Bestellverzögerung",          labelEN: "Order delay",             min: 0.1,   max: 0.9,   step: 0.05, defaultVal: 0.5,   unit: "" },
+  { id: "Anteil_MQ_Lieferant",      labelDE: "Multi-Sourcing-Anteil",       labelEN: "Multi-sourcing share",    min: 0,     max: 1,     step: 0.05, defaultVal: 1.0,   unit: "" },
 ];
 
-const SIM_DISRUPTIONS = [
-  { id: "outage", icon: "\u26A0\uFE0F", nameDE: "Lieferausfall", nameEN: "Supplier outage", descDE: "Lieferant fällt 4 Wochen komplett aus", descEN: "Supplier unavailable for 4 weeks" },
-  { id: "delay", icon: "\uD83D\uDE9A", nameDE: "Transportverzögerung", nameEN: "Transport delay", descDE: "+2 Wochen Lieferzeit", descEN: "+2 weeks delivery time" },
-  { id: "quality", icon: "\uD83D\uDD0D", nameDE: "Qualitätsmangel", nameEN: "Quality issue", descDE: "20% Ausschuss-Quote", descEN: "20% rejection rate" },
-  { id: "demand", icon: "\uD83D\uDCC8", nameDE: "Nachfrageanstieg", nameEN: "Demand surge", descDE: "+50% Bestellmenge unerwartet", descEN: "+50% unexpected order volume" },
-  { id: "scarcity", icon: "\uD83E\uDEA8", nameDE: "Rohstoffknappheit", nameEN: "Raw material scarcity", descDE: "Preis +35%, Menge \u221225%", descEN: "Price +35%, quantity \u221225%" },
+// ── Real PySD disruptions (8 scenarios) ────────────────────────────────────
+const SIM_DISRUPTIONS_REAL = [
+  { id: "MA_Knappheit",      icon: "👥",  nameDE: "Mitarbeiter-Knappheit", nameEN: "Workforce shortage", descDE: "Personalausfall 2 Wochen",                    descEN: "Workforce shortage for 2 weeks" },
+  { id: "Grenzschließung",   icon: "🚧",  nameDE: "Grenzschließung",       nameEN: "Border closure",     descDE: "Kein Versand 10 Tage",                         descEN: "No shipping for 10 days" },
+  { id: "Containershortage", icon: "📦",  nameDE: "Container-Mangel",      nameEN: "Container shortage", descDE: "Lieferzeit-Schock, 3 Wochen",                  descEN: "Lead-time shock, 3 weeks" },
+  { id: "Wintersturm",       icon: "❄️",  nameDE: "Wintersturm",            nameEN: "Winter storm",       descDE: "Multi-Parameter-Schaden, 2 Wochen",            descEN: "Multi-parameter damage, 2 weeks" },
+  { id: "Lagertechnik",      icon: "🏚️",  nameDE: "Lagertechnik-Ausfall",  nameEN: "Warehouse failure",  descDE: "Lager + Produktion 3 Wochen runter",            descEN: "Storage + production down, 3 weeks" },
+  { id: "Erdbeben",          icon: "🌍",  nameDE: "Erdbeben",              nameEN: "Earthquake",         descDE: "3 Phasen, 50 Tage gesamt",                     descEN: "3 phases, 50 days total" },
+  { id: "Hacker",            icon: "💻",  nameDE: "Hackerangriff",         nameEN: "Cyber attack",       descDE: "Bestellsystem + Lager 60 Tage gestört",        descEN: "Ordering + storage disrupted, 60 days" },
+  { id: "VariableDisruption",icon: "🎲",  nameDE: "Zufalls-Disruption",    nameEN: "Random disruption",  descDE: "Stress-Test mit zufälligen Parametern",         descEN: "Stress test with random parameters" },
 ];
 
-const SIM_MEASURES = [
-  { id: "alt-supplier", icon: "\uD83D\uDD04", nameDE: "Alternativ-Lieferant", nameEN: "Alternative supplier", descDE: "Zweiten Lieferanten aktivieren", descEN: "Activate second supplier" },
-  { id: "express", icon: "\u26A1", nameDE: "Expresslieferung", nameEN: "Express delivery", descDE: "Schnellere Lieferung (+Kosten)", descEN: "Faster delivery (+cost)" },
-  { id: "stock", icon: "\uD83D\uDCE6", nameDE: "Lagerbestand erhöhen", nameEN: "Increase stock", descDE: "Sicherheitsbestand aufstocken", descEN: "Increase safety stock" },
-  { id: "reduce", icon: "\uD83D\uDCC9", nameDE: "Bestellmenge reduzieren", nameEN: "Reduce order qty", descDE: "Bestellvolumen anpassen", descEN: "Adjust order volume" },
-  { id: "replan", icon: "\uD83D\uDCCB", nameDE: "Produktionsplan anpassen", nameEN: "Adjust production", descDE: "Zeitplan flexibilisieren", descEN: "Flexible scheduling" },
+// ── Measure sliders for Step 3 (multipliers applied to base params) ────────
+const SIM_MEASURE_SLIDERS = [
+  { id: "factor_lager",      labelDE: "Lager-Faktor",         labelEN: "Storage factor",      min: 1, max: 2,   step: 0.05, defaultVal: 1, targets: ["LagerLimit_MQ", "LagerLimit_Lieferant"] },
+  { id: "factor_safety",     labelDE: "Sicherheitsbestand-Faktor", labelEN: "Safety stock factor", min: 1, max: 3, step: 0.1, defaultVal: 1, targets: ["Sicherheitsbestand_MQ", "Sicherheitsbestand_Lieferant"] },
+  { id: "factor_shipping",   labelDE: "Versandgeschwindigkeit",   labelEN: "Shipping speed",   min: 0.5, max: 1.5, step: 0.05, defaultVal: 1, targets: ["readytoshipDelay_MQ", "readytoshipDelay_Lieferant"] },
+  { id: "factor_production", labelDE: "Produktionskapazität-Faktor", labelEN: "Production capacity factor", min: 1, max: 2, step: 0.05, defaultVal: 1, targets: ["ProductionLimit_MQ", "ProductionLimit_Lieferant"] },
+  { id: "factor_sourcing",   labelDE: "Multi-Sourcing-Split",    labelEN: "Multi-sourcing split", min: 0, max: 1, step: 0.05, defaultVal: 1, targets: ["Anteil_MQ_Lieferant"] },
 ];
 
+// ── State ─────────────────────────────────────────────────────────────────
 let simStep = 0;
-let simMaterial = null;
-let simDisruptions = new Set();
-let simMeasures = new Set();
-let simResults = null;
-let simCompareResults = null;
+let simUserOverrides = {};                              // {paramId: value} from Step 1 sliders
+let simMeasureFactors = {};                             // {sliderId: value} from Step 3 sliders
+let simSelectedDisruption = null;                       // disruption id from Step 2
+let simResults = null;                                   // from disruption run
+let simCalibration = null;                              // from calibration run
+let simCompareResults = null;                           // from measures run
 
-const simContent = document.getElementById("sim-content");
-const simLoading = document.getElementById("sim-loading");
+// initialize defaults
+SIM_PARAMS.forEach(p => { simUserOverrides[p.id] = p.defaultVal; });
+SIM_MEASURE_SLIDERS.forEach(s => { simMeasureFactors[s.id] = s.defaultVal; });
+
+const simContent     = document.getElementById("sim-content");
+const simLoading     = document.getElementById("sim-loading");
 const simLoadingFill = document.getElementById("sim-loading-fill");
 const simLoadingText = document.getElementById("sim-loading-text");
-const simBackBtn = document.getElementById("sim-back-btn");
-const simNextBtn = document.getElementById("sim-next-btn");
-const simResimBtn = document.getElementById("sim-resim-btn");
-const simFooter = document.getElementById("sim-footer");
+const simBackBtn     = document.getElementById("sim-back-btn");
+const simNextBtn     = document.getElementById("sim-next-btn");
+const simResimBtn    = document.getElementById("sim-resim-btn");
+const simFooter      = document.getElementById("sim-footer");
 
+// ── Stepper UI ────────────────────────────────────────────────────────────
 function updateSimStepper() {
   document.querySelectorAll("#sim-steps .sim-step").forEach(el => {
     const s = parseInt(el.dataset.step);
@@ -9084,6 +9173,7 @@ function updateSimStepper() {
   });
 }
 
+// ── Dispatcher: render the current step ───────────────────────────────────
 function renderSimStep(step) {
   simStep = step;
   updateSimStepper();
@@ -9095,372 +9185,827 @@ function renderSimStep(step) {
   else if (step === 1) renderSimDisruptions();
   else if (step === 2) renderSimMeasuresStep();
 
-  // Footer buttons
   simBackBtn.hidden = step === 0;
   simBackBtn.textContent = t("simBack");
 
-  // Re-simulate button: visible after results are shown in step 1 or 2
-  simResimBtn.hidden = !((step === 1 && simResults) || (step === 2 && simCompareResults));
+  simResimBtn.hidden = !(
+    (step === 0 && simCalibration) ||
+    (step === 1 && simResults) ||
+    (step === 2 && simCompareResults)
+  );
   simResimBtn.textContent = t("simResimulate");
 
   if (step === 0) {
-    simNextBtn.textContent = t("simNext");
+    simNextBtn.textContent = simCalibration ? t("simNext") : t("simStartSim");
     simNextBtn.hidden = false;
     simNextBtn.className = "btn btn-primary btn-sm";
-  } else if (step === 1 && !simResults) {
-    simNextBtn.textContent = t("simStartSim");
+  } else if (step === 1) {
+    simNextBtn.textContent = simResults ? t("simNext") : t("simStartDisruption");
     simNextBtn.hidden = false;
     simNextBtn.className = "btn btn-primary btn-sm";
-  } else if (step === 1 && simResults) {
-    simNextBtn.textContent = t("simNext");
+  } else if (step === 2) {
+    simNextBtn.textContent = simCompareResults ? t("simFinish") : t("simWithMeasures");
     simNextBtn.hidden = false;
-    simNextBtn.className = "btn btn-primary btn-sm";
-  } else if (step === 2 && !simCompareResults) {
-    simNextBtn.textContent = t("simWithMeasures");
-    simNextBtn.hidden = false;
-    simNextBtn.className = "btn btn-primary btn-sm";
-  } else if (step === 2 && simCompareResults) {
-    simNextBtn.textContent = t("simFinish");
-    simNextBtn.hidden = false;
-    simNextBtn.className = "btn btn-secondary btn-sm";
+    simNextBtn.className = simCompareResults ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm";
   }
 }
 
-function renderSimCalibration() {
-  const mat = simMaterial || SIM_MATERIALS[0];
-  simMaterial = mat;
-  let html = "";
+// ── Helper: slider row ────────────────────────────────────────────────────
+function sliderRow(spec, currentValue, onChange) {
+  const label = locale === "de" ? spec.labelDE : spec.labelEN;
+  const id = "slider-" + spec.id;
+  const isFloat = (spec.step || 1) < 1;
+  const valDisplay = isFloat ? Number(currentValue).toFixed(2) : Math.round(currentValue);
+  return `
+    <div class="sim-slider-row">
+      <label class="sim-slider-label" for="${id}">${escapeHtml(label)}</label>
+      <input type="range" id="${id}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${currentValue}" class="sim-slider-input" />
+      <span class="sim-slider-value" id="${id}-val">${valDisplay}${spec.unit || ""}</span>
+    </div>
+  `;
+}
 
-  // Material selection
-  html += `<div class="sim-section">`;
-  html += `<div class="sim-section-title">${t("simMaterial")}</div>`;
-  html += `<select class="sim-select" id="sim-material-select">`;
-  SIM_MATERIALS.forEach(m => {
-    html += `<option value="${m.id}" ${m.id === mat.id ? "selected" : ""}>${escapeHtml(m.name)}</option>`;
+function wireSlider(spec, currentValueRef, onChange) {
+  const id = "slider-" + spec.id;
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id + "-val");
+  if (!el || !valEl) return;
+  const isFloat = (spec.step || 1) < 1;
+  el.addEventListener("input", () => {
+    const v = Number(el.value);
+    valEl.textContent = (isFloat ? v.toFixed(2) : Math.round(v)) + (spec.unit || "");
+    onChange(v);
   });
-  html += `</select>`;
-  html += `<div class="sim-info-cards" id="sim-info-cards">`;
-  html += renderInfoCards(mat);
+}
+
+// ── Step 1: Calibration ───────────────────────────────────────────────────
+function renderSimCalibration() {
+  let html = "";
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-info-banner">${escapeHtml(t("simInfoBanner"))}</div>`;
+  html += `</div>`;
+
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simParamSection")}</div>`;
+  html += `<div class="sim-slider-grid">`;
+  SIM_PARAMS.forEach(p => {
+    html += sliderRow(p, simUserOverrides[p.id]);
+  });
   html += `</div></div>`;
 
-  // Order data
-  html += `<div class="sim-section">`;
-  html += `<div class="sim-section-title">${t("simOrderData")}</div>`;
-  html += `<div class="sim-form-grid">`;
-  html += formRow(t("simOrderMaterial"), "sim-order-mat", "text", "4.800 Einheiten");
-  html += formRow(t("simOrderQty"), "sim-order-qty", "text", "1.200 Einheiten");
-  html += formRow(t("simOrderDate"), "sim-order-date", "date", "2026-03-15");
-  html += `</div></div>`;
+  if (simCalibration) {
+    const m = simCalibration.metrics;
+    html += `<div class="sim-section">`;
+    html += `<div class="sim-result-card">`;
+    html += `  <div class="sim-result-card-title">${t("simResultLoss")}</div>`;
+    html += `  <div class="sim-result-card-value">${m.loss_pct.toFixed(1)}%</div>`;
+    html += `  <div class="sim-result-card-desc">${t("simResultLossDesc").replace("{pct}", m.loss_pct.toFixed(1))}</div>`;
+    html += `</div>`;
+    html += `</div>`;
 
-  // Simulation params
-  html += `<div class="sim-section">`;
-  html += `<div class="sim-section-title">${t("simParams")}</div>`;
-  html += `<div class="sim-form-grid">`;
-  html += formRow(t("simStock"), "sim-stock", "text", "800 Einheiten");
-  html += formSelect(t("simBuffer"), "sim-buffer", ["10%", "20%", "30%"], 1);
-  html += formSelect(t("simReliability"), "sim-reliability", ["85%", "90%", "95%", "99%"], 2);
-  html += `</div></div>`;
+    html += `<div class="sim-section">`;
+    html += `<div class="sim-plot" id="sim-plot-cal-1" style="height:380px"></div>`;
+    html += `<div class="sim-plot" id="sim-plot-cal-2" style="height:380px"></div>`;
+    html += `</div>`;
+
+    html += `<div class="sim-section">` + renderVerifyPanel(simCalibration) + `</div>`;
+  }
 
   simContent.innerHTML = html;
 
-  document.getElementById("sim-material-select").addEventListener("change", (e) => {
-    simMaterial = SIM_MATERIALS.find(m => m.id === e.target.value) || SIM_MATERIALS[0];
-    const cards = document.getElementById("sim-info-cards");
-    cards.innerHTML = renderInfoCards(simMaterial);
+  SIM_PARAMS.forEach(p => {
+    wireSlider(p, simUserOverrides[p.id], (v) => { simUserOverrides[p.id] = v; });
   });
+
+  if (simCalibration) {
+    renderPlot("sim-plot-cal-1", simCalibration.plots.calibration_eingang);
+    renderPlot("sim-plot-cal-2", simCalibration.plots.calibration_ausgang);
+  }
 }
 
-function renderInfoCards(mat) {
-  return `
-    <div class="sim-info-card">
-      <div class="sim-info-card-icon">\uD83C\uDFED</div>
-      <div class="sim-info-card-label">${t("simSupplier")}</div>
-      <div class="sim-info-card-value">${escapeHtml(mat.supplier)}</div>
-    </div>
-    <div class="sim-info-card">
-      <div class="sim-info-card-icon">\uD83D\uDCE6</div>
-      <div class="sim-info-card-label">${t("simQty")}</div>
-      <div class="sim-info-card-value">${escapeHtml(mat.qty)}</div>
-    </div>
-    <div class="sim-info-card">
-      <div class="sim-info-card-icon">\uD83D\uDCC5</div>
-      <div class="sim-info-card-label">${t("simDelivery")}</div>
-      <div class="sim-info-card-value">${escapeHtml(mat.delivery)}</div>
-    </div>`;
-}
-
-function formRow(label, id, type, value) {
-  return `<div class="sim-form-row">
-    <label class="sim-form-label" for="${id}">${label}</label>
-    <input class="sim-form-input" id="${id}" type="${type}" value="${escapeHtml(value)}" />
-  </div>`;
-}
-
-function formSelect(label, id, options, selectedIdx) {
-  let html = `<div class="sim-form-row">
-    <label class="sim-form-label" for="${id}">${label}</label>
-    <select class="sim-form-input" id="${id}">`;
-  options.forEach((o, i) => { html += `<option ${i === selectedIdx ? "selected" : ""}>${o}</option>`; });
-  html += `</select></div>`;
-  return html;
-}
-
+// ── Step 2: Disruption selection ──────────────────────────────────────────
 function renderSimDisruptions() {
-  const isDE = locale === "de";
-  let html = `<div class="sim-section">`;
-  html += `<div class="sim-section-title">${t("simStep2")}</div>`;
-  html += `<p style="font-size:0.82rem;color:var(--text-2);margin:0 0 0.75rem">${t("simSelectDisruptions")}</p>`;
-  html += `<div class="sim-option-grid">`;
-  SIM_DISRUPTIONS.forEach(d => {
-    const sel = simDisruptions.has(d.id);
-    html += `<div class="sim-option-card${sel ? " selected" : ""}" data-id="${d.id}">
-      <input type="checkbox" class="sim-option-check" ${sel ? "checked" : ""} />
-      <span class="sim-option-icon">${d.icon}</span>
-      <div class="sim-option-body">
-        <div class="sim-option-name">${escapeHtml(isDE ? d.nameDE : d.nameEN)}</div>
-        <div class="sim-option-desc">${escapeHtml(isDE ? d.descDE : d.descEN)}</div>
+  let html = "";
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simSelectDisruption")}</div>`;
+  html += `<div class="sim-disrupt-grid">`;
+  SIM_DISRUPTIONS_REAL.forEach(d => {
+    const isSelected = simSelectedDisruption === d.id;
+    const name = locale === "de" ? d.nameDE : d.nameEN;
+    const desc = locale === "de" ? d.descDE : d.descEN;
+    html += `
+      <div class="sim-disrupt-card ${isSelected ? "selected" : ""}" data-disruption-id="${d.id}">
+        <div class="sim-disrupt-icon">${d.icon}</div>
+        <div class="sim-disrupt-text">
+          <div class="sim-disrupt-name">${escapeHtml(name)}</div>
+          <div class="sim-disrupt-desc">${escapeHtml(desc)}</div>
+        </div>
       </div>
-    </div>`;
+    `;
   });
   html += `</div></div>`;
 
   if (simResults) {
-    html += renderResultsHTML(simResults, t("simResults"));
+    const m = simResults.metrics;
+    html += renderMetricCards(m);
+    html += `<div class="sim-section">`;
+    html += `<div class="sim-plot" id="sim-plot-dis-1" style="height:420px"></div>`;
+    html += `<div class="sim-plot" id="sim-plot-dis-2" style="height:320px"></div>`;
+    html += `</div>`;
+
+    html += `<div class="sim-section">` + renderVerifyPanel(simResults) + `</div>`;
   }
 
   simContent.innerHTML = html;
 
-  simContent.querySelectorAll(".sim-option-card").forEach(card => {
+  document.querySelectorAll(".sim-disrupt-card").forEach(card => {
     card.addEventListener("click", () => {
-      const id = card.dataset.id;
-      if (simDisruptions.has(id)) simDisruptions.delete(id); else simDisruptions.add(id);
-      card.classList.toggle("selected");
-      card.querySelector(".sim-option-check").checked = simDisruptions.has(id);
+      simSelectedDisruption = card.dataset.disruptionId;
+      simResults = null;
+      renderSimStep(1);
     });
   });
+
+  if (simResults) {
+    renderPlot("sim-plot-dis-1", simResults.plots.productivity);
+    renderPlot("sim-plot-dis-2", simResults.plots.fourR_bars);
+  }
 }
 
+// ── Step 3: Measures ──────────────────────────────────────────────────────
 function renderSimMeasuresStep() {
-  const isDE = locale === "de";
-  let html = `<div class="sim-section">`;
-  html += `<div class="sim-section-title">${t("simStep3")}</div>`;
-  html += `<p style="font-size:0.82rem;color:var(--text-2);margin:0 0 0.75rem">${t("simSelectMeasures")}</p>`;
-  html += `<div class="sim-option-grid">`;
-  SIM_MEASURES.forEach(m => {
-    const sel = simMeasures.has(m.id);
-    html += `<div class="sim-option-card${sel ? " selected" : ""}" data-id="${m.id}">
-      <input type="checkbox" class="sim-option-check" ${sel ? "checked" : ""} />
-      <span class="sim-option-icon">${m.icon}</span>
-      <div class="sim-option-body">
-        <div class="sim-option-name">${escapeHtml(isDE ? m.nameDE : m.nameEN)}</div>
-        <div class="sim-option-desc">${escapeHtml(isDE ? m.descDE : m.descEN)}</div>
-      </div>
-    </div>`;
+  let html = "";
+  html += `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("simMeasuresSection")}</div>`;
+  html += `<div class="sim-slider-grid">`;
+  SIM_MEASURE_SLIDERS.forEach(s => {
+    html += sliderRow(s, simMeasureFactors[s.id]);
   });
   html += `</div></div>`;
 
   if (simCompareResults) {
-    html += renderComparisonHTML(simResults, simCompareResults);
+    const before = simCompareResults.metrics.before;
+    const after = simCompareResults.metrics.after;
+    html += renderCompareCards(before, after, simCompareResults.metrics.delta_score);
+    html += `<div class="sim-section">`;
+    html += `<div class="sim-plot" id="sim-plot-cmp-1" style="height:420px"></div>`;
+    html += `<div class="sim-plot" id="sim-plot-cmp-2" style="height:320px"></div>`;
+    html += `</div>`;
+
+    html += `<div class="sim-section">` + renderVerifyPanel(simCompareResults) + `</div>`;
   }
 
   simContent.innerHTML = html;
 
-  simContent.querySelectorAll(".sim-option-card").forEach(card => {
-    card.addEventListener("click", () => {
-      const id = card.dataset.id;
-      if (simMeasures.has(id)) simMeasures.delete(id); else simMeasures.add(id);
-      card.classList.toggle("selected");
-      card.querySelector(".sim-option-check").checked = simMeasures.has(id);
-    });
+  SIM_MEASURE_SLIDERS.forEach(s => {
+    wireSlider(s, simMeasureFactors[s.id], (v) => { simMeasureFactors[s.id] = v; });
   });
+
+  if (simCompareResults) {
+    renderPlot("sim-plot-cmp-1", simCompareResults.plots.productivity_compare);
+    renderPlot("sim-plot-cmp-2", simCompareResults.plots.fourR_compare);
+  }
 }
 
-function generateFakeResults(disruptions) {
-  let delay = 0, cost = 0, fulfill = 98, risk = 1.2;
-  if (disruptions.has("outage")) { delay += 18; cost += 8400; fulfill -= 22; risk += 2.8; }
-  if (disruptions.has("delay")) { delay += 9; cost += 3200; fulfill -= 8; risk += 1.5; }
-  if (disruptions.has("quality")) { delay += 5; cost += 4800; fulfill -= 12; risk += 1.2; }
-  if (disruptions.has("demand")) { delay += 7; cost += 6100; fulfill -= 15; risk += 1.8; }
-  if (disruptions.has("scarcity")) { delay += 4; cost += 5600; fulfill -= 10; risk += 1.4; }
-  fulfill = Math.max(fulfill, 15);
-  risk = Math.min(risk, 9.5);
-  return { delay, cost, fulfill, risk: Math.round(risk * 10) / 10 };
+// ── Metric cards ─────────────────────────────────────────────────────────
+function renderMetricCards(m) {
+  return `
+    <div class="sim-section">
+      <div class="sim-metric-grid">
+        ${metricCard(t("simMetricRobustness"),     m.robustness.toFixed(2),     "#dc2626")}
+        ${metricCard(t("simMetricRedundancy"),     m.redundancy.toFixed(2),     "#059669")}
+        ${metricCard(t("simMetricResourcefulness"), m.resourcefulness.toFixed(2), "#2563eb")}
+        ${metricCard(t("simMetricRapidity"),       m.rapidity.toFixed(2),       "#f59e0b")}
+      </div>
+      <div class="sim-metric-grid sim-metric-grid-summary">
+        ${metricCard(t("simResultScore"), m.score.toFixed(2), "#1f2937", t("simResultScoreDesc"))}
+        ${metricCard(t("simMinProductivity"), (m.min_productivity * 100).toFixed(1) + "%", "#6b7280", t("simMinDay").replace("{day}", m.min_day))}
+      </div>
+    </div>
+  `;
 }
 
-function generateFakeComparison(disruptions, measures) {
-  const base = generateFakeResults(disruptions);
-  let dReduce = 0, cReduce = 0, fBoost = 0, rReduce = 0;
-  if (measures.has("alt-supplier")) { dReduce += 8; cReduce += 2000; fBoost += 12; rReduce += 1.5; }
-  if (measures.has("express")) { dReduce += 5; cReduce -= 1200; fBoost += 6; rReduce += 0.8; }
-  if (measures.has("stock")) { dReduce += 4; cReduce += 1800; fBoost += 8; rReduce += 1.0; }
-  if (measures.has("reduce")) { dReduce += 2; cReduce += 3200; fBoost += 5; rReduce += 0.6; }
-  if (measures.has("replan")) { dReduce += 3; cReduce += 1400; fBoost += 7; rReduce += 0.9; }
-  return {
-    delay: Math.max(base.delay - dReduce, 0),
-    cost: Math.max(base.cost - cReduce, 0),
-    fulfill: Math.min(base.fulfill + fBoost, 99),
-    risk: Math.max(Math.round((base.risk - rReduce) * 10) / 10, 0.5),
+function metricCard(label, value, color, sub) {
+  return `
+    <div class="sim-metric-card" style="border-left:4px solid ${color}">
+      <div class="sim-metric-label">${escapeHtml(label)}</div>
+      <div class="sim-metric-value" style="color:${color}">${escapeHtml(String(value))}</div>
+      ${sub ? `<div class="sim-metric-sub">${escapeHtml(sub)}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderCompareCards(before, after, deltaScore) {
+  const delta = (a, b) => {
+    const d = a - b;
+    if (Math.abs(d) < 0.0001) return "";
+    const arrow = d > 0 ? "↑" : "↓";
+    const cls = d > 0 ? "delta-positive" : "delta-negative";
+    return `<span class="${cls}">${arrow} ${Math.abs(d).toFixed(2)}</span>`;
   };
+  return `
+    <div class="sim-section">
+      <div class="sim-compare-grid">
+        ${compareRow(t("simMetricRobustness"),     before.robustness,     after.robustness)}
+        ${compareRow(t("simMetricRedundancy"),     before.redundancy,     after.redundancy)}
+        ${compareRow(t("simMetricResourcefulness"),before.resourcefulness, after.resourcefulness)}
+        ${compareRow(t("simMetricRapidity"),       before.rapidity,       after.rapidity)}
+      </div>
+      <div class="sim-section-title" style="margin-top:1rem">
+        ${t("simDeltaScore")}: ${deltaScore > 0 ? "+" : ""}${deltaScore.toFixed(2)}
+        ${delta(after.score, before.score)}
+      </div>
+    </div>
+  `;
 }
 
-function renderResultsHTML(r, title) {
-  const riskLabel = r.risk >= 7 ? "Hoch" : r.risk >= 4 ? "Mittel" : "Niedrig";
-  let html = `<div class="sim-results">`;
-  html += `<div class="sim-section-title">${title}</div>`;
-  html += `<div class="sim-metric-grid">`;
-  html += metricCard(t("simDelayDays"), `+${r.delay} ${locale === "de" ? "Tage" : "days"}`, "delta-negative");
-  html += metricCard(t("simCostIncrease"), `+${r.cost.toLocaleString("de-DE")} \u20AC`, "delta-negative");
-  html += metricCard(t("simFulfillment"), `${r.fulfill}%`, r.fulfill < 80 ? "delta-negative" : "");
-  html += metricCard(t("simRiskScore"), `${riskLabel} (${r.risk}/10)`, r.risk >= 5 ? "delta-negative" : "");
-  html += `</div>`;
-
-  // Summary
-  const summaryDE = `Die Simulation zeigt, dass bei den gewählten Störungsszenarien eine Lieferverzögerung von ${r.delay} Tagen und eine Kostenerhöhung von ${r.cost.toLocaleString("de-DE")} € zu erwarten sind. Die Erfüllungsquote sinkt auf ${r.fulfill}%. Der Risiko-Score liegt bei ${r.risk}/10.`;
-  const summaryEN = `The simulation shows that with the selected disruption scenarios, a delivery delay of ${r.delay} days and a cost increase of €${r.cost.toLocaleString("en-US")} are expected. The fulfillment rate drops to ${r.fulfill}%. The risk score is ${r.risk}/10.`;
-  html += `<div class="sim-summary">${locale === "de" ? summaryDE : summaryEN}</div>`;
-  html += `</div>`;
-  return html;
+function compareRow(label, before, after) {
+  const d = after - before;
+  const arrow = Math.abs(d) < 0.0001 ? "" : (d > 0 ? "↑" : "↓");
+  const cls = Math.abs(d) < 0.0001 ? "" : (d > 0 ? "delta-positive" : "delta-negative");
+  return `
+    <div class="sim-compare-row">
+      <div class="sim-compare-label">${escapeHtml(label)}</div>
+      <div class="sim-compare-before">${t("simBefore")}: <strong>${before.toFixed(2)}</strong></div>
+      <div class="sim-compare-after">${t("simAfter")}: <strong>${after.toFixed(2)}</strong> <span class="${cls}">${arrow} ${Math.abs(d).toFixed(2)}</span></div>
+    </div>
+  `;
 }
 
-function renderComparisonHTML(before, after) {
-  let html = `<div class="sim-results">`;
-  html += `<div class="sim-section-title">${t("simComparison")}</div>`;
-  html += `<div class="sim-metric-grid">`;
-  html += metricCardCompare(t("simDelayDays"), `+${before.delay}d`, `+${after.delay}d`, after.delay < before.delay);
-  html += metricCardCompare(t("simCostIncrease"), `+${before.cost.toLocaleString("de-DE")}\u20AC`, `+${after.cost.toLocaleString("de-DE")}\u20AC`, after.cost < before.cost);
-  html += metricCardCompare(t("simFulfillment"), `${before.fulfill}%`, `${after.fulfill}%`, after.fulfill > before.fulfill);
-  html += metricCardCompare(t("simRiskScore"), `${before.risk}`, `${after.risk}`, after.risk < before.risk);
-  html += `</div>`;
-
-  // Bar comparison
-  const maxDelay = Math.max(before.delay, 30);
-  html += `<div class="sim-bar-compare">`;
-  html += `<div class="sim-bar-row"><span class="sim-bar-label-col">${t("simBefore")}</span><div class="sim-bar-track"><div class="sim-bar-fill-before" style="width:${(before.delay / maxDelay * 100)}%"></div></div><span class="sim-bar-val">+${before.delay}d</span></div>`;
-  html += `<div class="sim-bar-row"><span class="sim-bar-label-col">${t("simAfter")}</span><div class="sim-bar-track"><div class="sim-bar-fill-after" style="width:${(after.delay / maxDelay * 100)}%"></div></div><span class="sim-bar-val">+${after.delay}d</span></div>`;
-  html += `</div>`;
-
-  const summaryDE = `Durch die gewählten Gegenmaßnahmen konnte die Lieferverzögerung von ${before.delay} auf ${after.delay} Tage reduziert werden. Die Erfüllungsquote verbessert sich von ${before.fulfill}% auf ${after.fulfill}%. Der Risiko-Score sinkt von ${before.risk} auf ${after.risk}.`;
-  const summaryEN = `The selected countermeasures reduced the delivery delay from ${before.delay} to ${after.delay} days. The fulfillment rate improved from ${before.fulfill}% to ${after.fulfill}%. The risk score decreased from ${before.risk} to ${after.risk}.`;
-  html += `<div class="sim-summary">${locale === "de" ? summaryDE : summaryEN}</div>`;
-  html += `</div>`;
-  return html;
-}
-
-function metricCard(label, value, cls) {
-  return `<div class="sim-metric-card">
-    <div class="sim-metric-label">${label}</div>
-    <div class="sim-metric-value ${cls}">${value}</div>
-  </div>`;
-}
-
-function metricCardCompare(label, before, after, improved) {
-  const arrow = improved ? "\u2193" : "\u2191";
-  const cls = improved ? "delta-positive" : "delta-negative";
-  return `<div class="sim-metric-card">
-    <div class="sim-metric-label">${label}</div>
-    <div class="sim-metric-value">${after}</div>
-    <div class="sim-metric-delta ${cls}">${before} ${arrow} ${after}</div>
-  </div>`;
-}
-
-function fakeSimulate(durationMs, phases) {
-  return new Promise(resolve => {
-    simContent.hidden = true;
-    simFooter.hidden = true;
-    simLoading.hidden = false;
-    simLoadingFill.style.width = "0%";
-    simLoadingText.textContent = phases[0] || "";
-    let elapsed = 0;
-    const interval = 50;
-    const timer = setInterval(() => {
-      elapsed += interval;
-      const pct = Math.min((elapsed / durationMs) * 100, 100);
-      simLoadingFill.style.width = pct + "%";
-      const phaseIdx = Math.min(Math.floor((elapsed / durationMs) * phases.length), phases.length - 1);
-      simLoadingText.textContent = phases[phaseIdx] || "";
-      if (elapsed >= durationMs) {
-        clearInterval(timer);
-        simLoading.hidden = true;
-        simContent.hidden = false;
-        simFooter.hidden = false;
-        resolve();
-      }
-    }, interval);
+// ── Plotly renderer ──────────────────────────────────────────────────────
+function renderPlot(containerId, plotSpec) {
+  if (!plotSpec || typeof Plotly === "undefined") return;
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  Plotly.react(el, plotSpec.traces, plotSpec.layout, {
+    responsive: true,
+    displayModeBar: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ["lasso2d", "select2d"],
+    locale: locale === "de" ? "de" : "en",
   });
 }
+
+// ── Verification panel (collapsible) — proves the sim really used the inputs ──
+function renderVerifyPanel(result) {
+  if (!result) return "";
+  const rc = result.received_config || {};
+  const sim = result.sim_id ? result.sim_id.slice(0, 8) : "—";
+  const dur = result.duration_ms != null ? `${result.duration_ms} ms` : "—";
+
+  function kvTable(obj) {
+    if (!obj || typeof obj !== "object") return `<em>${locale === "de" ? "leer" : "empty"}</em>`;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return `<em>${locale === "de" ? "leer (Defaults aktiv)" : "empty (defaults used)"}</em>`;
+    let rows = "";
+    keys.forEach(k => {
+      const v = obj[k];
+      const valStr = typeof v === "number" ? (Math.abs(v) >= 1000 ? v.toLocaleString("de-DE") : v.toFixed(3)) : String(v);
+      rows += `<tr><td>${escapeHtml(k)}</td><td><strong>${escapeHtml(valStr)}</strong></td></tr>`;
+    });
+    return `<table class="sim-verify-table"><tbody>${rows}</tbody></table>`;
+  }
+
+  const tDE = locale === "de";
+  const titleVerify     = tDE ? "🔬 Details zur Verifikation (was wurde wirklich gerechnet)" : "🔬 Verification details (what was actually computed)";
+  const labelSimId      = tDE ? "Sim-ID:"            : "Sim ID:";
+  const labelDuration   = tDE ? "Rechendauer:"       : "Compute time:";
+  const labelStep       = tDE ? "Schritt:"           : "Step:";
+  const labelTopo       = tDE ? "Topologie:"         : "Topology:";
+  const labelDisr       = tDE ? "Disruption:"        : "Disruption:";
+  const labelSpan       = tDE ? "Disruption-Tage:"   : "Disruption days:";
+  const labelUserOv     = tDE ? "Deine Slider-Werte (User-Overrides)" : "Your slider values (user overrides)";
+  const labelMeasureOv  = tDE ? "Maßnahmen-Overrides" : "Measure overrides";
+  const labelEff        = tDE ? "Effektiv angewandte Parameter" : "Effective parameters applied";
+  const labelEffBefore  = tDE ? "Effektiv VORHER"    : "Effective BEFORE";
+  const labelEffAfter   = tDE ? "Effektiv NACHHER"   : "Effective AFTER";
+
+  let html = `<details class="sim-verify"><summary>${titleVerify}</summary>`;
+  html += `<div class="sim-verify-body">`;
+  html += `<div class="sim-verify-meta">`;
+  html += `<span><strong>${labelSimId}</strong> <code>${escapeHtml(sim)}</code></span>`;
+  html += `<span><strong>${labelDuration}</strong> ${escapeHtml(dur)}</span>`;
+  if (rc.step) html += `<span><strong>${labelStep}</strong> ${escapeHtml(rc.step)}</span>`;
+  if (rc.topology) html += `<span><strong>${labelTopo}</strong> ${escapeHtml(rc.topology)}</span>`;
+  if (rc.disruption_type) html += `<span><strong>${labelDisr}</strong> ${escapeHtml(rc.disruption_type)}</span>`;
+  if (rc.disruption_span_days) html += `<span><strong>${labelSpan}</strong> ${rc.disruption_span_days[0]}–${rc.disruption_span_days[1]}</span>`;
+  html += `</div>`;
+
+  if (rc.user_overrides_applied) {
+    html += `<h4 class="sim-verify-h">${labelUserOv}</h4>`;
+    html += kvTable(rc.user_overrides_applied);
+  }
+  if (rc.measure_overrides_applied) {
+    html += `<h4 class="sim-verify-h">${labelMeasureOv}</h4>`;
+    html += kvTable(rc.measure_overrides_applied);
+  }
+  if (rc.effective_params_sample) {
+    html += `<h4 class="sim-verify-h">${labelEff}</h4>`;
+    html += kvTable(rc.effective_params_sample);
+  }
+  if (rc.effective_before_sample) {
+    html += `<h4 class="sim-verify-h">${labelEffBefore}</h4>`;
+    html += kvTable(rc.effective_before_sample);
+  }
+  if (rc.effective_after_sample) {
+    html += `<h4 class="sim-verify-h">${labelEffAfter}</h4>`;
+    html += kvTable(rc.effective_after_sample);
+  }
+
+  html += `</div></details>`;
+  return html;
+}
+
+// ── Loading overlay ─────────────────────────────────────────────────────
+function showSimLoading(text) {
+  simLoading.hidden = false;
+  if (simLoadingText) simLoadingText.textContent = text;
+  if (simLoadingFill) {
+    simLoadingFill.style.transition = "none";
+    simLoadingFill.style.width = "0%";
+    void simLoadingFill.offsetHeight;
+    simLoadingFill.style.transition = "width 30s linear";
+    simLoadingFill.style.width = "92%";
+  }
+}
+
+function hideSimLoading() {
+  simLoading.hidden = true;
+  if (simLoadingFill) {
+    simLoadingFill.style.transition = "width 0.3s ease";
+    simLoadingFill.style.width = "100%";
+    setTimeout(() => { simLoadingFill.style.width = "0%"; }, 300);
+  }
+}
+
+// ── API call ─────────────────────────────────────────────────────────────
+async function runSimulation(step, payload) {
+  const body = {
+    step,
+    locale: locale === "en" ? "en" : "de",
+    user_overrides: payload.user_overrides || {},
+    measure_overrides: payload.measure_overrides || {},
+    disruption_type: payload.disruption_type || null,
+    final_time: 365,
+  };
+  console.log("[SIM] Sending payload:", body);
+  const res = await apiRequest("/apps/resilience/api/simulation/run", { method: "POST", body });
+  if (!res.ok) {
+    const msg = (res.payload && (res.payload.message || res.payload.error)) || "HTTP " + res.status;
+    throw new Error(msg);
+  }
+  return res.payload;
+}
+
+// ── Button handlers ──────────────────────────────────────────────────────
+simBackBtn.addEventListener("click", () => {
+  if (simStep > 0) renderSimStep(simStep - 1);
+});
+
+simResimBtn.addEventListener("click", () => {
+  if (simStep === 0) { simCalibration = null; renderSimStep(0); }
+  else if (simStep === 1) { simResults = null; renderSimStep(1); }
+  else if (simStep === 2) { simCompareResults = null; renderSimStep(2); }
+});
 
 simNextBtn.addEventListener("click", async () => {
+  // Step 0 — calibration
   if (simStep === 0) {
-    // Step 1 → fake parametrize → Step 2
-    const phasesDE = ["Parameter werden geladen…", "Lieferkette wird aufgebaut…", "Simulation wird parametriert…"];
-    const phasesEN = ["Loading parameters…", "Building supply chain…", "Parametrizing simulation…"];
-    await fakeSimulate(1500, locale === "de" ? phasesDE : phasesEN);
-    simResults = null;
-    simCompareResults = null;
-    simDisruptions.clear();
-    simMeasures.clear();
-    renderSimStep(1);
-  } else if (simStep === 1 && !simResults) {
-    // Run disruption simulation
-    if (simDisruptions.size === 0) return;
-    const phasesDE = ["Störszenarien werden angewendet…", "Auswirkungen berechnen…", "Ergebnisse generieren…"];
-    const phasesEN = ["Applying disruption scenarios…", "Calculating impacts…", "Generating results…"];
-    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
-    simResults = generateFakeResults(simDisruptions);
-    renderSimStep(1);
-  } else if (simStep === 1 && simResults) {
-    // Step 2 results shown → Step 3
-    simCompareResults = null;
-    simMeasures.clear();
-    renderSimStep(2);
-  } else if (simStep === 2 && !simCompareResults) {
-    // Run measures simulation
-    if (simMeasures.size === 0) return;
-    const phasesDE = ["Gegenmaßnahmen werden angewendet…", "Neue Szenarien berechnen…", "Vergleich erstellen…"];
-    const phasesEN = ["Applying countermeasures…", "Calculating new scenarios…", "Creating comparison…"];
-    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
-    simCompareResults = generateFakeComparison(simDisruptions, simMeasures);
-    renderSimStep(2);
-  } else if (simStep === 2 && simCompareResults) {
-    // Finish → reset
-    simStep = 0;
-    simMaterial = null;
-    simResults = null;
-    simCompareResults = null;
-    simDisruptions.clear();
-    simMeasures.clear();
-    renderSimStep(0);
+    if (!simCalibration) {
+      try {
+        showSimLoading(t("simLoadingCalibration"));
+        simCalibration = await runSimulation("calibration", { user_overrides: simUserOverrides });
+        renderSimStep(0);
+      } catch (err) {
+        alert(`${t("simError")}: ${err.message}`);
+        renderSimStep(0);
+      } finally {
+        hideSimLoading();
+      }
+    } else {
+      renderSimStep(1);
+    }
+    return;
+  }
+
+  // Step 1 — disruption
+  if (simStep === 1) {
+    if (!simResults) {
+      if (!simSelectedDisruption) { alert(t("simNoDisruption")); return; }
+      try {
+        showSimLoading(t("simLoadingDisruption"));
+        simResults = await runSimulation("disruption", {
+          user_overrides: simUserOverrides,
+          disruption_type: simSelectedDisruption,
+        });
+        renderSimStep(1);
+      } catch (err) {
+        alert(`${t("simError")}: ${err.message}`);
+        renderSimStep(1);
+      } finally {
+        hideSimLoading();
+      }
+    } else {
+      renderSimStep(2);
+    }
+    return;
+  }
+
+  // Step 2 — measures
+  if (simStep === 2) {
+    if (simCompareResults) {
+      // reset for new run
+      simStep = 0;
+      simCalibration = null;
+      simResults = null;
+      simCompareResults = null;
+      simSelectedDisruption = null;
+      SIM_PARAMS.forEach(p => { simUserOverrides[p.id] = p.defaultVal; });
+      SIM_MEASURE_SLIDERS.forEach(s => { simMeasureFactors[s.id] = s.defaultVal; });
+      renderSimStep(0);
+      return;
+    }
+
+    if (!simSelectedDisruption) { alert(t("simNoDisruption")); return; }
+
+    // Build measure overrides from sliders by multiplying base values
+    const baseValues = {
+      LagerLimit_MQ: simUserOverrides.LagerLimit_MQ,
+      Sicherheitsbestand_MQ: simUserOverrides.Sicherheitsbestand_MQ,
+      ProductionLimit_MQ: simUserOverrides.ProductionLimit_MQ,
+      MaterialOrderDelay_MQ: simUserOverrides.MaterialOrderDelay_MQ,
+      Anteil_MQ_Lieferant: simUserOverrides.Anteil_MQ_Lieferant,
+      LagerLimit_Lieferant: 230000,
+      Sicherheitsbestand_Lieferant: 50000,
+      ProductionLimit_Lieferant: 15000,
+      readytoshipDelay_MQ: 1.0,
+      readytoshipDelay_Lieferant: 1.0,
+    };
+
+    const measureOverrides = {};
+    SIM_MEASURE_SLIDERS.forEach(s => {
+      const factor = simMeasureFactors[s.id];
+      if (Math.abs(factor - s.defaultVal) < 0.0001) return; // no change
+      s.targets.forEach(t => {
+        const baseVal = baseValues[t];
+        if (baseVal === undefined) return;
+        // For sourcing slider: replace value; for others: multiply
+        if (s.id === "factor_sourcing") {
+          measureOverrides[t] = factor;
+        } else {
+          measureOverrides[t] = baseVal * factor;
+        }
+      });
+    });
+
+    try {
+      showSimLoading(t("simLoadingMeasures"));
+      simCompareResults = await runSimulation("measures", {
+        user_overrides: simUserOverrides,
+        measure_overrides: measureOverrides,
+        disruption_type: simSelectedDisruption,
+      });
+      renderSimStep(2);
+    } catch (err) {
+      alert(`${t("simError")}: ${err.message}`);
+      renderSimStep(2);
+    } finally {
+      hideSimLoading();
+    }
   }
 });
 
-simBackBtn.addEventListener("click", () => {
-  if (simStep === 1) {
-    simResults = null;
-    renderSimStep(0);
-  } else if (simStep === 2) {
-    simCompareResults = null;
-    renderSimStep(1);
-  }
+// ======================= AUTO-OPTIMIZE (long-running) =======================
+
+Object.assign(I18N.de, {
+  optTitle: "🤖 Auto-Optimieren",
+  optDescCal: "Lass den Computer automatisch die besten Parameter-Werte finden, sodass die Simulation möglichst nah an den realen Excel-Daten liegt.",
+  optDescRes: "Lass den Computer automatisch die besten Parameter-Werte gegen die gewählte Krise finden.",
+  optSpeed: "Gründlichkeit:",
+  optSpeedFast: "Schnell (~5 Min)",
+  optSpeedStd: "Standard (~10 Min)",
+  optSpeedThorough: "Gründlich (~30 Min)",
+  optStartCal: "Optimierung starten (Loss minimieren)",
+  optStartRes: "Optimierung starten (Score maximieren)",
+  optCancel: "Abbrechen",
+  optApply: "Beste Werte in Slider übernehmen",
+  optResetSliders: "Slider zurücksetzen",
+  optStatusRunning: "Läuft …",
+  optStatusDone: "Fertig",
+  optStatusError: "Fehler",
+  optStatusCancelled: "Abgebrochen",
+  optProgress: "Trial {curr} / {total}",
+  optBestLoss: "Bester Loss bisher",
+  optBestScore: "Bester Score bisher",
+  optDuration: "Laufzeit",
+  optChartTitleCal: "Loss über Trials (niedriger = besser)",
+  optChartTitleRes: "Score über Trials (höher = besser)",
+  optNeedDisruption: "Bitte zuerst in Step 2 eine Krise auswählen.",
+  optBusy: "Eine andere Sim läuft gerade. Bitte warten.",
 });
 
-simResimBtn.addEventListener("click", async () => {
-  if (simStep === 1) {
-    simResults = null;
-    renderSimStep(1);
-    if (simDisruptions.size === 0) return;
-    const phasesDE = ["Störszenarien werden angewendet…", "Auswirkungen berechnen…", "Ergebnisse generieren…"];
-    const phasesEN = ["Applying disruption scenarios…", "Calculating impacts…", "Generating results…"];
-    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
-    simResults = generateFakeResults(simDisruptions);
-    renderSimStep(1);
-  } else if (simStep === 2) {
-    simCompareResults = null;
-    renderSimStep(2);
-    if (simMeasures.size === 0) return;
-    const phasesDE = ["Gegenmaßnahmen werden angewendet…", "Neue Szenarien berechnen…", "Vergleich erstellen…"];
-    const phasesEN = ["Applying countermeasures…", "Calculating new scenarios…", "Creating comparison…"];
-    await fakeSimulate(2000, locale === "de" ? phasesDE : phasesEN);
-    simCompareResults = generateFakeComparison(simDisruptions, simMeasures);
-    renderSimStep(2);
-  }
+Object.assign(I18N.en, {
+  optTitle: "🤖 Auto-optimize",
+  optDescCal: "Let the computer find the best parameter values so the simulation matches the real Excel data as closely as possible.",
+  optDescRes: "Let the computer find the best parameter values against the selected disruption.",
+  optSpeed: "Thoroughness:",
+  optSpeedFast: "Quick (~5 min)",
+  optSpeedStd: "Standard (~10 min)",
+  optSpeedThorough: "Thorough (~30 min)",
+  optStartCal: "Start optimization (minimize loss)",
+  optStartRes: "Start optimization (maximize score)",
+  optCancel: "Cancel",
+  optApply: "Apply best values to sliders",
+  optResetSliders: "Reset sliders",
+  optStatusRunning: "Running …",
+  optStatusDone: "Done",
+  optStatusError: "Error",
+  optStatusCancelled: "Cancelled",
+  optProgress: "Trial {curr} / {total}",
+  optBestLoss: "Best loss so far",
+  optBestScore: "Best score so far",
+  optDuration: "Duration",
+  optChartTitleCal: "Loss across trials (lower = better)",
+  optChartTitleRes: "Score across trials (higher = better)",
+  optNeedDisruption: "Please pick a disruption in step 2 first.",
+  optBusy: "Another simulation is running. Please wait.",
 });
+
+// State
+let optimizeJobId = null;
+let optimizePollHandle = null;
+let optimizeLastSnapshot = null;       // last polled JSON
+let optimizeSelectedSpeed = "standard";
+
+function optimizeRenderPanel(step) {
+  // step "calibration" or "disruption"
+  const isCal = step === "calibration";
+  const desc = isCal ? t("optDescCal") : t("optDescRes");
+  const startLabel = isCal ? t("optStartCal") : t("optStartRes");
+
+  let html = `<div class="sim-section">`;
+  html += `<div class="sim-section-title">${t("optTitle")}</div>`;
+  html += `<div class="opt-desc">${escapeHtml(desc)}</div>`;
+
+  // Speed picker
+  html += `<div class="opt-speed-row">`;
+  html += `<span class="opt-speed-label">${t("optSpeed")}</span>`;
+  ["fast", "standard", "thorough"].forEach(s => {
+    const label = s === "fast" ? t("optSpeedFast") : s === "standard" ? t("optSpeedStd") : t("optSpeedThorough");
+    const active = optimizeSelectedSpeed === s ? "active" : "";
+    html += `<button type="button" class="opt-speed-btn ${active}" data-speed="${s}" ${optimizeJobId ? "disabled" : ""}>${escapeHtml(label)}</button>`;
+  });
+  html += `</div>`;
+
+  // Start / running / done state
+  if (!optimizeJobId) {
+    html += `<button type="button" class="btn btn-primary btn-sm" id="opt-start-btn" data-step="${step}">${escapeHtml(startLabel)}</button>`;
+  } else {
+    const snap = optimizeLastSnapshot;
+    if (snap) {
+      const status = snap.status;
+      const statusText = status === "running" ? t("optStatusRunning") :
+                         status === "done" ? t("optStatusDone") :
+                         status === "cancelled" ? t("optStatusCancelled") :
+                         status === "error" ? t("optStatusError") : status;
+      const progress = t("optProgress").replace("{curr}", snap.current_trial).replace("{total}", snap.total_trials);
+      const pct = snap.total_trials > 0 ? (snap.current_trial / snap.total_trials * 100) : 0;
+
+      let bestText = "—";
+      if (snap.best_display) {
+        if (snap.best_display.kind === "loss") {
+          bestText = `${(snap.best_display.value * 100).toFixed(1)}%`;
+        } else {
+          bestText = snap.best_display.value.toFixed(2);
+        }
+      }
+      const bestLabel = isCal ? t("optBestLoss") : t("optBestScore");
+
+      html += `<div class="opt-status-card">`;
+      html += `<div class="opt-status-row"><strong>${statusText}</strong> &middot; ${escapeHtml(progress)} &middot; ${bestLabel}: <strong>${bestText}</strong> &middot; ${t("optDuration")}: ${Math.round((snap.duration_ms || 0) / 1000)}s</div>`;
+      html += `<div class="opt-progress-bar"><div class="opt-progress-fill" style="width:${pct}%"></div></div>`;
+      html += `<div class="opt-plot" id="opt-plot" style="height:240px"></div>`;
+      if (status === "running") {
+        html += `<button type="button" class="btn btn-outline btn-sm" id="opt-cancel-btn">${escapeHtml(t("optCancel"))}</button>`;
+      }
+      if (status === "done" && snap.best_params) {
+        html += `<button type="button" class="btn btn-primary btn-sm" id="opt-apply-btn">${escapeHtml(t("optApply"))}</button>`;
+      }
+      if (status === "error" && snap.error) {
+        html += `<div class="opt-error">${escapeHtml(snap.error)}</div>`;
+      }
+      html += `</div>`;
+    }
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function optimizeWirePanel(step) {
+  // Wire speed picker
+  document.querySelectorAll(".opt-speed-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (optimizeJobId) return;
+      optimizeSelectedSpeed = btn.dataset.speed;
+      document.querySelectorAll(".opt-speed-btn").forEach(b => b.classList.toggle("active", b.dataset.speed === optimizeSelectedSpeed));
+    });
+  });
+
+  // Start button
+  const startBtn = document.getElementById("opt-start-btn");
+  if (startBtn) {
+    startBtn.addEventListener("click", () => optimizeStart(step));
+  }
+
+  // Cancel button
+  const cancelBtn = document.getElementById("opt-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => optimizeCancel());
+  }
+
+  // Apply button
+  const applyBtn = document.getElementById("opt-apply-btn");
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => optimizeApplyBest());
+  }
+
+  // Re-render the live chart if we have history
+  if (optimizeLastSnapshot && optimizeLastSnapshot.history && optimizeLastSnapshot.history.length > 0) {
+    optimizeRenderChart(step);
+  }
+}
+
+function optimizeRenderChart(step) {
+  const el = document.getElementById("opt-plot");
+  if (!el || typeof Plotly === "undefined" || !optimizeLastSnapshot) return;
+  const hist = optimizeLastSnapshot.history || [];
+  if (hist.length === 0) return;
+  const isCal = step === "calibration";
+  // For calibration, target is -loss → show loss = -target (positive); for disruption, show target as score
+  const ys = hist.map(h => isCal ? Math.abs(h.target) : h.target);
+  const xs = hist.map(h => h.trial);
+  // Running best line
+  const running = [];
+  let best = null;
+  for (const v of ys) {
+    if (best == null) best = v;
+    else best = isCal ? Math.min(best, v) : Math.max(best, v);
+    running.push(best);
+  }
+  const traces = [
+    { type: "scatter", mode: "markers", x: xs, y: ys, name: isCal ? "Loss" : "Score", marker: { color: "#9ca3af", size: 6 } },
+    { type: "scatter", mode: "lines", x: xs, y: running, name: isCal ? "Best (running)" : "Best (running)", line: { color: "#2563eb", width: 2.5 } },
+  ];
+  const layout = {
+    title: isCal ? t("optChartTitleCal") : t("optChartTitleRes"),
+    xaxis: { title: "Trial" },
+    yaxis: { title: isCal ? "Loss" : "Score" },
+    showlegend: true,
+    margin: { l: 50, r: 20, t: 40, b: 40 },
+  };
+  Plotly.react(el, traces, layout, { responsive: true, displayModeBar: false });
+}
+
+async function optimizeStart(step) {
+  if (step === "disruption" && !simSelectedDisruption) {
+    alert(t("optNeedDisruption"));
+    return;
+  }
+  try {
+    const resp = await apiRequest("/apps/resilience/api/simulation/optimize", {
+      method: "POST",
+      body: {
+        step,
+        speed: optimizeSelectedSpeed,
+        disruption_type: step === "disruption" ? simSelectedDisruption : null,
+      },
+    });
+    if (!resp.ok) {
+      if (resp.status === 429) { alert(t("optBusy")); return; }
+      alert((resp.payload && (resp.payload.message || resp.payload.error)) || "HTTP " + resp.status);
+      return;
+    }
+    optimizeJobId = resp.payload.job_id;
+    optimizeLastSnapshot = {
+      status: "running",
+      current_trial: 0,
+      total_trials: resp.payload.total_trials,
+      duration_ms: 0,
+      history: [],
+      best_display: null,
+    };
+    // Re-render the current step to show the running panel
+    renderSimStep(simStep);
+    // Start polling
+    optimizePollHandle = setInterval(optimizePoll, 4000);
+    optimizePoll(); // immediate first poll
+  } catch (err) {
+    alert("Start fehlgeschlagen: " + err.message);
+  }
+}
+
+async function optimizePoll() {
+  if (!optimizeJobId) return;
+  const resp = await apiRequest(`/apps/resilience/api/simulation/optimize/${optimizeJobId}`, { method: "GET" });
+  if (!resp.ok || !resp.payload) return;
+  optimizeLastSnapshot = resp.payload;
+
+  // Update status row and progress bar without full re-render (cheap)
+  const statusCard = document.querySelector(".opt-status-card");
+  if (statusCard) {
+    const snap = optimizeLastSnapshot;
+    const isCal = optimizeLastSnapshot.step === "calibration";
+    const statusText = snap.status === "running" ? t("optStatusRunning") :
+                       snap.status === "done" ? t("optStatusDone") :
+                       snap.status === "cancelled" ? t("optStatusCancelled") :
+                       snap.status === "error" ? t("optStatusError") : snap.status;
+    const progress = t("optProgress").replace("{curr}", snap.current_trial).replace("{total}", snap.total_trials);
+    const pct = snap.total_trials > 0 ? (snap.current_trial / snap.total_trials * 100) : 0;
+    let bestText = "—";
+    if (snap.best_display) {
+      bestText = snap.best_display.kind === "loss" ? `${(snap.best_display.value * 100).toFixed(1)}%` : snap.best_display.value.toFixed(2);
+    }
+    const bestLabel = isCal ? t("optBestLoss") : t("optBestScore");
+    const row = statusCard.querySelector(".opt-status-row");
+    if (row) row.innerHTML = `<strong>${statusText}</strong> &middot; ${progress} &middot; ${bestLabel}: <strong>${bestText}</strong> &middot; ${t("optDuration")}: ${Math.round((snap.duration_ms || 0) / 1000)}s`;
+    const fill = statusCard.querySelector(".opt-progress-fill");
+    if (fill) fill.style.width = pct + "%";
+    optimizeRenderChart(snap.step);
+  }
+
+  if (optimizeLastSnapshot.status !== "running") {
+    clearInterval(optimizePollHandle);
+    optimizePollHandle = null;
+    // Re-render so Cancel-Button disappears and Apply-Button appears
+    renderSimStep(simStep);
+  }
+}
+
+async function optimizeCancel() {
+  if (!optimizeJobId) return;
+  await apiRequest(`/apps/resilience/api/simulation/optimize/${optimizeJobId}/cancel`, { method: "POST" });
+  // poll will pick up status change
+}
+
+function optimizeApplyBest() {
+  if (!optimizeLastSnapshot || !optimizeLastSnapshot.best_params) {
+    console.warn("[OPT] Apply skipped: no best_params in snapshot", optimizeLastSnapshot);
+    return;
+  }
+  const best = optimizeLastSnapshot.best_params;
+  console.log("[OPT] Applying best params:", best);
+  console.log("[OPT] simUserOverrides BEFORE:", { ...simUserOverrides });
+  // Apply best params to UI sliders (only the ones we have sliders for)
+  let applied = 0;
+  SIM_PARAMS.forEach(p => {
+    if (best[p.id] != null) {
+      const isFloat = (p.step && p.step < 1);
+      const v = isFloat ? Number(best[p.id]) : Math.round(Number(best[p.id]));
+      // Clamp into the slider's allowed range to keep <input type="range"> from snapping back
+      const clamped = Math.max(p.min, Math.min(p.max, v));
+      simUserOverrides[p.id] = clamped;
+      applied++;
+      console.log(`[OPT]   ${p.id}: ${best[p.id]} -> ${clamped} (clamped to [${p.min}, ${p.max}])`);
+    }
+  });
+  console.log(`[OPT] Applied ${applied} of ${SIM_PARAMS.length} params`);
+  console.log("[OPT] simUserOverrides AFTER:", { ...simUserOverrides });
+  if (applied === 0) {
+    alert("Keine optimierten Werte gefunden — Best-Params war leer. Bitte Server-Log prüfen.");
+    return;
+  }
+  // Reset and re-render so sliders reflect new values
+  optimizeJobId = null;
+  optimizeLastSnapshot = null;
+  // Invalidate dependent results since the params changed
+  if (simStep === 0) simCalibration = null;
+  if (simStep === 1) simResults = null;
+  if (simStep === 2) simCompareResults = null;
+  renderSimStep(simStep);
+  console.log("[OPT] After render, slider DOM values:");
+  SIM_PARAMS.forEach(p => {
+    const el = document.getElementById("slider-" + p.id);
+    console.log(`[OPT]   ${p.id}: DOM value=${el ? el.value : "(no element)"}`);
+  });
+}
+
+// Inject optimize panel into existing step renderers (without modifying them in-place):
+// We do this by patching the simContent innerHTML *after* the original render.
+const _renderSimCalibrationOriginal = renderSimCalibration;
+renderSimCalibration = function patchedCal() {
+  _renderSimCalibrationOriginal();
+  // Append optimize panel
+  simContent.insertAdjacentHTML("beforeend", optimizeRenderPanel("calibration"));
+  optimizeWirePanel("calibration");
+};
+
+const _renderSimDisruptionsOriginal = renderSimDisruptions;
+renderSimDisruptions = function patchedDis() {
+  _renderSimDisruptionsOriginal();
+  simContent.insertAdjacentHTML("beforeend", optimizeRenderPanel("disruption"));
+  optimizeWirePanel("disruption");
+};
+
+// Initial render
+if (simContent) renderSimStep(0);
