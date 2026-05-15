@@ -298,6 +298,7 @@ def create_model(sc_name, model_dict):
 
     # write supply chain model to named file
     fname = os.path.dirname(__file__) + f"/../models/{sc_name}.py"
+    os.makedirs(os.path.dirname(fname), exist_ok=True)
     with open(fname, "w", encoding="utf-8") as f:
         # first write settings
         f.write(PREREQUISITES)

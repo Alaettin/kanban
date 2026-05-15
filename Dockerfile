@@ -29,8 +29,9 @@ RUN python3.11 -m venv /app/simulation_rl/.venv \
 
 COPY . .
 
-# Ensure data directory exists for sqlite file mount/use
-RUN mkdir -p /app/data
+# Ensure data directory exists for sqlite file mount/use,
+# and the simulation_rl/pysd_model/models output dir (.gitignored, recreated at runtime)
+RUN mkdir -p /app/data /app/simulation_rl/pysd_model/models
 
 # Default path for the PySD simulation bridge (override via .env if needed)
 ENV SIMULATION_RL_PATH=/app/simulation_rl
