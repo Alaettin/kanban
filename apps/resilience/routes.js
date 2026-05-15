@@ -42,7 +42,7 @@ const SIM_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const SIM_OPTIMIZE_CFG = {
   calibration: path.join(SIM_RL_PATH, "web", "optimize_calibration_cfg.json"),
-  disruption:  path.join(SIM_RL_PATH, "web", "optimize_resilience_cfg.json"),
+  measures:    path.join(SIM_RL_PATH, "web", "optimize_resilience_cfg.json"),
 };
 const SIM_OPTIMIZE_SPEEDS = {
   fast:      { tpe: 10, bayes: 15 },
@@ -3979,13 +3979,13 @@ function mountRoutes(router) {
       const disruptionType = body.disruption_type || null;
 
       if (!SIM_OPTIMIZE_CFG[step]) {
-        return res.status(400).json({ error: "INVALID_STEP", message: "step must be 'calibration' or 'disruption'" });
+        return res.status(400).json({ error: "INVALID_STEP", message: "step must be 'calibration' or 'measures'" });
       }
       const speed = SIM_OPTIMIZE_SPEEDS[speedKey];
       if (!speed) {
         return res.status(400).json({ error: "INVALID_SPEED", message: "speed must be 'fast', 'standard', or 'thorough'" });
       }
-      if (step === "disruption" && !SIM_ALLOWED_DISRUPTIONS.has(disruptionType)) {
+      if (step === "measures" && !SIM_ALLOWED_DISRUPTIONS.has(disruptionType)) {
         return res.status(400).json({ error: "INVALID_DISRUPTION" });
       }
 
@@ -4005,7 +4005,7 @@ function mountRoutes(router) {
         "bayes_tpe_params.num_iter_tpe_per_param", String(speed.tpe),
         "bayes_tpe_params.num_iter_bayes_per_param", String(speed.bayes),
       ];
-      if (step === "disruption" && disruptionType) {
+      if (step === "measures" && disruptionType) {
         args.push("sim_config.disruption", disruptionType);
       }
 

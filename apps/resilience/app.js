@@ -9680,13 +9680,13 @@ simNextBtn.addEventListener("click", async () => {
 Object.assign(I18N.de, {
   optTitle: "🤖 Auto-Optimieren",
   optDescCal: "Lass den Computer automatisch die besten Parameter-Werte finden, sodass die Simulation möglichst nah an den realen Excel-Daten liegt.",
-  optDescRes: "Lass den Computer automatisch die besten Parameter-Werte gegen die gewählte Krise finden.",
+  optDescRes: "Lass den Computer die besten Maßnahmen-Faktoren gegen die in Step 2 gewählte Krise finden. Die gefundenen Werte werden als Faktoren auf deine Step-1-Slider angewandt.",
   optSpeed: "Gründlichkeit:",
   optSpeedFast: "Schnell (~5 Min)",
   optSpeedStd: "Standard (~10 Min)",
   optSpeedThorough: "Gründlich (~30 Min)",
   optStartCal: "Optimierung starten (Loss minimieren)",
-  optStartRes: "Optimierung starten (Score maximieren)",
+  optStartRes: "Beste Maßnahmen finden (Score maximieren)",
   optCancel: "Abbrechen",
   optApply: "Beste Werte in Slider übernehmen",
   optResetSliders: "Slider zurücksetzen",
@@ -9707,13 +9707,13 @@ Object.assign(I18N.de, {
 Object.assign(I18N.en, {
   optTitle: "🤖 Auto-optimize",
   optDescCal: "Let the computer find the best parameter values so the simulation matches the real Excel data as closely as possible.",
-  optDescRes: "Let the computer find the best parameter values against the selected disruption.",
+  optDescRes: "Let the computer find the best countermeasure factors against the disruption picked in step 2. Found values are applied as factors on your step 1 sliders.",
   optSpeed: "Thoroughness:",
   optSpeedFast: "Quick (~5 min)",
   optSpeedStd: "Standard (~10 min)",
   optSpeedThorough: "Thorough (~30 min)",
   optStartCal: "Start optimization (minimize loss)",
-  optStartRes: "Start optimization (maximize score)",
+  optStartRes: "Find best measures (maximize score)",
   optCancel: "Cancel",
   optApply: "Apply best values to sliders",
   optResetSliders: "Reset sliders",
@@ -9868,7 +9868,7 @@ function optimizeRenderChart(step) {
 }
 
 async function optimizeStart(step) {
-  if (step === "disruption" && !simSelectedDisruption) {
+  if (step === "measures" && !simSelectedDisruption) {
     alert(t("optNeedDisruption"));
     return;
   }
@@ -9878,7 +9878,7 @@ async function optimizeStart(step) {
       body: {
         step,
         speed: optimizeSelectedSpeed,
-        disruption_type: step === "disruption" ? simSelectedDisruption : null,
+        disruption_type: step === "measures" ? simSelectedDisruption : null,
       },
     });
     if (!resp.ok) {
@@ -9954,25 +9954,61 @@ function optimizeApplyBest() {
     return;
   }
   const best = optimizeLastSnapshot.best_params;
-  console.log("[OPT] Applying best params:", best);
-  console.log("[OPT] simUserOverrides BEFORE:", { ...simUserOverrides });
-  // Apply best params to UI sliders (only the ones we have sliders for)
+  const optStep = optimizeLastSnapshot.step;
+  console.log("[OPT] Applying best params for step=", optStep, best);
+
   let applied = 0;
-  SIM_PARAMS.forEach(p => {
-    if (best[p.id] != null) {
-      const isFloat = (p.step && p.step < 1);
-      const v = isFloat ? Number(best[p.id]) : Math.round(Number(best[p.id]));
-      // Clamp into the slider's allowed range to keep <input type="range"> from snapping back
-      const clamped = Math.max(p.min, Math.min(p.max, v));
-      simUserOverrides[p.id] = clamped;
+
+  if (optStep === "measures") {
+    // Step 3 mode: derive the 5 measure-factor sliders from the optimized absolute
+    // parameter values, relative to the current Step-1 base values.
+    console.log("[OPT] simMeasureFactors BEFORE:", { ...simMeasureFactors });
+    const baseValueFor = (paramName) => {
+      // 1. Step-1 user override, 2. SIM_PARAMS default, 3. raw fallback
+      if (simUserOverrides[paramName] != null) return simUserOverrides[paramName];
+      const p = SIM_PARAMS.find(x => x.id === paramName);
+      return p ? p.defaultVal : null;
+    };
+    // Optimized-param -> matching factor slider
+    const factorMap = {
+      LagerLimit_MQ:         "factor_lager",
+      Sicherheitsbestand_MQ: "factor_safety",
+      ProductionLimit_MQ:    "factor_production",
+      // MaterialOrderDelay_MQ has no factor counterpart - skipped intentionally
+    };
+    Object.entries(factorMap).forEach(([paramName, factorId]) => {
+      if (best[paramName] == null) return;
+      const baseVal = baseValueFor(paramName);
+      if (!baseVal || baseVal === 0) return;
+      const rawFactor = Number(best[paramName]) / Number(baseVal);
+      const slider = SIM_MEASURE_SLIDERS.find(s => s.id === factorId);
+      if (!slider) return;
+      const clamped = Math.max(slider.min, Math.min(slider.max, rawFactor));
+      simMeasureFactors[factorId] = clamped;
       applied++;
-      console.log(`[OPT]   ${p.id}: ${best[p.id]} -> ${clamped} (clamped to [${p.min}, ${p.max}])`);
-    }
-  });
-  console.log(`[OPT] Applied ${applied} of ${SIM_PARAMS.length} params`);
-  console.log("[OPT] simUserOverrides AFTER:", { ...simUserOverrides });
+      console.log(`[OPT]   ${paramName}=${best[paramName]} / base=${baseVal} -> factor ${factorId}=${rawFactor.toFixed(3)} (clamped to ${clamped.toFixed(3)})`);
+    });
+    console.log(`[OPT] Applied ${applied} of ${SIM_MEASURE_SLIDERS.length} factor sliders`);
+    console.log("[OPT] simMeasureFactors AFTER:", { ...simMeasureFactors });
+  } else {
+    // Step 1 mode (calibration): apply best absolute values directly to base sliders
+    console.log("[OPT] simUserOverrides BEFORE:", { ...simUserOverrides });
+    SIM_PARAMS.forEach(p => {
+      if (best[p.id] != null) {
+        const isFloat = (p.step && p.step < 1);
+        const v = isFloat ? Number(best[p.id]) : Math.round(Number(best[p.id]));
+        const clamped = Math.max(p.min, Math.min(p.max, v));
+        simUserOverrides[p.id] = clamped;
+        applied++;
+        console.log(`[OPT]   ${p.id}: ${best[p.id]} -> ${clamped} (clamped to [${p.min}, ${p.max}])`);
+      }
+    });
+    console.log(`[OPT] Applied ${applied} of ${SIM_PARAMS.length} params`);
+    console.log("[OPT] simUserOverrides AFTER:", { ...simUserOverrides });
+  }
+
   if (applied === 0) {
-    alert("Keine optimierten Werte gefunden — Best-Params war leer. Bitte Server-Log prüfen.");
+    alert("Keine optimierten Werte zum Übernehmen gefunden. Bitte Server-Log prüfen.");
     return;
   }
   // Reset and re-render so sliders reflect new values
@@ -9983,11 +10019,6 @@ function optimizeApplyBest() {
   if (simStep === 1) simResults = null;
   if (simStep === 2) simCompareResults = null;
   renderSimStep(simStep);
-  console.log("[OPT] After render, slider DOM values:");
-  SIM_PARAMS.forEach(p => {
-    const el = document.getElementById("slider-" + p.id);
-    console.log(`[OPT]   ${p.id}: DOM value=${el ? el.value : "(no element)"}`);
-  });
 }
 
 // Inject optimize panel into existing step renderers (without modifying them in-place):
@@ -10000,11 +10031,20 @@ renderSimCalibration = function patchedCal() {
   optimizeWirePanel("calibration");
 };
 
+// Step 2 (Disruption) intentionally has NO Auto-Optimize panel anymore —
+// it would overlap with Step 3 (Measures). Step 2 stays pure crisis visualization.
 const _renderSimDisruptionsOriginal = renderSimDisruptions;
 renderSimDisruptions = function patchedDis() {
   _renderSimDisruptionsOriginal();
-  simContent.insertAdjacentHTML("beforeend", optimizeRenderPanel("disruption"));
-  optimizeWirePanel("disruption");
+};
+
+// Step 3 (Measures) gets the Auto-Optimize panel that finds the best
+// countermeasure factors against the disruption picked in Step 2.
+const _renderSimMeasuresStepOriginal = renderSimMeasuresStep;
+renderSimMeasuresStep = function patchedMeas() {
+  _renderSimMeasuresStepOriginal();
+  simContent.insertAdjacentHTML("beforeend", optimizeRenderPanel("measures"));
+  optimizeWirePanel("measures");
 };
 
 // Initial render
