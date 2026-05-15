@@ -1,0 +1,45 @@
+{
+    "sim_config": {
+        "sc": {
+            "MQ": {
+                "Alles": [
+                    "Lieferant"
+                ]
+            }
+        },
+        "target_company": "MQ",
+        "disruption": null
+    },
+    "data": {
+        "data_path": "pysd_model/data/MQ.xlsx",
+        "data_map": {
+            "geschätzte verteilung der bestellung pro tag": "Marktnachfrage_WORLD_MQ",
+            "eingang interpolliert": "EingangReal_MQ",
+            "warenausgang interpolliert": "AusgangReal_MQ"
+        }
+    },
+    "optimization": {
+        "sim_type": "SimInstancePySDCalibration",
+        "loss_fn": "pysd_calibrate",
+        "out_path": "out",
+        "in_path": "",
+        "name": "pygad",
+        "num_threads": 1,
+        "default_params": "cfg_default_pysd.json",
+        "optimizer": "pygad"
+    },
+    "pygad_params": {
+        "num_generations": 200,
+        "sol_per_pop": 50,
+        "num_parents_mating": 25,
+        "crossover_type": "single_point",
+        "mutation_type": "random",
+        "mutation_percent_genes": 10,
+        "parent_selection_type": "sss",
+        "keep_elitism": 2
+    },
+    "anylogic_config": {
+        "model_path": "model.jar",
+        "java_path": "java.exe"
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "step": "measures",
+  "disruption_type": "Erdbeben",
+  "user_overrides": {},
+  "measure_overrides": {
+    "LagerLimit_MQ": 350000,
+    "LagerLimit_Lieferant": 350000,
+    "Sicherheitsbestand_MQ": 80000,
+    "Sicherheitsbestand_Lieferant": 80000
+  },
+  "final_time": 365,
+  "locale": "de"
+}

@@ -1,0 +1,19 @@
+{
+    "supply_chain": {
+        "MQ": {
+            "Alles": ["Lieferant"]
+        }
+    },
+    "default_params": "../cfg_default_pysd.json",
+    "data_path": "data/MQ.xlsx",
+    "data_map": {
+        "geschätzte verteilung der bestellung pro tag": "Marktnachfrage_WORLD_MQ",
+        "eingang interpolliert": "EingangReal_MQ",
+        "warenausgang interpolliert": "AusgangReal_MQ"
+    },
+    "target_company": "MQ",
+    "final_time": 365,
+    "time_step": 0.0625,
+    "saveper": 1,
+    "disruption_type": "Erdbeben"
+}

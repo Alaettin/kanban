@@ -1,4 +1,12 @@
 node_modules/
-data/
+/data/
 .env
 *.bak
+
+# Python (simulation_rl)
+simulation_rl/.venv/
+simulation_rl/out/
+simulation_rl/**/__pycache__/
+simulation_rl/**/*.pyc
+simulation_rl/pysd_model/models/
+*.tfevents.*

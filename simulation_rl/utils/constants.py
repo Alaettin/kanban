@@ -1,0 +1,2 @@
+SPLIT_STR = "//"
+SPLIT_STR_PARAM = "##"

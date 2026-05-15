@@ -1,0 +1,107 @@
+{
+    "materials": {
+        "Holz": {
+            "multiplikator": 2,
+            "suppliers": {
+                "HolzLief1": {
+                    "anteil": 0.6,
+                    "materials": {
+                        "Rundholz": {
+                            "multiplikator": 1,
+                            "suppliers": {
+                                "Saege1": {
+                                    "anteil": 0.7,
+                                    "materials": {
+                                        "Stammholz": {
+                                            "multiplikator": 1,
+                                            "suppliers": {
+                                                "Forst1": {
+                                                    "anteil": 0.5
+                                                },
+                                                "Forst2": {
+                                                    "anteil": 0.5
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Saege2": {
+                                    "anteil": 0.3
+                                }
+                            }
+                        },
+                        "Kantholz": {
+                            "multiplikator": 1,
+                            "suppliers": {
+                                "Blatt1": {
+                                    "anteil": 0.7,
+                                    "materials": {
+                                        "Kern": {
+                                            "multiplikator": 1,
+                                            "suppliers": {
+                                                "Pflanze1": {
+                                                    "anteil": 0.5
+                                                },
+                                                "Pflanze2": {
+                                                    "anteil": 0.5
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Blatt2": {
+                                    "anteil": 0.3
+                                }
+                            }
+                        }
+                    }
+                },
+                "HolzLief2": {
+                    "anteil": 0.4
+                }
+            }
+        },
+        "Eisen": {
+            "multiplikator": 1,
+            "suppliers": {
+                "EisenLief1": {
+                    "anteil": 0.6,
+                    "materials": {
+                        "Erz": {
+                            "multiplikator": 1,
+                            "suppliers": {
+                                "Mine1": {
+                                    "anteil": 0.5,
+                                    "materials": {
+                                        "Rohstoff": {
+                                            "multiplikator": 1,
+                                            "suppliers": {
+                                                "Abbau1": {
+                                                    "anteil": 1.0
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Mine2": {
+                                    "anteil": 0.5
+                                }
+                            }
+                        }
+                    }
+                },
+                "EisenLief2": {
+                    "anteil": 0.4
+                }
+            }
+        },
+        "Kunststoff": {
+            "multiplikator": 2,
+            "suppliers": {
+                "KunstLief1": {
+                    "anteil": 1.0
+                }
+            }
+        }
+    }
+}

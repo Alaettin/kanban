@@ -1,0 +1,47 @@
+{
+    "sim_config": {
+        "sc": {
+            "MQ": {
+                "Alles": [
+                    "Lieferant"
+                ]
+            }
+        },
+        "target_company": "MQ",
+        "disruption": "MA_Knappheit"
+    },
+    "data": {
+        "data_path": "pysd_model/data/MQ.xlsx",
+        "data_map": {
+            "geschätzte verteilung der bestellung pro tag": "Marktnachfrage_WORLD_MQ",
+            "eingang interpolliert": "EingangReal_MQ",
+            "warenausgang interpolliert": "AusgangReal_MQ"
+        }
+    },
+    "optimization": {
+        "sim_type": "SimInstancePySDResilience",
+        "loss_fn": "pysd_resilience",
+        "out_path": "out",
+        "in_path": "",
+        "name": "bayes",
+        "num_threads": 1,
+        "default_params": "cfg_default_pysd.json",
+        "optimizer": "tpe_bayes",
+        "optimizable_params": [
+            "LagerLimit",
+            "ProductionLimit",
+            "Sicherheitsbestand",
+            "MaterialOrderDelay",
+            "ProductionDelay"
+        ]
+    },
+    "bayes_tpe_params": {
+        "num_iter_tpe_per_param": 20,
+        "param_importance_threshold": 1,
+        "num_iter_bayes_per_param": 5
+    },
+    "anylogic_config": {
+        "model_path": "model.jar",
+        "java_path": "java.exe"
+    }
+}

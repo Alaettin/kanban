@@ -13,10 +13,22 @@ const rssParser = new RssParser({ timeout: 15000 });
 // ---------------------------------------------------------------------------
 // PySD Simulation bridge (apps/resilience → simulation_rl/web/web_simulation.py)
 // ---------------------------------------------------------------------------
-const SIM_RL_PATH = process.env.SIMULATION_RL_PATH
-  || path.join(__dirname, "..", "..", "..", "Neuer Ordner", "simulation_rl", "simulation_rl");
+// Production / Docker default: simulation_rl/ lives next to the kanban app root.
+// Dev (Windows) fallback: legacy "Neuer Ordner" path on the developer machine.
+function resolveSimRlPath() {
+  if (process.env.SIMULATION_RL_PATH) return process.env.SIMULATION_RL_PATH;
+  const repoLocal = path.join(__dirname, "..", "..", "simulation_rl");
+  if (require("fs").existsSync(path.join(repoLocal, "web", "web_simulation.py"))) {
+    return repoLocal;
+  }
+  return path.join(__dirname, "..", "..", "..", "Neuer Ordner", "simulation_rl", "simulation_rl");
+}
+
+const SIM_RL_PATH = resolveSimRlPath();
 const SIM_PYTHON_BIN = process.env.SIMULATION_PYTHON
-  || path.join(SIM_RL_PATH, ".venv", "Scripts", "python.exe");
+  || (process.platform === "win32"
+        ? path.join(SIM_RL_PATH, ".venv", "Scripts", "python.exe")
+        : path.join(SIM_RL_PATH, ".venv", "bin", "python3"));
 const SIM_WRAPPER = path.join(SIM_RL_PATH, "web", "web_simulation.py");
 
 const SIM_ALLOWED_STEPS = new Set(["calibration", "disruption", "measures"]);

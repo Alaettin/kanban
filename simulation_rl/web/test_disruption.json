@@ -1,0 +1,7 @@
+{
+  "step": "disruption",
+  "disruption_type": "Erdbeben",
+  "user_overrides": {},
+  "final_time": 365,
+  "locale": "de"
+}

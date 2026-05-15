@@ -1,0 +1,62 @@
+{
+    "supply_chain": {
+        "MQ": {
+            "Holz": [
+                "HolzLief1",
+                "HolzLief2"
+            ],
+            "Eisen": [
+                "EisenLief1",
+                "EisenLief2"
+            ],
+            "Kunststoff": [
+                "KunstLief1"
+            ]
+        },
+        "HolzLief1": {
+            "Rundholz": [
+                "Saege1",
+                "Saege2"
+            ],
+            "Kantholz": [
+                "Blatt1",
+                "Blatt2"
+            ]
+        },
+        "Saege1": {
+            "Stammholz": [
+                "Forst1",
+                "Forst2"
+            ]
+        },
+        "Blatt1": {
+            "Kern": [
+                "Pflanze1",
+                "Pflanze2"
+            ]
+        },
+        "EisenLief1": {
+            "Erz": [
+                "Mine1",
+                "Mine2"
+            ]
+        },
+        "Mine1": {
+            "Rohstoff": [
+                "Abbau1"
+            ]
+        }
+    },
+    "default_params": "data/params.txt",
+    "data_path": "data/MQ.xlsx",
+    "data_map": {
+        "geschätzte verteilung der bestellung pro tag": "Marktnachfrage_WORLD_MQ",
+        "eingang interpolliert": "EingangReal_MQ",
+        "warenausgang interpolliert": "AusgangReal_MQ"
+    },
+    "target_company": "MQ",
+    "final_time": 365,
+    "time_step": 0.0625,
+    "saveper": 1,
+    "disruption_type": null
+}

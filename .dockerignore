@@ -6,3 +6,10 @@ docker-compose*.yml
 .gitignore
 .env
 data/
+
+# Python build artifacts (the venv is rebuilt inside the image)
+simulation_rl/.venv
+simulation_rl/out
+simulation_rl/**/__pycache__
+simulation_rl/**/*.pyc
+simulation_rl/pysd_model/models
