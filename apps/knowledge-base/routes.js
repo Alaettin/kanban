@@ -372,69 +372,82 @@ function mountRoutes(router) {
     }
   });
 
-  // Batch: fill missing description and/or tags for all user's documents via AI
+  // Batch: fill missing description and/or tags for all user's documents via AI.
+  // Streams NDJSON progress so the frontend can show a live counter overlay.
   router.post("/api/documents/fill-missing-meta", auth.requireAuth, async (req, res) => {
-    try {
-      const settings = await db.get("SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?", [req.user.id]);
-      if (!settings?.api_key) return res.status(400).json({ error: "NO_API_KEY" });
+    const settings = await db.get("SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?", [req.user.id]);
+    if (!settings?.api_key) return res.status(400).json({ error: "NO_API_KEY" });
 
-      const docs = await db.all(
-        "SELECT doc_id, description, tags, content_text FROM kb_documents WHERE user_id = ?",
-        [req.user.id]
-      );
+    const docs = await db.all(
+      "SELECT doc_id, description, tags, content_text FROM kb_documents WHERE user_id = ?",
+      [req.user.id]
+    );
 
-      let processed = 0, descriptionFilled = 0, tagsFilled = 0, errors = 0;
-      const skipped = { alreadyComplete: 0, noText: 0 };
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
 
-      for (const d of docs) {
+    const send = (obj) => { res.write(JSON.stringify(obj) + "\n"); };
+
+    send({ type: "start", total: docs.length });
+
+    let processed = 0, descriptionFilled = 0, tagsFilled = 0, errors = 0;
+    const skipped = { alreadyComplete: 0, noText: 0 };
+    let i = 0;
+
+    for (const d of docs) {
+      i++;
+      let action = "skipped-complete";
+      try {
         const existingTags = (() => { try { const a = JSON.parse(d.tags || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } })();
         const descMissing = !(d.description && d.description.trim());
         const tagsMissing = existingTags.length === 0;
 
-        if (!descMissing && !tagsMissing) { skipped.alreadyComplete++; continue; }
-        if (!d.content_text || !d.content_text.trim()) { skipped.noText++; continue; }
+        if (!descMissing && !tagsMissing) {
+          skipped.alreadyComplete++; action = "skipped-complete";
+        } else if (!d.content_text || !d.content_text.trim()) {
+          skipped.noText++; action = "skipped-notext";
+        } else {
+          let aiResult;
+          try {
+            aiResult = await generateDescriptionAI(d.content_text, settings.provider, settings.model, settings.api_key);
+          } catch (err) {
+            console.error("[KB] fill-missing-meta AI error for", d.doc_id, err.message);
+            errors++; action = "error";
+            send({ type: "progress", current: i, total: docs.length, action });
+            continue;
+          }
+          const aiDesc = (aiResult?.description || "").trim();
+          const aiTags = Array.isArray(aiResult?.tags) ? aiResult.tags : [];
+          const finalDesc = descMissing ? (aiDesc || d.description || "") : d.description;
+          const finalTags = [...new Set([...existingTags, ...aiTags])];
+          const descChanged = descMissing && aiDesc;
+          const tagsChanged = finalTags.length > existingTags.length;
 
-        let aiResult;
-        try {
-          aiResult = await generateDescriptionAI(d.content_text, settings.provider, settings.model, settings.api_key);
-        } catch (err) {
-          console.error("[KB] fill-missing-meta AI error for", d.doc_id, err.message);
-          errors++;
-          continue;
+          if (!descChanged && !tagsChanged) {
+            if (descMissing && !aiDesc) { errors++; action = "error"; }
+            else { skipped.alreadyComplete++; action = "skipped-complete"; }
+          } else {
+            await db.run(
+              "UPDATE kb_documents SET description = ?, tags = ?, updated_at = datetime('now') WHERE doc_id = ?",
+              [finalDesc || "", JSON.stringify(finalTags), d.doc_id]
+            );
+            processed++;
+            if (descChanged) descriptionFilled++;
+            if (tagsChanged) tagsFilled++;
+            action = "updated";
+          }
         }
-
-        const aiDesc = (aiResult?.description || "").trim();
-        const aiTags = Array.isArray(aiResult?.tags) ? aiResult.tags : [];
-
-        const finalDesc = descMissing ? (aiDesc || d.description || "") : d.description;
-        // Union: existing tags + AI tags, dedup
-        const tagSet = new Set([...existingTags, ...aiTags]);
-        const finalTags = [...tagSet];
-
-        const descChanged = descMissing && aiDesc;
-        const tagsChanged = finalTags.length > existingTags.length;
-
-        if (!descChanged && !tagsChanged) {
-          // KI returned nothing useful; count as error or skip silently
-          if (descMissing && !aiDesc) errors++;
-          else skipped.alreadyComplete++;
-          continue;
-        }
-
-        await db.run(
-          "UPDATE kb_documents SET description = ?, tags = ?, updated_at = datetime('now') WHERE doc_id = ?",
-          [finalDesc || "", JSON.stringify(finalTags), d.doc_id]
-        );
-        processed++;
-        if (descChanged) descriptionFilled++;
-        if (tagsChanged) tagsFilled++;
+      } catch (loopErr) {
+        console.error("[KB] fill-missing-meta loop error:", loopErr);
+        errors++; action = "error";
       }
-
-      res.json({ processed, descriptionFilled, tagsFilled, skipped, errors, total: docs.length });
-    } catch (e) {
-      console.error("[KB] fill-missing-meta error:", e);
-      res.status(500).json({ error: "FILL_FAILED" });
+      send({ type: "progress", current: i, total: docs.length, action });
     }
+
+    send({ type: "done", processed, descriptionFilled, tagsFilled, skipped, errors, total: docs.length });
+    res.end();
   });
 
   // Generate AI description
@@ -554,23 +567,27 @@ function mountRoutes(router) {
   // Seed 10 test contacts for the Resilienz demo. Idempotent via "Test: " prefix.
   router.post("/api/kb-contacts/seed-test", auth.requireAuth, async (req, res) => {
     const TEST_CONTACTS = [
-      { function: "Test: Betriebsrat",                 name: "Maria Schneider",  email: "test.maria@example.com",   phone: "+49 30 1234 5601", note: "Sprechstunde Mo 9–11",          role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
-      { function: "Test: BEM-Beauftragte",             name: "Thomas Bauer",     email: "test.thomas@example.com",  phone: "+49 30 1234 5602", note: "Begleitung bei Wiedereingliederung", role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
-      { function: "Test: Betriebsarzt",                name: "Dr. Anna Klein",   email: "test.anna@example.com",    phone: "+49 30 1234 5603", note: "Termine über das Sekretariat",   role_tags: ["kontaktperson", "all-roles"] },
-      { function: "Test: Sicherheitsfachkraft",        name: "Stefan Wagner",    email: "test.stefan@example.com",  phone: "+49 30 1234 5604", note: "Gefährdungsbeurteilungen, Unterweisungen", role_tags: ["kontaktperson", "beschaeftigte-produktion"] },
-      { function: "Test: Schwerbehindertenvertretung", name: "Petra Lang",       email: "test.petra@example.com",   phone: "+49 30 1234 5605", note: "Vertretung schwerbehinderter Beschäftigter", role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
-      { function: "Test: Gesundheitsmanagement",       name: "Julia Hoffmann",   email: "test.julia@example.com",   phone: "+49 30 1234 5606", note: "BGM-Programme, Workshops, Belastungs-EKG", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
-      { function: "Test: HR Business Partner",         name: "Markus Becker",    email: "test.markus@example.com",  phone: "+49 30 1234 5607", note: "Personalentwicklung, Konfliktbegleitung", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
-      { function: "Test: Coach für Führungskräfte",   name: "Sabine Vogel",     email: "test.sabine@example.com",  phone: "+49 30 1234 5608", note: "1:1-Coaching für Team- und Bereichsleitungen", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
-      { function: "Test: Konfliktmoderation",          name: "Daniel Roth",      email: "test.daniel@example.com",  phone: "+49 30 1234 5609", note: "Moderation bei Team-Konflikten",  role_tags: ["kontaktperson", "fk-klein"] },
-      { function: "Test: Vertrauensperson",            name: "Lisa Krüger",      email: "test.lisa@example.com",    phone: "+49 30 1234 5610", note: "Anonyme erste Anlaufstelle",     role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "Betriebsrat",                 name: "Maria Schneider",  email: "test.maria@example.com",   phone: "+49 30 1234 5601", note: "Sprechstunde Mo 9–11",          role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "BEM-Beauftragte",             name: "Thomas Bauer",     email: "test.thomas@example.com",  phone: "+49 30 1234 5602", note: "Begleitung bei Wiedereingliederung", role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "Betriebsarzt",                name: "Dr. Anna Klein",   email: "test.anna@example.com",    phone: "+49 30 1234 5603", note: "Termine über das Sekretariat",   role_tags: ["kontaktperson", "all-roles"] },
+      { function: "Sicherheitsfachkraft",        name: "Stefan Wagner",    email: "test.stefan@example.com",  phone: "+49 30 1234 5604", note: "Gefährdungsbeurteilungen, Unterweisungen", role_tags: ["kontaktperson", "beschaeftigte-produktion"] },
+      { function: "Schwerbehindertenvertretung", name: "Petra Lang",       email: "test.petra@example.com",   phone: "+49 30 1234 5605", note: "Vertretung schwerbehinderter Beschäftigter", role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "Gesundheitsmanagement",       name: "Julia Hoffmann",   email: "test.julia@example.com",   phone: "+49 30 1234 5606", note: "BGM-Programme, Workshops, Belastungs-EKG", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
+      { function: "HR Business Partner",         name: "Markus Becker",    email: "test.markus@example.com",  phone: "+49 30 1234 5607", note: "Personalentwicklung, Konfliktbegleitung", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
+      { function: "Coach für Führungskräfte",   name: "Sabine Vogel",     email: "test.sabine@example.com",  phone: "+49 30 1234 5608", note: "1:1-Coaching für Team- und Bereichsleitungen", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
+      { function: "Konfliktmoderation",          name: "Daniel Roth",      email: "test.daniel@example.com",  phone: "+49 30 1234 5609", note: "Moderation bei Team-Konflikten",  role_tags: ["kontaktperson", "fk-klein"] },
+      { function: "Vertrauensperson",            name: "Lisa Krüger",      email: "test.lisa@example.com",    phone: "+49 30 1234 5610", note: "Anonyme erste Anlaufstelle",     role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
     ];
     try {
+      // One-off cleanup: remove legacy entries from earlier iteration that still carried the "Test: " prefix
+      await db.run("DELETE FROM kb_contacts WHERE user_id = ? AND function LIKE 'Test: %'", [req.user.id]);
+
       let created = 0, skipped = 0;
       for (const c of TEST_CONTACTS) {
+        // Idempotency anchor: the synthetic test email is unique per contact and cannot collide with real contacts
         const existing = await db.get(
-          "SELECT contact_id FROM kb_contacts WHERE user_id = ? AND function = ?",
-          [req.user.id, c.function]
+          "SELECT contact_id FROM kb_contacts WHERE user_id = ? AND email = ?",
+          [req.user.id, c.email]
         );
         if (existing) { skipped++; continue; }
         await db.run(

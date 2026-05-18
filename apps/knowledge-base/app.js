@@ -22,6 +22,8 @@ const I18N = {
     tagsPlaceholder: "Noch keine Tags. Vorschlag w\u00e4hlen oder eigenen Tag eingeben.",
     tagSuggestPlaceholder: "Vorschlag w\u00e4hlen\u2026",
     tagCustomPlaceholder: "Eigener Tag",
+    tagTypeTopic: "Thema",
+    tagTypeRole: "Rolle",
     generateDesc: "KI-Beschreibung",
     generateDescTitle: "Generiert Beschreibung und Tag-Vorschl\u00e4ge",
     aiTagsAdded: "{n} Tag(s) erg\u00e4nzt",
@@ -47,7 +49,9 @@ const I18N = {
     settingsSave: "Speichern",
     settingsSaved: "Einstellungen gespeichert",
     settingsTestTitle: "Demo-Daten",
-    settingsTestDesc: "Legt 10 Test-Kontaktpersonen für die Resilienz-Demo an (mit Präfix \"Test: \"). Vorhandene Test-Einträge werden nicht doppelt erstellt.",
+    settingsTestDesc: "Legt 10 Test-Kontaktpersonen für die Resilienz-Demo an. Bestehende Test-Einträge werden nicht doppelt erstellt.",
+    batchStarting: "Starte…",
+    batchProgress: "Bearbeite {c} von {t} Dokumenten…",
     seedContactsBtn: "10 Test-Kontakte anlegen",
     seedDone: "{c} angelegt, {s} bereits vorhanden",
     seedFailed: "Test-Kontakte konnten nicht angelegt werden.",
@@ -94,6 +98,8 @@ const I18N = {
     tagsPlaceholder: "No tags yet. Pick a suggestion or type a custom tag.",
     tagSuggestPlaceholder: "Pick a suggestion\u2026",
     tagCustomPlaceholder: "Custom tag",
+    tagTypeTopic: "Topic",
+    tagTypeRole: "Role",
     generateDesc: "AI Description",
     generateDescTitle: "Generates description and tag suggestions",
     aiTagsAdded: "{n} tag(s) added",
@@ -119,7 +125,9 @@ const I18N = {
     settingsSave: "Save",
     settingsSaved: "Settings saved",
     settingsTestTitle: "Demo data",
-    settingsTestDesc: "Creates 10 test contacts for the resilience demo (prefixed with \"Test: \"). Existing test entries are not duplicated.",
+    settingsTestDesc: "Creates 10 test contacts for the resilience demo. Existing test entries are not duplicated.",
+    batchStarting: "Starting…",
+    batchProgress: "Processing {c} of {t} documents…",
     seedContactsBtn: "Create 10 test contacts",
     seedDone: "{c} created, {s} already present",
     seedFailed: "Could not create test contacts.",
@@ -166,7 +174,11 @@ const TOPIC_TAGS = [
   "fuehrung", "team", "belastungs-ekg", "schnittstellen-workshop",
   "audit", "programme-unternehmen", "prozess-vorschlag",
 ];
-function roleLabel(id) { return (ROLE_TAG_LABELS[id] && ROLE_TAG_LABELS[id][locale]) || id; }
+function roleLabel(id) {
+  if (ROLE_TAG_LABELS[id]) return ROLE_TAG_LABELS[id][locale] || id;
+  if (typeof id === "string" && id.startsWith("role:")) return id.slice(5);
+  return id;
+}
 
 let locale = localStorage.getItem("kanban-locale") || "de";
 function t(key) {
@@ -219,6 +231,8 @@ const settingsCancel = document.getElementById("settings-cancel");
 const settingsSave = document.getElementById("settings-save");
 const settingsSeedContacts = document.getElementById("settings-seed-contacts");
 const settingsFillMeta = document.getElementById("settings-fill-meta");
+const batchOverlay = document.getElementById("batch-overlay");
+const batchProgressText = document.getElementById("batch-progress-text");
 const userMenuToggle = document.getElementById("user-menu-toggle");
 const userMenu = document.getElementById("user-menu");
 const userInitials = document.getElementById("user-initials");
@@ -238,6 +252,7 @@ const contactSave = document.getElementById("contact-save");
 const contactDelete = document.getElementById("contact-delete");
 const tagsChips = document.getElementById("f-tags-chips");
 const tagsSelect = document.getElementById("f-tags-select");
+const tagsTypeSelect = document.getElementById("f-tags-type");
 const tagsCustom = document.getElementById("f-tags-custom");
 const tagsAdd = document.getElementById("f-tags-add");
 
@@ -507,7 +522,11 @@ docForm.addEventListener("submit", async (e) => {
 // ---------------------------------------------------------------------------
 // Tag editor
 // ---------------------------------------------------------------------------
-function isRoleTag(tag) { return Object.prototype.hasOwnProperty.call(ROLE_TAG_LABELS, tag); }
+function isRoleTag(tag) {
+  if (!tag || typeof tag !== "string") return false;
+  if (Object.prototype.hasOwnProperty.call(ROLE_TAG_LABELS, tag)) return true;
+  return tag.startsWith("role:");
+}
 
 function renderTagChips() {
   tagsChips.dataset.placeholder = t("tagsPlaceholder");
@@ -558,7 +577,15 @@ function populateTagsSelect() {
 
 function addTagFromInput() {
   const sel = tagsSelect.value;
-  const custom = tagsCustom.value.trim();
+  const customRaw = tagsCustom.value.trim();
+  const customType = tagsTypeSelect ? tagsTypeSelect.value : "topic";
+
+  let custom = "";
+  if (customRaw) {
+    const slug = customRaw.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    if (slug) custom = (customType === "role") ? `role:${slug}` : slug;
+  }
+
   if (sel && !editingTags.includes(sel)) editingTags.push(sel);
   if (custom && !editingTags.includes(custom)) editingTags.push(custom);
   tagsSelect.value = "";
@@ -690,25 +717,84 @@ settingsSeedContacts.addEventListener("click", async () => {
 });
 
 settingsFillMeta.addEventListener("click", async () => {
-  const origText = settingsFillMeta.textContent;
   settingsFillMeta.disabled = true;
-  settingsFillMeta.textContent = t("filling");
-  const res = await api("/api/documents/fill-missing-meta", { method: "POST" });
+  batchProgressText.textContent = t("batchStarting");
+  batchOverlay.hidden = false;
+
+  let response;
+  try {
+    response = await fetch("/apps/knowledge-base/api/documents/fill-missing-meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    batchOverlay.hidden = true;
+    settingsFillMeta.disabled = false;
+    showToast(t("fillFailed"));
+    return;
+  }
+
+  if (response.status === 401) { window.location.href = "/"; return; }
+
+  if (!response.ok) {
+    batchOverlay.hidden = true;
+    settingsFillMeta.disabled = false;
+    let errJson = null;
+    try { errJson = await response.json(); } catch {}
+    if (errJson?.error === "NO_API_KEY") showToast(t("noApiKey"));
+    else showToast(t("fillFailed"));
+    return;
+  }
+
+  // Read NDJSON stream
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let finalPayload = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let evt;
+        try { evt = JSON.parse(line); } catch { continue; }
+        if (evt.type === "start") {
+          batchProgressText.textContent = t("batchProgress")
+            .replace("{c}", 0).replace("{t}", evt.total);
+        } else if (evt.type === "progress") {
+          batchProgressText.textContent = t("batchProgress")
+            .replace("{c}", evt.current).replace("{t}", evt.total);
+        } else if (evt.type === "done") {
+          finalPayload = evt;
+        }
+      }
+    }
+  } catch (err) {
+    batchOverlay.hidden = true;
+    settingsFillMeta.disabled = false;
+    showToast(t("fillFailed"));
+    return;
+  }
+
+  batchOverlay.hidden = true;
   settingsFillMeta.disabled = false;
-  settingsFillMeta.textContent = origText;
-  if (res.ok && res.payload) {
-    const p = res.payload;
-    const skipTotal = (p.skipped?.alreadyComplete || 0) + (p.skipped?.noText || 0);
+
+  if (finalPayload) {
+    const skipTotal = (finalPayload.skipped?.alreadyComplete || 0) + (finalPayload.skipped?.noText || 0);
     showToast(t("fillDone")
-      .replace("{p}", p.processed)
-      .replace("{d}", p.descriptionFilled)
-      .replace("{tg}", p.tagsFilled)
+      .replace("{p}", finalPayload.processed)
+      .replace("{d}", finalPayload.descriptionFilled)
+      .replace("{tg}", finalPayload.tagsFilled)
       .replace("{s}", skipTotal)
     );
     await loadDocuments();
     if (currentTab === "documents") renderDocuments();
-  } else if (res.payload?.error === "NO_API_KEY") {
-    showToast(t("noApiKey"));
   } else {
     showToast(t("fillFailed"));
   }
@@ -898,6 +984,8 @@ function applyLocaleToUI() {
   document.getElementById("contact-delete").textContent = t("delete");
   document.getElementById("lbl-tags").textContent = t("lblTags");
   tagsCustom.placeholder = t("tagCustomPlaceholder");
+  document.getElementById("opt-tag-type-topic").textContent = t("tagTypeTopic");
+  document.getElementById("opt-tag-type-role").textContent = t("tagTypeRole");
   renderDocuments();
   if (currentTab === "contacts") renderContacts();
 }

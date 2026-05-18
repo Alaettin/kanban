@@ -114,6 +114,10 @@
               <select id="f-tags-select" class="tags-select">
                 <option value="" id="opt-tag-empty">Vorschlag w&auml;hlen&hellip;</option>
               </select>
+              <select id="f-tags-type" class="tags-type-select" aria-label="Typ">
+                <option value="topic" id="opt-tag-type-topic">Thema</option>
+                <option value="role"  id="opt-tag-type-role">Rolle</option>
+              </select>
               <input id="f-tags-custom" type="text" class="tags-custom" placeholder="Eigener Tag" />
               <button type="button" id="f-tags-add" class="tags-add-btn">+</button>
             </div>
@@ -201,6 +205,14 @@
       </div>
     </div>
   </dialog>
+
+  <!-- Batch progress overlay (fill-missing-meta) -->
+  <div id="batch-overlay" class="upload-overlay" hidden>
+    <div class="batch-progress">
+      <div class="upload-spinner"></div>
+      <p id="batch-progress-text">Starte&hellip;</p>
+    </div>
+  </div>
 
   <!-- Upload Overlay -->
   <div id="upload-overlay" class="upload-overlay" hidden>
