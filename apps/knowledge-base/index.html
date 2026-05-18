@@ -223,6 +223,15 @@
       <p class="settings-desc" id="settings-desc">Instruktionen für die Wissensdatenbank als MCP-Ressource.</p>
       <label for="settings-prompt" id="lbl-base-prompt">MCP Base-Prompt</label>
       <textarea id="settings-prompt"></textarea>
+
+      <div class="settings-divider"></div>
+      <h4 id="settings-test-title" class="settings-subtitle">Demo-Daten</h4>
+      <p class="settings-desc" id="settings-test-desc">Legt 10 Test-Kontaktpersonen f&uuml;r die Resilienz-Demo an (mit Pr&auml;fix &quot;Test: &quot;). Vorhandene Test-Eintr&auml;ge werden nicht doppelt erstellt.</p>
+      <button id="settings-seed-contacts" class="btn btn-secondary" type="button">10 Test-Kontakte anlegen</button>
+
+      <p class="settings-desc" id="settings-fill-desc" style="margin-top: 0.85rem;">Sucht alle Dokumente ohne Beschreibung oder Tags und erg&auml;nzt fehlende Felder per KI. Bestehende Beschreibungen und Tags bleiben unver&auml;ndert.</p>
+      <button id="settings-fill-meta" class="btn btn-secondary" type="button">Fehlende Meta-Daten erg&auml;nzen</button>
+
       <div class="settings-actions">
         <button id="settings-reset" class="btn btn-secondary" type="button">Zurücksetzen</button>
         <button id="settings-cancel" class="btn btn-secondary" type="button">Abbrechen</button>

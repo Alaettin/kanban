@@ -49,6 +49,27 @@ async function extractText(filePath, ext) {
 }
 
 // ---------------------------------------------------------------------------
+// Mojibake fix — multer (and many HTTP stacks) decode multipart filename
+// bytes as latin1, so a UTF-8 "ü" (0xC3 0xBC) arrives as "Ã¼". Detect that
+// and reconstruct the original UTF-8 string.
+// ---------------------------------------------------------------------------
+function fixMojibake(str) {
+  if (!str || typeof str !== "string") return str;
+  // Cheap pre-check: only proceed if a typical mojibake lead byte appears.
+  // 0xC3 ("Ã") leads ü/ä/ö/é etc., 0xC2 ("Â") leads ° §, etc.
+  if (str.indexOf('Ã') < 0 && str.indexOf('Â') < 0 && !/[ÃÂ]/.test(str)) return str;
+  try {
+    const fixed = Buffer.from(str, "latin1").toString("utf8");
+    if (fixed.indexOf('�') >= 0) return str; // replacement char → not real mojibake
+    const before = (str.match(/[ÂÃ]/g) || []).length;
+    const after  = (fixed.match(/[ÂÃ]/g) || []).length;
+    return after < before ? fixed : str;
+  } catch {
+    return str;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Multer
 // ---------------------------------------------------------------------------
 const upload = multer({
@@ -67,6 +88,8 @@ const upload = multer({
   }),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter(req, file, cb) {
+    // Fix multer's latin1-decoded filename before anything downstream reads it
+    file.originalname = fixMojibake(file.originalname);
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, ACCEPTED_EXTS.has(ext));
   },
@@ -117,16 +140,95 @@ async function initKnowledgeBaseTables() {
   )`);
 
   fs.mkdirSync(KB_DIR, { recursive: true });
+
+  // One-time repair: filenames stored with latin1-decoded UTF-8 bytes
+  try {
+    const rows = await db.all(
+      "SELECT doc_id, title, original_name FROM kb_documents WHERE title LIKE '%Ã%' OR title LIKE '%Â%' OR original_name LIKE '%Ã%' OR original_name LIKE '%Â%'"
+    );
+    let repaired = 0;
+    for (const r of rows) {
+      const newTitle = fixMojibake(r.title);
+      const newOrig = fixMojibake(r.original_name);
+      if (newTitle !== r.title || newOrig !== r.original_name) {
+        await db.run(
+          "UPDATE kb_documents SET title = ?, original_name = ? WHERE doc_id = ?",
+          [newTitle, newOrig, r.doc_id]
+        );
+        repaired++;
+      }
+    }
+    if (repaired > 0) console.log(`[KB] Repaired ${repaired} mojibake filename(s).`);
+  } catch (e) {
+    console.warn("[KB] Mojibake repair skipped:", e.message);
+  }
+
   console.log("[KB] Tables ready.");
 }
 
 // ---------------------------------------------------------------------------
-// AI description generation
+// AI description + tag generation
 // ---------------------------------------------------------------------------
+const KB_ROLE_TAGS = new Set([
+  "beschaeftigte-buero", "beschaeftigte-produktion",
+  "fk-klein", "fk-gross", "kontaktperson", "all-roles",
+]);
+const KB_TOPIC_TAGS = new Set([
+  "resilienz-grundlagen", "stress", "konflikt", "ueberlastung",
+  "fuehrung", "team", "belastungs-ekg", "schnittstellen-workshop",
+  "audit", "programme-unternehmen", "prozess-vorschlag",
+]);
+const KB_KNOWN_TAGS = new Set([...KB_ROLE_TAGS, ...KB_TOPIC_TAGS]);
+
+const AI_DESC_TAGS_PROMPT =
+  "Du analysierst ein hochgeladenes Dokument und lieferst zwei Dinge:\n" +
+  "1) Eine aussagekraeftige Zusammenfassung in 3-5 Saetzen auf Deutsch.\n" +
+  "2) Eine Liste passender Tags fuer dieses Dokument. Waehle vor allem aus diesem Vokabular:\n\n" +
+  "Rollen-Tags (nur diese IDs, kein Freitext):\n" +
+  "- beschaeftigte-buero       (Wissensarbeit, Bueroumfeld)\n" +
+  "- beschaeftigte-produktion  (Produktion, Schicht, wenig Gestaltungsraum)\n" +
+  "- fk-klein                  (Fuehrungskraft mit kleinem Team <= 10)\n" +
+  "- fk-gross                  (Fuehrungskraft fuer mehrere Teams / Organisation)\n" +
+  "- kontaktperson             (Betriebsrat, BEM, Sicherheitsbeauftragte, Betriebsarzt, SBV)\n" +
+  "- all-roles                 (relevant fuer alle Rollen)\n\n" +
+  "Topic-Tags (nur diese IDs):\n" +
+  "- resilienz-grundlagen, stress, konflikt, ueberlastung, fuehrung, team,\n" +
+  "  belastungs-ekg, schnittstellen-workshop, audit, programme-unternehmen, prozess-vorschlag\n\n" +
+  "Du darfst zusaetzlich MAXIMAL 3 eigene Topic-Tags vorschlagen, falls das Dokument klar ein Thema ausserhalb des Vokabulars traegt (kebab-case, deutsch, kurz – z.B. \"achtsamkeit\", \"ergonomie\"). Niemals eigene Rollen-Tags erfinden.\n\n" +
+  "Antworte AUSSCHLIESSLICH als gueltiges JSON, ohne Markdown-Fences, ohne Kommentar:\n" +
+  "{\"description\":\"...\",\"tags\":[\"tag1\",\"tag2\",...]}\n\n" +
+  "DOKUMENT:\n";
+
+function stripJsonFences(raw) {
+  if (!raw) return "";
+  let s = raw.trim();
+  // strip ```json ... ``` or ``` ... ```
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  return s.trim();
+}
+
+function sanitizeAiTags(rawTags) {
+  if (!Array.isArray(rawTags)) return [];
+  const seen = new Set();
+  const vocab = [];
+  const free = [];
+  for (const t of rawTags) {
+    if (typeof t !== "string") continue;
+    const id = t.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (KB_KNOWN_TAGS.has(id)) vocab.push(id);
+    else if (/^[a-z0-9][a-z0-9-]{1,30}$/.test(id)) free.push(id);
+  }
+  // max 3 free topic tags, hard-cap 8 total
+  return [...vocab, ...free.slice(0, 3)].slice(0, 8);
+}
+
 async function generateDescriptionAI(contentText, provider, model, apiKey) {
   const truncated = contentText.slice(0, 8000);
-  const prompt = `Erstelle eine aussagekräftige Zusammenfassung dieses Dokuments in 3-5 Sätzen auf Deutsch. Die Zusammenfassung soll die wichtigsten Inhalte, Themen und Kernaussagen abdecken. Antworte NUR mit der Zusammenfassung, ohne Einleitung oder Kommentar.\n\n${truncated}`;
+  const prompt = AI_DESC_TAGS_PROMPT + truncated;
 
+  let rawText = "";
   if (provider === "gemini" || provider === "google") {
     const url = `${GEMINI_BASE}/${model || "gemini-2.5-flash"}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
@@ -134,27 +236,43 @@ async function generateDescriptionAI(contentText, provider, model, apiKey) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.3 },
+        generationConfig: {
+          maxOutputTokens: 8192,
+          temperature: 0.3,
+          responseMimeType: "application/json",
+        },
       }),
     });
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    return text.trim();
+    rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } else {
+    // Groq / OpenAI-compatible
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: model || "llama-3.1-8b-instant",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1024,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
+    });
+    const data = await res.json();
+    rawText = data.choices?.[0]?.message?.content || "";
   }
 
-  // Groq / OpenAI-compatible
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: model || "llama-3.1-8b-instant",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 512,
-      temperature: 0.3,
-    }),
-  });
-  const data = await res.json();
-  return (data.choices?.[0]?.message?.content || "").trim();
+  const cleaned = stripJsonFences(rawText);
+  try {
+    const parsed = JSON.parse(cleaned);
+    const description = typeof parsed?.description === "string" ? parsed.description.trim() : "";
+    const tags = sanitizeAiTags(parsed?.tags);
+    if (description) return { description, tags };
+  } catch (e) {
+    console.warn("[KB] AI JSON parse failed, falling back to raw text:", e.message);
+  }
+  // Fallback: parse failed → keep description, no tags
+  return { description: cleaned, tags: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +372,71 @@ function mountRoutes(router) {
     }
   });
 
+  // Batch: fill missing description and/or tags for all user's documents via AI
+  router.post("/api/documents/fill-missing-meta", auth.requireAuth, async (req, res) => {
+    try {
+      const settings = await db.get("SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?", [req.user.id]);
+      if (!settings?.api_key) return res.status(400).json({ error: "NO_API_KEY" });
+
+      const docs = await db.all(
+        "SELECT doc_id, description, tags, content_text FROM kb_documents WHERE user_id = ?",
+        [req.user.id]
+      );
+
+      let processed = 0, descriptionFilled = 0, tagsFilled = 0, errors = 0;
+      const skipped = { alreadyComplete: 0, noText: 0 };
+
+      for (const d of docs) {
+        const existingTags = (() => { try { const a = JSON.parse(d.tags || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } })();
+        const descMissing = !(d.description && d.description.trim());
+        const tagsMissing = existingTags.length === 0;
+
+        if (!descMissing && !tagsMissing) { skipped.alreadyComplete++; continue; }
+        if (!d.content_text || !d.content_text.trim()) { skipped.noText++; continue; }
+
+        let aiResult;
+        try {
+          aiResult = await generateDescriptionAI(d.content_text, settings.provider, settings.model, settings.api_key);
+        } catch (err) {
+          console.error("[KB] fill-missing-meta AI error for", d.doc_id, err.message);
+          errors++;
+          continue;
+        }
+
+        const aiDesc = (aiResult?.description || "").trim();
+        const aiTags = Array.isArray(aiResult?.tags) ? aiResult.tags : [];
+
+        const finalDesc = descMissing ? (aiDesc || d.description || "") : d.description;
+        // Union: existing tags + AI tags, dedup
+        const tagSet = new Set([...existingTags, ...aiTags]);
+        const finalTags = [...tagSet];
+
+        const descChanged = descMissing && aiDesc;
+        const tagsChanged = finalTags.length > existingTags.length;
+
+        if (!descChanged && !tagsChanged) {
+          // KI returned nothing useful; count as error or skip silently
+          if (descMissing && !aiDesc) errors++;
+          else skipped.alreadyComplete++;
+          continue;
+        }
+
+        await db.run(
+          "UPDATE kb_documents SET description = ?, tags = ?, updated_at = datetime('now') WHERE doc_id = ?",
+          [finalDesc || "", JSON.stringify(finalTags), d.doc_id]
+        );
+        processed++;
+        if (descChanged) descriptionFilled++;
+        if (tagsChanged) tagsFilled++;
+      }
+
+      res.json({ processed, descriptionFilled, tagsFilled, skipped, errors, total: docs.length });
+    } catch (e) {
+      console.error("[KB] fill-missing-meta error:", e);
+      res.status(500).json({ error: "FILL_FAILED" });
+    }
+  });
+
   // Generate AI description
   router.post("/api/documents/:docId/generate-description", auth.requireAuth, async (req, res) => {
     try {
@@ -264,8 +447,8 @@ function mountRoutes(router) {
       const settings = await db.get("SELECT provider, model, api_key FROM aas_chat_settings WHERE user_id = ?", [req.user.id]);
       if (!settings?.api_key) return res.status(400).json({ error: "NO_API_KEY" });
 
-      const description = await generateDescriptionAI(doc.content_text, settings.provider, settings.model, settings.api_key);
-      res.json({ description });
+      const { description, tags } = await generateDescriptionAI(doc.content_text, settings.provider, settings.model, settings.api_key);
+      res.json({ description, tags: tags || [] });
     } catch (e) {
       console.error("[KB] AI description error:", e);
       res.status(500).json({ error: "GENERATE_FAILED" });
@@ -365,6 +548,42 @@ function mountRoutes(router) {
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: "DELETE_FAILED" });
+    }
+  });
+
+  // Seed 10 test contacts for the Resilienz demo. Idempotent via "Test: " prefix.
+  router.post("/api/kb-contacts/seed-test", auth.requireAuth, async (req, res) => {
+    const TEST_CONTACTS = [
+      { function: "Test: Betriebsrat",                 name: "Maria Schneider",  email: "test.maria@example.com",   phone: "+49 30 1234 5601", note: "Sprechstunde Mo 9–11",          role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "Test: BEM-Beauftragte",             name: "Thomas Bauer",     email: "test.thomas@example.com",  phone: "+49 30 1234 5602", note: "Begleitung bei Wiedereingliederung", role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "Test: Betriebsarzt",                name: "Dr. Anna Klein",   email: "test.anna@example.com",    phone: "+49 30 1234 5603", note: "Termine über das Sekretariat",   role_tags: ["kontaktperson", "all-roles"] },
+      { function: "Test: Sicherheitsfachkraft",        name: "Stefan Wagner",    email: "test.stefan@example.com",  phone: "+49 30 1234 5604", note: "Gefährdungsbeurteilungen, Unterweisungen", role_tags: ["kontaktperson", "beschaeftigte-produktion"] },
+      { function: "Test: Schwerbehindertenvertretung", name: "Petra Lang",       email: "test.petra@example.com",   phone: "+49 30 1234 5605", note: "Vertretung schwerbehinderter Beschäftigter", role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+      { function: "Test: Gesundheitsmanagement",       name: "Julia Hoffmann",   email: "test.julia@example.com",   phone: "+49 30 1234 5606", note: "BGM-Programme, Workshops, Belastungs-EKG", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
+      { function: "Test: HR Business Partner",         name: "Markus Becker",    email: "test.markus@example.com",  phone: "+49 30 1234 5607", note: "Personalentwicklung, Konfliktbegleitung", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
+      { function: "Test: Coach für Führungskräfte",   name: "Sabine Vogel",     email: "test.sabine@example.com",  phone: "+49 30 1234 5608", note: "1:1-Coaching für Team- und Bereichsleitungen", role_tags: ["kontaktperson", "fk-klein", "fk-gross"] },
+      { function: "Test: Konfliktmoderation",          name: "Daniel Roth",      email: "test.daniel@example.com",  phone: "+49 30 1234 5609", note: "Moderation bei Team-Konflikten",  role_tags: ["kontaktperson", "fk-klein"] },
+      { function: "Test: Vertrauensperson",            name: "Lisa Krüger",      email: "test.lisa@example.com",    phone: "+49 30 1234 5610", note: "Anonyme erste Anlaufstelle",     role_tags: ["kontaktperson", "beschaeftigte-buero", "beschaeftigte-produktion"] },
+    ];
+    try {
+      let created = 0, skipped = 0;
+      for (const c of TEST_CONTACTS) {
+        const existing = await db.get(
+          "SELECT contact_id FROM kb_contacts WHERE user_id = ? AND function = ?",
+          [req.user.id, c.function]
+        );
+        if (existing) { skipped++; continue; }
+        await db.run(
+          `INSERT INTO kb_contacts (contact_id, user_id, function, name, email, phone, note, role_tags)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [crypto.randomUUID(), req.user.id, c.function, c.name, c.email, c.phone, c.note, JSON.stringify(c.role_tags)]
+        );
+        created++;
+      }
+      res.json({ created, skipped, total: TEST_CONTACTS.length });
+    } catch (e) {
+      console.error("[KB] Seed test contacts error:", e);
+      res.status(500).json({ error: "SEED_FAILED" });
     }
   });
 }

@@ -23,6 +23,8 @@ const I18N = {
     tagSuggestPlaceholder: "Vorschlag w\u00e4hlen\u2026",
     tagCustomPlaceholder: "Eigener Tag",
     generateDesc: "KI-Beschreibung",
+    generateDescTitle: "Generiert Beschreibung und Tag-Vorschl\u00e4ge",
+    aiTagsAdded: "{n} Tag(s) erg\u00e4nzt",
     generating: "Generiere\u2026",
     lblFilename: "Datei: ",
     lblFilesize: "Gr\u00f6\u00dfe: ",
@@ -44,6 +46,16 @@ const I18N = {
     settingsCancel: "Abbrechen",
     settingsSave: "Speichern",
     settingsSaved: "Einstellungen gespeichert",
+    settingsTestTitle: "Demo-Daten",
+    settingsTestDesc: "Legt 10 Test-Kontaktpersonen für die Resilienz-Demo an (mit Präfix \"Test: \"). Vorhandene Test-Einträge werden nicht doppelt erstellt.",
+    seedContactsBtn: "10 Test-Kontakte anlegen",
+    seedDone: "{c} angelegt, {s} bereits vorhanden",
+    seedFailed: "Test-Kontakte konnten nicht angelegt werden.",
+    settingsFillDesc: "Sucht alle Dokumente ohne Beschreibung oder Tags und ergänzt fehlende Felder per KI. Bestehende Beschreibungen und Tags bleiben unverändert.",
+    fillMetaBtn: "Fehlende Meta-Daten ergänzen",
+    filling: "Ergänze… (kann dauern)",
+    fillDone: "{p} bearbeitet · {d} Beschreibungen · {tg} Tag-Sätze · {s} übersprungen",
+    fillFailed: "Meta-Daten konnten nicht ergänzt werden.",
     noApiKey: "Bitte zuerst API-Key in AAS Chat Einstellungen hinterlegen.",
     noText: "Kein extrahierter Text vorhanden.",
     generateFailed: "Beschreibung konnte nicht generiert werden.",
@@ -83,6 +95,8 @@ const I18N = {
     tagSuggestPlaceholder: "Pick a suggestion\u2026",
     tagCustomPlaceholder: "Custom tag",
     generateDesc: "AI Description",
+    generateDescTitle: "Generates description and tag suggestions",
+    aiTagsAdded: "{n} tag(s) added",
     generating: "Generating\u2026",
     lblFilename: "File: ",
     lblFilesize: "Size: ",
@@ -104,6 +118,16 @@ const I18N = {
     settingsCancel: "Cancel",
     settingsSave: "Save",
     settingsSaved: "Settings saved",
+    settingsTestTitle: "Demo data",
+    settingsTestDesc: "Creates 10 test contacts for the resilience demo (prefixed with \"Test: \"). Existing test entries are not duplicated.",
+    seedContactsBtn: "Create 10 test contacts",
+    seedDone: "{c} created, {s} already present",
+    seedFailed: "Could not create test contacts.",
+    settingsFillDesc: "Scans all documents without a description or tags and fills missing fields via AI. Existing descriptions and tags are preserved.",
+    fillMetaBtn: "Fill missing metadata",
+    filling: "Filling… (may take a while)",
+    fillDone: "{p} updated · {d} descriptions · {tg} tag sets · {s} skipped",
+    fillFailed: "Could not fill metadata.",
     noApiKey: "Please configure an API key in AAS Chat settings first.",
     noText: "No extracted text available.",
     generateFailed: "Could not generate description.",
@@ -193,6 +217,8 @@ const settingsPrompt = document.getElementById("settings-prompt");
 const settingsReset = document.getElementById("settings-reset");
 const settingsCancel = document.getElementById("settings-cancel");
 const settingsSave = document.getElementById("settings-save");
+const settingsSeedContacts = document.getElementById("settings-seed-contacts");
+const settingsFillMeta = document.getElementById("settings-fill-meta");
 const userMenuToggle = document.getElementById("user-menu-toggle");
 const userMenu = document.getElementById("user-menu");
 const userInitials = document.getElementById("user-initials");
@@ -565,7 +591,7 @@ confirmOk.addEventListener("click", async () => {
 // Back
 editBackBtn.addEventListener("click", () => setTab("documents"));
 
-// Generate description
+// Generate description (+ tag suggestions)
 generateDescBtn.addEventListener("click", async () => {
   if (!editingDoc) return;
   generateDescBtn.disabled = true;
@@ -578,6 +604,19 @@ generateDescBtn.addEventListener("click", async () => {
 
   if (res.ok && res.payload?.description) {
     document.getElementById("f-desc").value = res.payload.description;
+    // Merge KI-Tag-Vorschläge in editingTags (Union, keine Duplikate)
+    if (Array.isArray(res.payload.tags) && res.payload.tags.length) {
+      const before = editingTags.length;
+      for (const tag of res.payload.tags) {
+        if (typeof tag === "string" && tag && !editingTags.includes(tag)) editingTags.push(tag);
+      }
+      const added = editingTags.length - before;
+      if (added > 0) {
+        renderTagChips();
+        populateTagsSelect();
+        showToast(t("aiTagsAdded").replace("{n}", added));
+      }
+    }
   } else if (res.payload?.error === "NO_API_KEY") {
     showToast(t("noApiKey"));
   } else if (res.payload?.error === "NO_TEXT") {
@@ -634,6 +673,45 @@ settingsSave.addEventListener("click", async () => {
   await api("/api/settings", { method: "PUT", body: { base_prompt: settingsPrompt.value.trim() } });
   settingsDialog.close();
   showToast(t("settingsSaved"));
+});
+
+settingsSeedContacts.addEventListener("click", async () => {
+  settingsSeedContacts.disabled = true;
+  const res = await api("/api/kb-contacts/seed-test", { method: "POST" });
+  settingsSeedContacts.disabled = false;
+  if (res.ok && res.payload) {
+    const { created, skipped } = res.payload;
+    showToast(t("seedDone").replace("{c}", created).replace("{s}", skipped));
+    await loadContacts();
+    if (currentTab === "contacts") renderContacts();
+  } else {
+    showToast(t("seedFailed"));
+  }
+});
+
+settingsFillMeta.addEventListener("click", async () => {
+  const origText = settingsFillMeta.textContent;
+  settingsFillMeta.disabled = true;
+  settingsFillMeta.textContent = t("filling");
+  const res = await api("/api/documents/fill-missing-meta", { method: "POST" });
+  settingsFillMeta.disabled = false;
+  settingsFillMeta.textContent = origText;
+  if (res.ok && res.payload) {
+    const p = res.payload;
+    const skipTotal = (p.skipped?.alreadyComplete || 0) + (p.skipped?.noText || 0);
+    showToast(t("fillDone")
+      .replace("{p}", p.processed)
+      .replace("{d}", p.descriptionFilled)
+      .replace("{tg}", p.tagsFilled)
+      .replace("{s}", skipTotal)
+    );
+    await loadDocuments();
+    if (currentTab === "documents") renderDocuments();
+  } else if (res.payload?.error === "NO_API_KEY") {
+    showToast(t("noApiKey"));
+  } else {
+    showToast(t("fillFailed"));
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -777,6 +855,7 @@ function applyLocaleToUI() {
   document.getElementById("lbl-title").textContent = t("lblTitle");
   document.getElementById("lbl-desc").textContent = t("lblDesc");
   generateDescBtn.textContent = t("generateDesc");
+  generateDescBtn.title = t("generateDescTitle");
   document.getElementById("lbl-filename").textContent = t("lblFilename");
   document.getElementById("lbl-filesize").textContent = t("lblFilesize");
   document.getElementById("lbl-filetype").textContent = t("lblFiletype");
@@ -793,6 +872,11 @@ function applyLocaleToUI() {
   document.getElementById("settings-reset").textContent = t("resetPrompt");
   document.getElementById("settings-cancel").textContent = t("settingsCancel");
   document.getElementById("settings-save").textContent = t("settingsSave");
+  document.getElementById("settings-test-title").textContent = t("settingsTestTitle");
+  document.getElementById("settings-test-desc").textContent = t("settingsTestDesc");
+  document.getElementById("settings-seed-contacts").textContent = t("seedContactsBtn");
+  document.getElementById("settings-fill-desc").textContent = t("settingsFillDesc");
+  document.getElementById("settings-fill-meta").textContent = t("fillMetaBtn");
   searchInput.placeholder = t("searchPlaceholder");
   logoutBtn.textContent = t("logout");
   // Tabs + contacts

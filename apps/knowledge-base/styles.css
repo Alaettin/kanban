@@ -411,6 +411,8 @@ body {
 }
 .settings-inner textarea:focus { border-color: var(--accent); }
 .settings-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.settings-divider { height: 1px; background: var(--border); margin: 1.25rem 0 1rem; }
+.settings-subtitle { margin: 0 0 0.25rem; font-size: 0.92rem; font-weight: 700; color: var(--text); }
 
 /* ===== CONFIRM DIALOG ===== */
 
