@@ -376,13 +376,13 @@ function extractConnectorEvent(text) {
 // Build optional resilience-mode context for the chat system prompt
 function buildResilienceContext(conv) {
   if (!conv?.resilience_mode) return "";
-  let ctx = "RESILIENZ-MODUS aktiv (vom Chat-Frontend angefordert).";
+  let ctx = "Resilienz-Modus aktiv.";
   if (conv.resilience_role) {
-    ctx += `\nErkannte Rolle: ${conv.resilience_role}`;
+    ctx += `\nEingeschätzte Rolle: ${conv.resilience_role}`;
     if (conv.resilience_subrole) ctx += ` (Sub-Rolle: ${conv.resilience_subrole})`;
-    ctx += ". FRAGE NICHT erneut nach der Rolle, springe direkt zum rollenspezifischen Vorgehen.";
+    ctx += ". Frag nicht erneut nach dem Kontext, knüpf direkt an das Gespräch an.";
   } else {
-    ctx += "\nROLLE NOCH NICHT GESETZT. Führe JETZT die 3-Fragen-Intake durch und rufe danach das Tool setResilienceRole auf, bevor du inhaltlich antwortest.";
+    ctx += "\nDer Arbeitskontext ist noch unklar – beginne ruhig, mit einer einzigen offenen Frage. Du musst nichts in dieser einen Antwort klären.";
   }
   return ctx;
 }
