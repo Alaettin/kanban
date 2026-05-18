@@ -96,6 +96,26 @@ async function initKnowledgeBaseTables() {
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
 
+  // Migration: add tags column (JSON array of role/topic tags)
+  try {
+    await db.run(`ALTER TABLE kb_documents ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`);
+  } catch { /* column already exists */ }
+
+  // Contact persons (Resilienz-Modus: Betriebsrat, BEM, Betriebsarzt, SBV, ...)
+  await db.run(`CREATE TABLE IF NOT EXISTS kb_contacts (
+    contact_id TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    function   TEXT NOT NULL DEFAULT '',
+    name       TEXT NOT NULL DEFAULT '',
+    email      TEXT NOT NULL DEFAULT '',
+    phone      TEXT NOT NULL DEFAULT '',
+    note       TEXT NOT NULL DEFAULT '',
+    role_tags  TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+
   fs.mkdirSync(KB_DIR, { recursive: true });
   console.log("[KB] Tables ready.");
 }
@@ -145,10 +165,14 @@ function mountRoutes(router) {
   router.get("/api/documents", auth.requireAuth, async (req, res) => {
     try {
       const docs = await db.all(
-        "SELECT doc_id, title, description, original_name, mime_type, file_size, created_at, updated_at FROM kb_documents WHERE user_id = ? ORDER BY updated_at DESC",
+        "SELECT doc_id, title, description, original_name, mime_type, file_size, tags, created_at, updated_at FROM kb_documents WHERE user_id = ? ORDER BY updated_at DESC",
         [req.user.id]
       );
-      res.json({ documents: docs });
+      const out = docs.map(d => ({
+        ...d,
+        tags: (() => { try { return JSON.parse(d.tags || "[]"); } catch { return []; } })(),
+      }));
+      res.json({ documents: out });
     } catch (e) {
       res.status(500).json({ error: "LOAD_FAILED" });
     }
@@ -187,13 +211,14 @@ function mountRoutes(router) {
   // Update document
   router.put("/api/documents/:docId", auth.requireAuth, async (req, res) => {
     try {
-      const { title, description } = req.body || {};
+      const { title, description, tags } = req.body || {};
       const doc = await db.get("SELECT doc_id FROM kb_documents WHERE doc_id = ? AND user_id = ?", [req.params.docId, req.user.id]);
       if (!doc) return res.status(404).json({ error: "NOT_FOUND" });
 
+      const tagsJson = JSON.stringify(Array.isArray(tags) ? tags.filter(t => typeof t === "string") : []);
       await db.run(
-        "UPDATE kb_documents SET title = ?, description = ?, updated_at = datetime('now') WHERE doc_id = ?",
-        [title || "", description || "", req.params.docId]
+        "UPDATE kb_documents SET title = ?, description = ?, tags = ?, updated_at = datetime('now') WHERE doc_id = ?",
+        [title || "", description || "", tagsJson, req.params.docId]
       );
       res.json({ ok: true });
     } catch (e) {
@@ -272,6 +297,74 @@ function mountRoutes(router) {
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: "SAVE_FAILED" });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Contact persons (Resilienz-Modus)
+  // -------------------------------------------------------------------------
+  function parseRoleTags(raw) {
+    if (Array.isArray(raw)) return raw.filter(t => typeof t === "string");
+    if (typeof raw === "string") {
+      try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; } catch { return []; }
+    }
+    return [];
+  }
+
+  router.get("/api/kb-contacts", auth.requireAuth, async (req, res) => {
+    try {
+      const rows = await db.all(
+        "SELECT contact_id, function, name, email, phone, note, role_tags, created_at, updated_at FROM kb_contacts WHERE user_id = ? ORDER BY function, name",
+        [req.user.id]
+      );
+      const out = rows.map(r => ({ ...r, role_tags: parseRoleTags(r.role_tags) }));
+      res.json({ contacts: out });
+    } catch (e) {
+      res.status(500).json({ error: "LOAD_FAILED" });
+    }
+  });
+
+  router.post("/api/kb-contacts", auth.requireAuth, async (req, res) => {
+    try {
+      const { function: fn, name, email, phone, note, role_tags } = req.body || {};
+      const contactId = crypto.randomUUID();
+      await db.run(
+        `INSERT INTO kb_contacts (contact_id, user_id, function, name, email, phone, note, role_tags)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [contactId, req.user.id, fn || "", name || "", email || "", phone || "", note || "", JSON.stringify(parseRoleTags(role_tags))]
+      );
+      res.json({ contact_id: contactId });
+    } catch (e) {
+      console.error("[KB] Contact create error:", e);
+      res.status(500).json({ error: "CREATE_FAILED" });
+    }
+  });
+
+  router.put("/api/kb-contacts/:contactId", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get("SELECT contact_id FROM kb_contacts WHERE contact_id = ? AND user_id = ?", [req.params.contactId, req.user.id]);
+      if (!row) return res.status(404).json({ error: "NOT_FOUND" });
+      const { function: fn, name, email, phone, note, role_tags } = req.body || {};
+      await db.run(
+        `UPDATE kb_contacts
+         SET function = ?, name = ?, email = ?, phone = ?, note = ?, role_tags = ?, updated_at = datetime('now')
+         WHERE contact_id = ?`,
+        [fn || "", name || "", email || "", phone || "", note || "", JSON.stringify(parseRoleTags(role_tags)), req.params.contactId]
+      );
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: "UPDATE_FAILED" });
+    }
+  });
+
+  router.delete("/api/kb-contacts/:contactId", auth.requireAuth, async (req, res) => {
+    try {
+      const row = await db.get("SELECT contact_id FROM kb_contacts WHERE contact_id = ? AND user_id = ?", [req.params.contactId, req.user.id]);
+      if (!row) return res.status(404).json({ error: "NOT_FOUND" });
+      await db.run("DELETE FROM kb_contacts WHERE contact_id = ?", [req.params.contactId]);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: "DELETE_FAILED" });
     }
   });
 }

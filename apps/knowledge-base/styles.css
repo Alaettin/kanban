@@ -124,6 +124,23 @@ body {
 .locale-switch-btn.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-xs); }
 .locale-switch-btn:hover:not(.active) { color: var(--text-2); }
 
+/* ===== TAB BAR ===== */
+
+.tab-bar {
+  display: flex; gap: 0; padding: 0 1.5rem; max-width: 800px;
+  margin: 0 auto; width: 100%;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.tab-btn {
+  background: transparent; border: none; padding: 12px 16px;
+  font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all var(--transition);
+}
+.tab-btn:hover { color: var(--text-2); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
 /* ===== VIEWS ===== */
 
 .view { display: none; overflow-y: auto; }
@@ -307,6 +324,75 @@ body {
 .btn-danger:hover { background: var(--danger); color: #fff; }
 .btn-secondary { background: var(--surface-3); color: var(--text-2); }
 .btn-secondary:hover { background: var(--border); color: var(--text); }
+
+/* ===== TAGS EDITOR ===== */
+
+.tags-editor { display: flex; flex-direction: column; gap: 8px; }
+.tags-chips {
+  display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px;
+  padding: 6px 8px; border: 1px dashed var(--border);
+  border-radius: var(--radius-xs); background: var(--surface-2);
+}
+.tags-chips:empty::before {
+  content: attr(data-placeholder); color: var(--muted); font-size: 0.78rem; align-self: center;
+}
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 999px;
+  background: var(--accent-light); color: var(--accent-2);
+  font-size: 0.74rem; font-weight: 600;
+}
+.tag-chip.role-tag { background: rgba(59, 130, 246, 0.10); color: #2563eb; }
+.tag-chip-remove {
+  background: transparent; border: none; cursor: pointer;
+  color: inherit; font-size: 1rem; line-height: 1; padding: 0 2px;
+  opacity: 0.55;
+}
+.tag-chip-remove:hover { opacity: 1; }
+
+.tags-controls { display: flex; gap: 6px; align-items: center; }
+.tags-select, .tags-custom {
+  flex: 1; padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  font: inherit; font-size: 0.8rem; background: var(--surface); color: var(--text);
+}
+.tags-select { max-width: 220px; }
+.tags-add-btn {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border: 1px solid var(--accent); border-radius: var(--radius-xs);
+  background: var(--accent-light); color: var(--accent);
+  font: inherit; font-size: 1.2rem; font-weight: 700; line-height: 1;
+  cursor: pointer; transition: all var(--transition);
+}
+.tags-add-btn:hover { background: var(--accent); color: #fff; }
+
+/* ===== ROLE CHECKS (contact dialog) ===== */
+
+.role-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.role-checks label {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-2);
+  font-size: 0.74rem; font-weight: 600;
+  text-transform: none; letter-spacing: 0;
+  cursor: pointer; user-select: none;
+  border: 1px solid transparent;
+  margin: 0;
+}
+.role-checks label.checked {
+  background: rgba(59, 130, 246, 0.12); color: #2563eb;
+  border-color: rgba(59, 130, 246, 0.30);
+}
+.role-checks input[type="checkbox"] { display: none; }
+
+/* ===== CONTACT CARDS ===== */
+
+.contacts-hint { font-size: 0.82rem; color: var(--text-2); margin: 0 0 12px; }
+.contact-card { cursor: pointer; }
+.contact-card .doc-card-icon { background: rgba(59, 130, 246, 0.10); }
+.contact-card .doc-card-icon svg { stroke: #2563eb; }
+.contact-card-roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.contact-card-roles .tag-chip { font-size: 0.68rem; padding: 2px 6px; }
 
 /* ===== SETTINGS DIALOG ===== */
 

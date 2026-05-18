@@ -67,6 +67,17 @@ async function initAasChatTables() {
     await db.run(`ALTER TABLE aas_chat_messages ADD COLUMN chat_id TEXT DEFAULT NULL`);
   } catch { /* column already exists */ }
 
+  // Migration: Resilienz-Modus pro Chat
+  try {
+    await db.run(`ALTER TABLE aas_chat_conversations ADD COLUMN resilience_mode INTEGER NOT NULL DEFAULT 0`);
+  } catch { /* column already exists */ }
+  try {
+    await db.run(`ALTER TABLE aas_chat_conversations ADD COLUMN resilience_role TEXT DEFAULT NULL`);
+  } catch { /* column already exists */ }
+  try {
+    await db.run(`ALTER TABLE aas_chat_conversations ADD COLUMN resilience_subrole TEXT DEFAULT NULL`);
+  } catch { /* column already exists */ }
+
   // Migration: assign orphaned messages (no chat_id) to a default chat per user
   const orphanUsers = await db.all(
     `SELECT DISTINCT user_id FROM aas_chat_messages WHERE chat_id IS NULL`
@@ -99,8 +110,9 @@ const BASE_SYSTEM_PROMPT =
   "Du bist ein hilfreicher Assistent für Fragen rund um die Asset Administration Shell (kurz AAS). " +
   "Antworte klar und präzise. Wenn du etwas nicht weißt, sage es ehrlich.";
 
-function buildSystemPrompt(baseOverride, aasInstructions, dtiInstructions, mcpResources, mcpPrompts, kbInstructions) {
+function buildSystemPrompt(baseOverride, aasInstructions, dtiInstructions, mcpResources, mcpPrompts, kbInstructions, resilienceContext) {
   let prompt = baseOverride || BASE_SYSTEM_PROMPT;
+  if (resilienceContext) prompt += "\n\n" + resilienceContext;
   if (aasInstructions) prompt += "\n\n" + aasInstructions;
   if (dtiInstructions) prompt += "\n\n" + dtiInstructions;
   if (kbInstructions) prompt += "\n\n" + kbInstructions;
@@ -127,7 +139,7 @@ const DTI_TOOL_NAMES = new Set([
   "listAssets", "createAsset", "deleteAsset", "renameAsset", "getAssetValues", "setAssetValues", "updateAssetValues",
 ]);
 
-const KB_TOOL_NAMES = new Set(["listDocuments", "readDocument"]);
+const KB_TOOL_NAMES = new Set(["listDocuments", "readDocument", "getContactPersons", "setResilienceRole"]);
 
 // ---------------------------------------------------------------------------
 // Continuation store — allows extending beyond MAX_ROUNDS per user request
@@ -291,8 +303,8 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-async function getPooledKbMcpClient(userId, basePrompt, log) {
-  const poolKey = `kb:${userId}`;
+async function getPooledKbMcpClient(userId, basePrompt, resMode, resRole, resSubrole, log) {
+  const poolKey = `kb:${userId}:${resMode ? 1 : 0}:${resRole || "none"}`;
   const existing = kbMcpClientPool.get(poolKey);
   if (existing) {
     existing.lastUsed = Date.now();
@@ -309,6 +321,9 @@ async function getPooledKbMcpClient(userId, basePrompt, log) {
       ...process.env,
       KB_USER_ID: userId,
       KB_BASE_PROMPT: basePrompt || "",
+      KB_RESILIENCE_MODE: resMode ? "1" : "",
+      KB_RESILIENCE_ROLE: resRole || "",
+      KB_RESILIENCE_SUBROLE: resSubrole || "",
     },
   });
   const loggingTransport = new LoggingTransport(transport, "knowledge-base");
@@ -337,11 +352,12 @@ async function getPooledKbMcpClient(userId, basePrompt, log) {
 }
 
 function closeKbMcpPool(userId) {
-  const key = `kb:${userId}`;
-  const entry = kbMcpClientPool.get(key);
-  if (entry) {
-    try { entry.client.close(); } catch {}
-    kbMcpClientPool.delete(key);
+  const prefix = `kb:${userId}:`;
+  for (const [key, entry] of kbMcpClientPool) {
+    if (key === `kb:${userId}` || key.startsWith(prefix)) {
+      try { entry.client.close(); } catch {}
+      kbMcpClientPool.delete(key);
+    }
   }
 }
 
@@ -352,6 +368,32 @@ function extractConnectorEvent(text) {
   try {
     const parsed = JSON.parse(match[1]);
     return { cleanText: text.slice(0, match.index), event: parsed.__connectorEvent };
+  } catch {
+    return { cleanText: text, event: null };
+  }
+}
+
+// Build optional resilience-mode context for the chat system prompt
+function buildResilienceContext(conv) {
+  if (!conv?.resilience_mode) return "";
+  let ctx = "RESILIENZ-MODUS aktiv (vom Chat-Frontend angefordert).";
+  if (conv.resilience_role) {
+    ctx += `\nErkannte Rolle: ${conv.resilience_role}`;
+    if (conv.resilience_subrole) ctx += ` (Sub-Rolle: ${conv.resilience_subrole})`;
+    ctx += ". FRAGE NICHT erneut nach der Rolle, springe direkt zum rollenspezifischen Vorgehen.";
+  } else {
+    ctx += "\nROLLE NOCH NICHT GESETZT. Führe JETZT die 3-Fragen-Intake durch und rufe danach das Tool setResilienceRole auf, bevor du inhaltlich antwortest.";
+  }
+  return ctx;
+}
+
+// Extract __resilienceEvent from MCP tool result text (KB MCP setResilienceRole)
+function extractResilienceEvent(text) {
+  const match = text.match(/\n(\{"__resilienceEvent":\{.+\}\})$/);
+  if (!match) return { cleanText: text, event: null };
+  try {
+    const parsed = JSON.parse(match[1]);
+    return { cleanText: text.slice(0, match.index), event: parsed.__resilienceEvent };
   } catch {
     return { cleanText: text, event: null };
   }
@@ -581,6 +623,7 @@ async function callGroq(apiKey, model, chatHistory) {
 async function chatGroqWithTools(apiKey, model, chatHistory, allTools, mcpClients, log, systemPrompt, userId, continueState) {
   const MAX_ROUNDS = 10;
   let latestConnectorEvent = null;
+  let latestResilienceEvent = null;
 
   const messages = continueState || [
     { role: "system", content: systemPrompt },
@@ -654,9 +697,12 @@ async function chatGroqWithTools(apiKey, model, chatHistory, allTools, mcpClient
             const mcpResult = await targetClient.callTool(mcpCallPayload);
             log.push({ type: "console", direction: "received", label: `${mcpLabel} → Client: tools/call result (${fnName})`, json: mcpResult });
             resultText = extractMcpContent(mcpResult);
-            const { cleanText, event } = extractConnectorEvent(resultText);
-            resultText = cleanText;
-            if (event) latestConnectorEvent = event;
+            const ce = extractConnectorEvent(resultText);
+            resultText = ce.cleanText;
+            if (ce.event) latestConnectorEvent = ce.event;
+            const re = extractResilienceEvent(resultText);
+            resultText = re.cleanText;
+            if (re.event) latestResilienceEvent = re.event;
           } else {
             resultText = `Fehler: Tool "${fnName}" ist nicht verfügbar.`;
           }
@@ -683,12 +729,13 @@ async function chatGroqWithTools(apiKey, model, chatHistory, allTools, mcpClient
 
     const reply = msg?.content || "";
     log.push({ type: "llm_response", text: reply.slice(0, 200) });
-    return { reply, connectorEvent: latestConnectorEvent };
+    return { reply, connectorEvent: latestConnectorEvent, resilienceEvent: latestResilienceEvent };
   }
 
   return {
     reply: "Ich habe 10 Tool-Aufrufe durchgeführt. Möchtest du weitermachen?",
     connectorEvent: latestConnectorEvent,
+    resilienceEvent: latestResilienceEvent,
     continuationState: { provider: "groq", messages },
   };
 }
@@ -761,6 +808,7 @@ function handleGeminiError(status, errText) {
 async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClients, log, systemPrompt, userId, continueState) {
   const MAX_ROUNDS = 10;
   let latestConnectorEvent = null;
+  let latestResilienceEvent = null;
 
   const contents = continueState || chatHistory.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -882,9 +930,12 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
             const mcpResult = await targetClient.callTool(mcpCallPayload);
             log.push({ type: "console", direction: "received", label: `${mcpLabel} → Client: tools/call result (${name})`, json: mcpResult });
             resultText = extractMcpContent(mcpResult);
-            const { cleanText, event } = extractConnectorEvent(resultText);
-            resultText = cleanText;
-            if (event) latestConnectorEvent = event;
+            const ce = extractConnectorEvent(resultText);
+            resultText = ce.cleanText;
+            if (ce.event) latestConnectorEvent = ce.event;
+            const re = extractResilienceEvent(resultText);
+            resultText = re.cleanText;
+            if (re.event) latestResilienceEvent = re.event;
           } else {
             resultText = `Fehler: Tool "${name}" ist nicht verfügbar.`;
           }
@@ -913,21 +964,22 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
       // If a tool was successfully called, use its result as fallback reply
       const lastToolResult = [...log].reverse().find(e => e.type === "tool_result" && e.result && !e.result.startsWith("Fehler"));
       if (lastToolResult) {
-        return { reply: lastToolResult.result, connectorEvent: latestConnectorEvent };
+        return { reply: lastToolResult.result, connectorEvent: latestConnectorEvent, resilienceEvent: latestResilienceEvent };
       }
       const hint = finishReason === "MAX_TOKENS" ? " (Eingabe zu lang — versuche weniger Daten.)"
         : finishReason === "SAFETY" ? " (Sicherheitsfilter blockiert.)"
         : finishReason === "RECITATION" ? " (Rezitationsfilter blockiert.)"
         : "";
-      return { reply: `Das Modell hat leider keine Antwort generiert${hint} Bitte versuche es erneut.`, connectorEvent: latestConnectorEvent };
+      return { reply: `Das Modell hat leider keine Antwort generiert${hint} Bitte versuche es erneut.`, connectorEvent: latestConnectorEvent, resilienceEvent: latestResilienceEvent };
     }
     log.push({ type: "llm_response", text: reply.slice(0, 200) });
-    return { reply, connectorEvent: latestConnectorEvent };
+    return { reply, connectorEvent: latestConnectorEvent, resilienceEvent: latestResilienceEvent };
   }
 
   return {
     reply: "Ich habe 10 Tool-Aufrufe durchgeführt. Möchtest du weitermachen?",
     connectorEvent: latestConnectorEvent,
+    resilienceEvent: latestResilienceEvent,
     continuationState: { provider: "gemini", contents },
   };
 }
@@ -942,12 +994,53 @@ function mountRoutes(router) {
   router.get("/api/chats", auth.requireAuth, async (req, res) => {
     try {
       const chats = await db.all(
-        `SELECT chat_id, title, active_connector_id, updated_at
+        `SELECT chat_id, title, active_connector_id, resilience_mode, resilience_role, resilience_subrole, updated_at
          FROM aas_chat_conversations WHERE user_id = ? ORDER BY updated_at DESC`,
         [req.user.id]
       );
       res.json({ chats });
     } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // --- Resilience-Mode toggle + role reset ---
+  router.patch("/api/chats/:chatId/resilience", auth.requireAuth, async (req, res) => {
+    try {
+      const enabled = !!req.body?.enabled;
+      const chat = await db.get(
+        "SELECT chat_id FROM aas_chat_conversations WHERE chat_id = ? AND user_id = ?",
+        [req.params.chatId, req.user.id]
+      );
+      if (!chat) return res.status(404).json({ error: "chat not found" });
+      if (enabled) {
+        await db.run(
+          "UPDATE aas_chat_conversations SET resilience_mode = 1, updated_at = datetime('now') WHERE chat_id = ?",
+          [req.params.chatId]
+        );
+      } else {
+        await db.run(
+          "UPDATE aas_chat_conversations SET resilience_mode = 0, resilience_role = NULL, resilience_subrole = NULL, updated_at = datetime('now') WHERE chat_id = ?",
+          [req.params.chatId]
+        );
+      }
+      closeKbMcpPool(req.user.id);
+      res.json({ ok: true, enabled });
+    } catch (e) {
+      res.status(500).json({ error: "RESILIENCE_TOGGLE_FAILED" });
+    }
+  });
+
+  router.post("/api/chats/:chatId/resilience/reset", auth.requireAuth, async (req, res) => {
+    try {
+      const result = await db.run(
+        "UPDATE aas_chat_conversations SET resilience_role = NULL, resilience_subrole = NULL, updated_at = datetime('now') WHERE chat_id = ? AND user_id = ?",
+        [req.params.chatId, req.user.id]
+      );
+      if (result.changes === 0) return res.status(404).json({ error: "chat not found" });
+      closeKbMcpPool(req.user.id);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: "RESILIENCE_RESET_FAILED" });
+    }
   });
 
   router.post("/api/chats", auth.requireAuth, async (req, res) => {
@@ -1041,7 +1134,7 @@ function mountRoutes(router) {
         if (!settings || !settings.api_key) return res.status(400).json({ error: "NO_API_KEY" });
         let enabledMcpsCont;
         try { enabledMcpsCont = JSON.parse(settings?.enabled_mcps || '["aas","dti"]'); } catch { enabledMcpsCont = ["aas", "dti"]; }
-        const conv = await db.get("SELECT active_connector_id FROM aas_chat_conversations WHERE chat_id = ? AND user_id = ?", [chatId, req.user.id]);
+        const conv = await db.get("SELECT active_connector_id, resilience_mode, resilience_role, resilience_subrole FROM aas_chat_conversations WHERE chat_id = ? AND user_id = ?", [chatId, req.user.id]);
 
         const toolLog = stored.toolLog || [];
         let connectorEvent = null;
@@ -1074,19 +1167,25 @@ function mountRoutes(router) {
           let kbPoolEntry = { instructions: "" };
           if (enabledMcpsCont.includes("kb")) {
             const kbSettings = await db.get("SELECT base_prompt FROM kb_settings WHERE user_id = ?", [req.user.id]);
-            kbPoolEntry = await getPooledKbMcpClient(req.user.id, kbSettings?.base_prompt || "", toolLog);
+            kbPoolEntry = await getPooledKbMcpClient(
+              req.user.id, kbSettings?.base_prompt || "",
+              !!conv?.resilience_mode, conv?.resilience_role || "", conv?.resilience_subrole || "",
+              toolLog
+            );
             kbMcpClient = kbPoolEntry.client;
             kbTools = kbPoolEntry.tools;
           }
 
           const allTools = [...mcpTools, ...dtiTools, ...kbTools];
+          const resCtx = buildResilienceContext(conv);
           const sysPrompt = buildSystemPrompt(
             settings.base_prompt || "",
             aasPoolEntry?.instructions || "",
             dtiPoolEntry.instructions,
             aasPoolEntry?.resources || [],
             aasPoolEntry?.prompts || [],
-            kbPoolEntry.instructions
+            kbPoolEntry.instructions,
+            resCtx
           );
 
           toolLog.push({ type: "info", text: "Fortsetzung — weitere Tool-Aufrufe" });
@@ -1101,12 +1200,24 @@ function mountRoutes(router) {
 
           const reply = result.reply;
           connectorEvent = result.connectorEvent;
+          let resilienceEvent = result.resilienceEvent;
 
           // Invalidate DTI pool when connector changes so next request gets fresh context
           if (connectorEvent) {
             closeDtiMcpPool(req.user.id);
             const newCid = connectorEvent.action === "connect" ? connectorEvent.connectorId : null;
             await db.run("UPDATE aas_chat_conversations SET active_connector_id = ? WHERE chat_id = ? AND user_id = ?", [newCid, chatId, req.user.id]);
+          }
+
+          // Persist resilience role + refresh KB pool so future turns get the role-aware preamble
+          if (resilienceEvent?.role) {
+            await db.run(
+              `UPDATE aas_chat_conversations
+               SET resilience_role = ?, resilience_subrole = COALESCE(?, resilience_subrole), updated_at = datetime('now')
+               WHERE chat_id = ? AND user_id = ?`,
+              [resilienceEvent.role, resilienceEvent.subrole || null, chatId, req.user.id]
+            );
+            closeKbMcpPool(req.user.id);
           }
 
           if (result.continuationState) {
@@ -1130,6 +1241,7 @@ function mountRoutes(router) {
             reply,
             toolLog: toolLog.length > 0 ? toolLog : undefined,
             connectorEvent: connectorEvent || undefined,
+            resilienceEvent: resilienceEvent || undefined,
             continuationAvailable: !!result.continuationState || undefined,
           });
         } catch (llmErr) {
@@ -1155,7 +1267,7 @@ function mountRoutes(router) {
       );
       let enabledMcps;
       try { enabledMcps = JSON.parse(settings?.enabled_mcps || '["aas","dti"]'); } catch { enabledMcps = ["aas", "dti"]; }
-      const conv = await db.get("SELECT active_connector_id FROM aas_chat_conversations WHERE chat_id = ? AND user_id = ?", [chatId, req.user.id]);
+      const conv = await db.get("SELECT active_connector_id, resilience_mode, resilience_role, resilience_subrole FROM aas_chat_conversations WHERE chat_id = ? AND user_id = ?", [chatId, req.user.id]);
 
       if (!settings || !settings.api_key) {
         return res.status(400).json({ error: "NO_API_KEY" });
@@ -1181,6 +1293,7 @@ function mountRoutes(router) {
       // Call LLM (with or without tools)
       let reply;
       let connectorEvent = null;
+      let resilienceEvent = null;
       const toolLog = [];
       try {
         if (useTools) {
@@ -1221,7 +1334,11 @@ function mountRoutes(router) {
           let kbPoolEntry = { instructions: "" };
           if (enabledMcps.includes("kb")) {
             const kbSettings = await db.get("SELECT base_prompt FROM kb_settings WHERE user_id = ?", [req.user.id]);
-            kbPoolEntry = await getPooledKbMcpClient(req.user.id, kbSettings?.base_prompt || "", toolLog);
+            kbPoolEntry = await getPooledKbMcpClient(
+              req.user.id, kbSettings?.base_prompt || "",
+              !!conv?.resilience_mode, conv?.resilience_role || "", conv?.resilience_subrole || "",
+              toolLog
+            );
             kbMcpClient = kbPoolEntry.client;
             kbTools = kbPoolEntry.tools;
             toolLog.push({ type: "kb_tools", count: kbTools.length, names: kbTools.map((t) => t.name) });
@@ -1229,15 +1346,18 @@ function mountRoutes(router) {
 
           const allTools = [...mcpTools, ...dtiTools, ...kbTools];
           const userBase = settings.base_prompt || "";
+          const resCtx = buildResilienceContext(conv);
           const sysPrompt = buildSystemPrompt(
             userBase,
             aasPoolEntry?.instructions || "",
             dtiPoolEntry.instructions,
             mcpResources,
             mcpPrompts,
-            kbPoolEntry.instructions
+            kbPoolEntry.instructions,
+            resCtx
           );
           const promptSources = [{ source: "client", label: "Base-Prompt", text: userBase || BASE_SYSTEM_PROMPT }];
+          if (resCtx) promptSources.push({ source: "resilience-mode", label: "Resilience context", text: resCtx });
           if (aasPoolEntry?.instructions) promptSources.push({ source: "aas-repository", label: "MCP Server instructions", text: aasPoolEntry.instructions });
           if (dtiPoolEntry.instructions) promptSources.push({ source: "dti-connector", label: "MCP Server instructions", text: dtiPoolEntry.instructions });
           if (kbPoolEntry.instructions) promptSources.push({ source: "knowledge-base", label: "MCP Server instructions", text: kbPoolEntry.instructions });
@@ -1318,12 +1438,24 @@ function mountRoutes(router) {
           }
           reply = result.reply;
           connectorEvent = result.connectorEvent || connectorEvent;
+          resilienceEvent = result.resilienceEvent || resilienceEvent;
 
           // Invalidate DTI pool when connector changes so next request gets fresh context
           if (connectorEvent) {
             closeDtiMcpPool(req.user.id);
             const newCid = connectorEvent.action === "connect" ? connectorEvent.connectorId : null;
             await db.run("UPDATE aas_chat_conversations SET active_connector_id = ? WHERE chat_id = ? AND user_id = ?", [newCid, chatId, req.user.id]);
+          }
+
+          // Persist resilience role + refresh KB pool with new role-aware preamble
+          if (resilienceEvent?.role) {
+            await db.run(
+              `UPDATE aas_chat_conversations
+               SET resilience_role = ?, resilience_subrole = COALESCE(?, resilience_subrole), updated_at = datetime('now')
+               WHERE chat_id = ? AND user_id = ?`,
+              [resilienceEvent.role, resilienceEvent.subrole || null, chatId, req.user.id]
+            );
+            closeKbMcpPool(req.user.id);
           }
 
           // Store continuation state if MAX_ROUNDS was reached
@@ -1363,6 +1495,7 @@ function mountRoutes(router) {
         reply,
         toolLog: toolLog.length > 0 ? toolLog : undefined,
         connectorEvent: connectorEvent || undefined,
+        resilienceEvent: resilienceEvent || undefined,
         continuationAvailable: continuationStore.has(req.user.id) || undefined,
       });
     } catch {

@@ -507,6 +507,50 @@ body.sidebar-collapsed .chat-list { display: none; }
 .mode-search .mode-icon-search { display: block; }
 .mode-label { line-height: 1; }
 
+/* Resilience-Mode toggle pill */
+.resilience-toggle {
+  display: flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 9px; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); color: var(--text-2);
+  cursor: pointer; font-size: 0.65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.3px;
+  transition: all var(--transition);
+}
+.resilience-toggle:hover { background: var(--surface-3); }
+.resilience-toggle svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.resilience-toggle.active {
+  background: rgba(236, 72, 153, 0.10); color: #db2777; border-color: rgba(236, 72, 153, 0.30);
+}
+.resilience-toggle.active:hover { background: #db2777; color: #fff; border-color: #db2777; }
+.resilience-role-pill {
+  background: rgba(236, 72, 153, 0.18); color: #be185d;
+  padding: 2px 6px; border-radius: 8px; font-size: 0.62rem;
+  text-transform: none; letter-spacing: 0; line-height: 1.2;
+}
+.resilience-toggle.active:hover .resilience-role-pill { background: rgba(255,255,255,0.20); color: #fff; }
+.resilience-reset {
+  border: none; background: transparent; color: inherit;
+  cursor: pointer; padding: 0 2px; font-size: 0.95rem;
+  line-height: 1; opacity: 0.65;
+}
+.resilience-reset:hover { opacity: 1; }
+
+/* Sidebar chat-item resilience marker */
+.chat-item-resilience-dot {
+  display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: #db2777; margin-right: 5px;
+  vertical-align: middle;
+}
+.chat-item-role-pill {
+  display: inline-block;
+  background: rgba(236, 72, 153, 0.14); color: #be185d;
+  padding: 1px 6px; border-radius: 999px;
+  font-size: 0.66rem; font-weight: 700;
+  margin-left: 6px; line-height: 1.25;
+  text-transform: none; letter-spacing: 0;
+}
+
 /* Connector toggle tab (fixed right edge) */
 .connector-toggle {
   position: fixed;

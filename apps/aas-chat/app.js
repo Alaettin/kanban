@@ -43,6 +43,27 @@ const resetBasePromptBtn = document.getElementById("reset-base-prompt-btn");
 const modeToggle = document.getElementById("mode-toggle");
 const modeLabel = document.getElementById("mode-label");
 
+// Resilience-Mode DOM
+const resilienceToggle = document.getElementById("resilience-toggle");
+const resilienceToggleLabel = document.getElementById("resilience-toggle-label");
+const resilienceRolePill = document.getElementById("resilience-role-pill");
+const resilienceResetBtn = document.getElementById("resilience-reset");
+
+// Resilience role labels (canonical IDs from KB MCP)
+const RESILIENCE_ROLE_LABELS = {
+  "beschaeftigte-buero":      { de: "Büro",         en: "Office" },
+  "beschaeftigte-produktion": { de: "Produktion",   en: "Production" },
+  "fk-klein":                 { de: "FK · klein",   en: "Mgr · small" },
+  "fk-gross":                 { de: "FK · groß",    en: "Mgr · large" },
+  "kontaktperson":            { de: "Kontakt",      en: "Contact" },
+};
+function resilienceRoleLabel(role, subrole) {
+  if (!role) return "";
+  const lang = (typeof locale !== "undefined" ? locale : "de") === "en" ? "en" : "de";
+  const base = (RESILIENCE_ROLE_LABELS[role] && RESILIENCE_ROLE_LABELS[role][lang]) || role;
+  return subrole ? `${base} · ${subrole}` : base;
+}
+
 // Connector panel DOM
 const connectorPanel = document.getElementById("connector-panel");
 const connectorPanelName = document.getElementById("connector-panel-name");
@@ -282,18 +303,25 @@ async function loadChatList() {
   if (result.ok) {
     chatList = result.payload?.chats || [];
     renderChatList();
+    updateResilienceToggleUI();
   }
 }
 
 function renderChatList() {
-  chatListEl.innerHTML = chatList.map(c => `
+  chatListEl.innerHTML = chatList.map(c => {
+    const resDot = c.resilience_mode ? `<span class="chat-item-resilience-dot" title="Resilienz-Modus"></span>` : "";
+    const rolePill = c.resilience_role
+      ? `<span class="chat-item-role-pill">${escapeHtml(resilienceRoleLabel(c.resilience_role, c.resilience_subrole))}</span>`
+      : "";
+    return `
     <div class="chat-item${c.chat_id === currentChatId ? " active" : ""}" data-chat-id="${c.chat_id}">
-      <span class="chat-item-title">${escapeHtml(c.title)}</span>
+      ${resDot}<span class="chat-item-title">${escapeHtml(c.title)}</span>${rolePill}
       <button class="chat-item-close" type="button" title="Chat löschen">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   // Click on chat item
   chatListEl.querySelectorAll(".chat-item").forEach(item => {
@@ -350,6 +378,7 @@ function renderChatList() {
 async function switchChat(chatId) {
   if (chatId === currentChatId) return;
   currentChatId = chatId;
+  updateResilienceToggleUI();
 
   // Reset frontend state
   messages = [];
@@ -979,6 +1008,58 @@ slashMenuList.addEventListener("click", (e) => {
   if (item) selectSlashItem(+item.dataset.idx);
 });
 
+// === Resilience-Mode toggle / reset / badge ===
+function updateResilienceToggleUI() {
+  const chat = chatList.find(c => c.chat_id === currentChatId);
+  const enabled = !!chat?.resilience_mode;
+  resilienceToggle.classList.toggle("active", enabled);
+  resilienceToggle.setAttribute("aria-pressed", String(enabled));
+  if (enabled && chat?.resilience_role) {
+    resilienceRolePill.hidden = false;
+    resilienceRolePill.textContent = resilienceRoleLabel(chat.resilience_role, chat.resilience_subrole);
+    resilienceResetBtn.hidden = false;
+  } else {
+    resilienceRolePill.hidden = true;
+    resilienceResetBtn.hidden = true;
+  }
+}
+
+if (resilienceToggle) {
+  resilienceToggle.addEventListener("click", async (e) => {
+    if (e.target.closest("#resilience-reset")) return;
+    if (!currentChatId) return;
+    const chat = chatList.find(c => c.chat_id === currentChatId);
+    const newEnabled = !chat?.resilience_mode;
+    const result = await apiRequest(`/apps/aas-chat/api/chats/${currentChatId}/resilience`, {
+      method: "PATCH",
+      body: { enabled: newEnabled },
+    });
+    if (result.ok) {
+      if (chat) {
+        chat.resilience_mode = newEnabled ? 1 : 0;
+        if (!newEnabled) { chat.resilience_role = null; chat.resilience_subrole = null; }
+      }
+      renderChatList();
+      updateResilienceToggleUI();
+    }
+  });
+}
+if (resilienceResetBtn) {
+  resilienceResetBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!currentChatId) return;
+    const result = await apiRequest(`/apps/aas-chat/api/chats/${currentChatId}/resilience/reset`, {
+      method: "POST",
+    });
+    if (result.ok) {
+      const chat = chatList.find(c => c.chat_id === currentChatId);
+      if (chat) { chat.resilience_role = null; chat.resilience_subrole = null; }
+      renderChatList();
+      updateResilienceToggleUI();
+    }
+  });
+}
+
 // === Handle LLM response (shared by sendMessage + sendContinuation) ===
 function handleLlmResponseExtras(payload) {
   // Handle connector events (open/close panel)
@@ -986,6 +1067,16 @@ function handleLlmResponseExtras(payload) {
     const evt = payload.connectorEvent;
     if (evt.action === "connect") openConnectorPanel(evt);
     else if (evt.action === "disconnect") disconnectConnectorUI();
+  }
+  // Resilience role detected → update sidebar badge + toolbar pill
+  if (payload.resilienceEvent?.role) {
+    const chat = chatList.find(c => c.chat_id === currentChatId);
+    if (chat) {
+      chat.resilience_role = payload.resilienceEvent.role;
+      if (payload.resilienceEvent.subrole) chat.resilience_subrole = payload.resilienceEvent.subrole;
+      renderChatList();
+      updateResilienceToggleUI();
+    }
   }
   // Log DTI tool calls to connector panel
   if (payload.toolLog) {
@@ -1087,6 +1178,15 @@ async function sendContinuationAll(wrapElement) {
         const evt = result.payload.connectorEvent;
         if (evt.action === "connect") openConnectorPanel(evt);
         else if (evt.action === "disconnect") disconnectConnectorUI();
+      }
+      if (result.payload.resilienceEvent?.role) {
+        const chat = chatList.find(c => c.chat_id === currentChatId);
+        if (chat) {
+          chat.resilience_role = result.payload.resilienceEvent.role;
+          if (result.payload.resilienceEvent.subrole) chat.resilience_subrole = result.payload.resilienceEvent.subrole;
+          renderChatList();
+          updateResilienceToggleUI();
+        }
       }
       if (result.payload.toolLog) {
         const log = result.payload.toolLog;

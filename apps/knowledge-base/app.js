@@ -18,6 +18,10 @@ const I18N = {
     editTitle: "Dokument bearbeiten",
     lblTitle: "Titel",
     lblDesc: "Beschreibung",
+    lblTags: "Tags",
+    tagsPlaceholder: "Noch keine Tags. Vorschlag w\u00e4hlen oder eigenen Tag eingeben.",
+    tagSuggestPlaceholder: "Vorschlag w\u00e4hlen\u2026",
+    tagCustomPlaceholder: "Eigener Tag",
     generateDesc: "KI-Beschreibung",
     generating: "Generiere\u2026",
     lblFilename: "Datei: ",
@@ -45,6 +49,22 @@ const I18N = {
     generateFailed: "Beschreibung konnte nicht generiert werden.",
     uploadFailed: "Fehler beim Hochladen.",
     logout: "Logout",
+    tabDocuments: "Dokumente",
+    tabContacts: "Kontaktpersonen",
+    contactsTitle: "Kontaktpersonen",
+    contactsHint: "Hinterlege Ansprechpersonen (Betriebsrat, BEM, Betriebsarzt, SBV, \u2026), die der Chatbot im Resilienz-Modus passend vorschlagen kann.",
+    contactsEmpty: "Noch keine Kontakte hinterlegt.",
+    contactAdd: "Neuer Kontakt",
+    contactDialogTitle: "Kontaktperson",
+    contactDialogDesc: "Pflege Name und Erreichbarkeit. Tags steuern, in welchen Rollen-Antworten dieser Kontakt erscheint.",
+    lblCFunction: "Funktion",
+    lblCName: "Name",
+    lblCEmail: "E-Mail",
+    lblCPhone: "Telefon",
+    lblCNote: "Notiz",
+    lblCRoles: "Rollen (Sichtbarkeit)",
+    contactSaved: "Kontakt gespeichert",
+    contactDeleted: "Kontakt gel\u00f6scht",
   },
   en: {
     brandText: "Knowledge Base",
@@ -58,6 +78,10 @@ const I18N = {
     editTitle: "Edit Document",
     lblTitle: "Title",
     lblDesc: "Description",
+    lblTags: "Tags",
+    tagsPlaceholder: "No tags yet. Pick a suggestion or type a custom tag.",
+    tagSuggestPlaceholder: "Pick a suggestion\u2026",
+    tagCustomPlaceholder: "Custom tag",
     generateDesc: "AI Description",
     generating: "Generating\u2026",
     lblFilename: "File: ",
@@ -85,8 +109,40 @@ const I18N = {
     generateFailed: "Could not generate description.",
     uploadFailed: "Upload failed.",
     logout: "Logout",
+    tabDocuments: "Documents",
+    tabContacts: "Contact persons",
+    contactsTitle: "Contact persons",
+    contactsHint: "Add contacts (works council, BEM, occupational doctor, SBV, \u2026) for the chatbot to suggest in resilience mode.",
+    contactsEmpty: "No contacts yet.",
+    contactAdd: "New contact",
+    contactDialogTitle: "Contact",
+    contactDialogDesc: "Maintain name and reachability. Tags control in which role responses this contact appears.",
+    lblCFunction: "Function",
+    lblCName: "Name",
+    lblCEmail: "Email",
+    lblCPhone: "Phone",
+    lblCNote: "Note",
+    lblCRoles: "Roles (visibility)",
+    contactSaved: "Contact saved",
+    contactDeleted: "Contact deleted",
   },
 };
+
+// Tag vocabulary (canonical IDs \u2014 must match aas-chat MCP enum + DB)
+const ROLE_TAG_LABELS = {
+  "beschaeftigte-buero":     { de: "Besch\u00e4ftigte (B\u00fcro)",      en: "Employees (office)" },
+  "beschaeftigte-produktion":{ de: "Besch\u00e4ftigte (Produktion)", en: "Employees (production)" },
+  "fk-klein":                { de: "F\u00fchrungskraft (\u2264 10 P.)",  en: "Manager (small team)" },
+  "fk-gross":                { de: "F\u00fchrungskraft (gro\u00df)",     en: "Manager (large org)" },
+  "kontaktperson":           { de: "Kontaktperson",                en: "Contact person" },
+  "all-roles":               { de: "Alle Rollen",                  en: "All roles" },
+};
+const TOPIC_TAGS = [
+  "resilienz-grundlagen", "stress", "konflikt", "ueberlastung",
+  "fuehrung", "team", "belastungs-ekg", "schnittstellen-workshop",
+  "audit", "programme-unternehmen", "prozess-vorschlag",
+];
+function roleLabel(id) { return (ROLE_TAG_LABELS[id] && ROLE_TAG_LABELS[id][locale]) || id; }
 
 let locale = localStorage.getItem("kanban-locale") || "de";
 function t(key) {
@@ -98,10 +154,14 @@ function t(key) {
 // ---------------------------------------------------------------------------
 let documents = [];
 let editingDoc = null;
+let editingTags = [];
 let currentPage = 1;
 const PAGE_SIZE = 20;
 let searchQuery = "";
 let defaultBasePrompt = "";
+let contacts = [];
+let editingContact = null;
+let currentTab = "documents";
 
 // ---------------------------------------------------------------------------
 // DOM
@@ -140,6 +200,20 @@ const userInfo = document.getElementById("user-info");
 const logoutBtn = document.getElementById("logout-btn");
 const localeDeBtn = document.getElementById("locale-de-btn");
 const localeEnBtn = document.getElementById("locale-en-btn");
+const tabButtons = document.querySelectorAll(".tab-btn");
+const contactsView = document.getElementById("contacts-view");
+const contactsGrid = document.getElementById("contacts-grid");
+const contactsEmpty = document.getElementById("contacts-empty");
+const contactsCount = document.getElementById("contacts-count");
+const contactAddBtn = document.getElementById("contact-add-btn");
+const contactDialog = document.getElementById("contact-dialog");
+const contactCancel = document.getElementById("contact-cancel");
+const contactSave = document.getElementById("contact-save");
+const contactDelete = document.getElementById("contact-delete");
+const tagsChips = document.getElementById("f-tags-chips");
+const tagsSelect = document.getElementById("f-tags-select");
+const tagsCustom = document.getElementById("f-tags-custom");
+const tagsAdd = document.getElementById("f-tags-add");
 
 // ---------------------------------------------------------------------------
 // API helper
@@ -183,8 +257,17 @@ function showToast(msg) {
 function showView(view) {
   listView.classList.remove("active");
   editView.classList.remove("active");
+  contactsView.classList.remove("active");
   view.classList.add("active");
 }
+
+function setTab(tab) {
+  currentTab = tab;
+  tabButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
+  if (tab === "documents") showView(listView);
+  else if (tab === "contacts") { showView(contactsView); renderContacts(); }
+}
+tabButtons.forEach(btn => btn.addEventListener("click", () => setTab(btn.dataset.tab)));
 
 // ---------------------------------------------------------------------------
 // File type helpers
@@ -276,11 +359,20 @@ function renderDocuments() {
     el.className = "doc-card";
     el.dataset.id = doc.doc_id;
 
+    const tagChips = Array.isArray(doc.tags) && doc.tags.length
+      ? `<div class="contact-card-roles">${doc.tags.map(tg => {
+          const label = isRoleTag(tg) ? roleLabel(tg) : tg;
+          const cls = isRoleTag(tg) ? " role-tag" : "";
+          return `<span class="tag-chip${cls}">${esc(label)}</span>`;
+        }).join("")}</div>`
+      : "";
+
     el.innerHTML = `
       <div class="doc-card-icon">${getFileIcon(ext)}</div>
       <div class="doc-card-body">
         <h3 class="doc-card-title">${esc(doc.title || doc.original_name || "\u2014")}</h3>
         ${doc.description ? `<p class="doc-card-desc">${esc(doc.description)}</p>` : ""}
+        ${tagChips}
         <div class="doc-card-meta">
           <span>${ext.toUpperCase()}</span>
           <span>${formatSize(doc.file_size)}</span>
@@ -340,6 +432,7 @@ async function openEdit(docId) {
   const doc = documents.find(d => d.doc_id === docId);
   if (!doc) return;
   editingDoc = doc;
+  editingTags = Array.isArray(doc.tags) ? [...doc.tags] : [];
 
   document.getElementById("f-title").value = doc.title || "";
   document.getElementById("f-desc").value = doc.description || "";
@@ -347,6 +440,9 @@ async function openEdit(docId) {
   document.getElementById("info-filesize").textContent = formatSize(doc.file_size);
   document.getElementById("info-filetype").textContent = doc.mime_type || "";
   document.getElementById("info-filedate").textContent = formatDate(doc.updated_at || doc.created_at);
+
+  renderTagChips();
+  populateTagsSelect();
 
   // Load extracted text
   const textPreview = document.getElementById("text-preview");
@@ -368,14 +464,86 @@ docForm.addEventListener("submit", async (e) => {
   if (!editingDoc) return;
   const title = document.getElementById("f-title").value.trim();
   const description = document.getElementById("f-desc").value.trim();
-  const res = await api("/api/documents/" + editingDoc.doc_id, { method: "PUT", body: { title, description } });
+  const res = await api("/api/documents/" + editingDoc.doc_id, {
+    method: "PUT",
+    body: { title, description, tags: editingTags },
+  });
   if (res.ok) {
     editingDoc.title = title;
     editingDoc.description = description;
+    editingDoc.tags = [...editingTags];
     renderDocuments();
     showToast(t("saved"));
-    showView(listView);
+    setTab("documents");
   }
+});
+
+// ---------------------------------------------------------------------------
+// Tag editor
+// ---------------------------------------------------------------------------
+function isRoleTag(tag) { return Object.prototype.hasOwnProperty.call(ROLE_TAG_LABELS, tag); }
+
+function renderTagChips() {
+  tagsChips.dataset.placeholder = t("tagsPlaceholder");
+  tagsChips.innerHTML = "";
+  for (const tag of editingTags) {
+    const chip = document.createElement("span");
+    chip.className = "tag-chip" + (isRoleTag(tag) ? " role-tag" : "");
+    const label = isRoleTag(tag) ? roleLabel(tag) : tag;
+    chip.innerHTML = `${esc(label)} <button type="button" class="tag-chip-remove" aria-label="Entfernen">&times;</button>`;
+    chip.querySelector(".tag-chip-remove").addEventListener("click", () => {
+      editingTags = editingTags.filter(x => x !== tag);
+      renderTagChips();
+      populateTagsSelect();
+    });
+    tagsChips.appendChild(chip);
+  }
+}
+
+function populateTagsSelect() {
+  tagsSelect.innerHTML = "";
+  const optEmpty = document.createElement("option");
+  optEmpty.value = "";
+  optEmpty.textContent = t("tagSuggestPlaceholder");
+  tagsSelect.appendChild(optEmpty);
+
+  const grpRole = document.createElement("optgroup");
+  grpRole.label = locale === "de" ? "Rollen" : "Roles";
+  for (const id of Object.keys(ROLE_TAG_LABELS)) {
+    if (editingTags.includes(id)) continue;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = roleLabel(id);
+    grpRole.appendChild(opt);
+  }
+  if (grpRole.childElementCount > 0) tagsSelect.appendChild(grpRole);
+
+  const grpTopic = document.createElement("optgroup");
+  grpTopic.label = locale === "de" ? "Themen" : "Topics";
+  for (const id of TOPIC_TAGS) {
+    if (editingTags.includes(id)) continue;
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    grpTopic.appendChild(opt);
+  }
+  if (grpTopic.childElementCount > 0) tagsSelect.appendChild(grpTopic);
+}
+
+function addTagFromInput() {
+  const sel = tagsSelect.value;
+  const custom = tagsCustom.value.trim();
+  if (sel && !editingTags.includes(sel)) editingTags.push(sel);
+  if (custom && !editingTags.includes(custom)) editingTags.push(custom);
+  tagsSelect.value = "";
+  tagsCustom.value = "";
+  renderTagChips();
+  populateTagsSelect();
+}
+tagsSelect.addEventListener("change", () => { if (tagsSelect.value) addTagFromInput(); });
+tagsAdd.addEventListener("click", addTagFromInput);
+tagsCustom.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); addTagFromInput(); }
 });
 
 // Delete
@@ -390,12 +558,12 @@ confirmOk.addEventListener("click", async () => {
     editingDoc = null;
     renderDocuments();
     showToast(t("deleted"));
-    showView(listView);
+    setTab("documents");
   }
 });
 
 // Back
-editBackBtn.addEventListener("click", () => showView(listView));
+editBackBtn.addEventListener("click", () => setTab("documents"));
 
 // Generate description
 generateDescBtn.addEventListener("click", async () => {
@@ -469,6 +637,123 @@ settingsSave.addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Contacts
+// ---------------------------------------------------------------------------
+async function loadContacts() {
+  const res = await api("/api/kb-contacts");
+  if (res.ok && res.payload?.contacts) contacts = res.payload.contacts;
+}
+
+function renderContacts() {
+  contactsGrid.innerHTML = "";
+  contactsCount.textContent = contacts.length ? `(${contacts.length})` : "";
+  if (!contacts.length) {
+    contactsEmpty.hidden = false;
+    document.getElementById("contacts-empty-text").textContent = t("contactsEmpty");
+    return;
+  }
+  contactsEmpty.hidden = true;
+  for (const c of contacts) {
+    const el = document.createElement("div");
+    el.className = "doc-card contact-card";
+    el.dataset.id = c.contact_id;
+    const tags = Array.isArray(c.role_tags) ? c.role_tags : [];
+    const chips = tags.length
+      ? `<div class="contact-card-roles">${tags.map(tg => {
+          const label = isRoleTag(tg) ? roleLabel(tg) : tg;
+          const cls = isRoleTag(tg) ? " role-tag" : "";
+          return `<span class="tag-chip${cls}">${esc(label)}</span>`;
+        }).join("")}</div>`
+      : "";
+    el.innerHTML = `
+      <div class="doc-card-icon">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="doc-card-body">
+        <h3 class="doc-card-title">${esc(c.function || "—")}${c.name ? " · " + esc(c.name) : ""}</h3>
+        ${c.email ? `<p class="doc-card-desc">${esc(c.email)}${c.phone ? " · " + esc(c.phone) : ""}</p>` : (c.phone ? `<p class="doc-card-desc">${esc(c.phone)}</p>` : "")}
+        ${chips}
+      </div>
+      <button class="doc-card-delete" type="button" title="${esc(t("delete"))}">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    `;
+    el.querySelector(".doc-card-delete").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(t("confirmDelete"))) return;
+      const r = await api("/api/kb-contacts/" + c.contact_id, { method: "DELETE" });
+      if (r.ok) { contacts = contacts.filter(x => x.contact_id !== c.contact_id); renderContacts(); showToast(t("contactDeleted")); }
+    });
+    el.addEventListener("click", () => openContactDialog(c));
+    contactsGrid.appendChild(el);
+  }
+}
+
+function buildRoleChecks(selected) {
+  const wrap = document.getElementById("c-roles");
+  wrap.innerHTML = "";
+  for (const id of Object.keys(ROLE_TAG_LABELS)) {
+    const label = document.createElement("label");
+    const checked = selected.includes(id);
+    label.className = checked ? "checked" : "";
+    label.innerHTML = `<input type="checkbox" value="${id}" ${checked ? "checked" : ""}/> ${esc(roleLabel(id))}`;
+    const input = label.querySelector("input");
+    input.addEventListener("change", () => { label.classList.toggle("checked", input.checked); });
+    wrap.appendChild(label);
+  }
+}
+
+function openContactDialog(contact) {
+  editingContact = contact || null;
+  document.getElementById("c-function").value = contact?.function || "";
+  document.getElementById("c-name").value     = contact?.name || "";
+  document.getElementById("c-email").value    = contact?.email || "";
+  document.getElementById("c-phone").value    = contact?.phone || "";
+  document.getElementById("c-note").value     = contact?.note || "";
+  buildRoleChecks(contact?.role_tags || []);
+  contactDelete.hidden = !contact;
+  contactDialog.showModal();
+}
+
+contactAddBtn.addEventListener("click", () => openContactDialog(null));
+contactCancel.addEventListener("click", () => contactDialog.close());
+
+contactSave.addEventListener("click", async () => {
+  const payload = {
+    function: document.getElementById("c-function").value.trim(),
+    name:     document.getElementById("c-name").value.trim(),
+    email:    document.getElementById("c-email").value.trim(),
+    phone:    document.getElementById("c-phone").value.trim(),
+    note:     document.getElementById("c-note").value.trim(),
+    role_tags: Array.from(document.querySelectorAll("#c-roles input[type=checkbox]:checked")).map(i => i.value),
+  };
+  let res;
+  if (editingContact) {
+    res = await api("/api/kb-contacts/" + editingContact.contact_id, { method: "PUT", body: payload });
+  } else {
+    res = await api("/api/kb-contacts", { method: "POST", body: payload });
+  }
+  if (res.ok) {
+    contactDialog.close();
+    await loadContacts();
+    renderContacts();
+    showToast(t("contactSaved"));
+  }
+});
+
+contactDelete.addEventListener("click", async () => {
+  if (!editingContact) return;
+  if (!confirm(t("confirmDelete"))) return;
+  const r = await api("/api/kb-contacts/" + editingContact.contact_id, { method: "DELETE" });
+  if (r.ok) {
+    contactDialog.close();
+    contacts = contacts.filter(x => x.contact_id !== editingContact.contact_id);
+    renderContacts();
+    showToast(t("contactDeleted"));
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Locale
 // ---------------------------------------------------------------------------
 function setLocale(lang) {
@@ -510,7 +795,27 @@ function applyLocaleToUI() {
   document.getElementById("settings-save").textContent = t("settingsSave");
   searchInput.placeholder = t("searchPlaceholder");
   logoutBtn.textContent = t("logout");
+  // Tabs + contacts
+  document.getElementById("tab-documents-btn").textContent = t("tabDocuments");
+  document.getElementById("tab-contacts-btn").textContent = t("tabContacts");
+  document.getElementById("contacts-title").textContent = t("contactsTitle");
+  document.getElementById("contacts-hint").textContent = t("contactsHint");
+  document.getElementById("contact-add-label").textContent = t("contactAdd");
+  document.getElementById("contact-dialog-title").textContent = t("contactDialogTitle");
+  document.getElementById("contact-dialog-desc").textContent = t("contactDialogDesc");
+  document.getElementById("lbl-c-function").textContent = t("lblCFunction");
+  document.getElementById("lbl-c-name").textContent = t("lblCName");
+  document.getElementById("lbl-c-email").textContent = t("lblCEmail");
+  document.getElementById("lbl-c-phone").textContent = t("lblCPhone");
+  document.getElementById("lbl-c-note").textContent = t("lblCNote");
+  document.getElementById("lbl-c-roles").textContent = t("lblCRoles");
+  document.getElementById("contact-cancel").textContent = t("settingsCancel");
+  document.getElementById("contact-save").textContent = t("settingsSave");
+  document.getElementById("contact-delete").textContent = t("delete");
+  document.getElementById("lbl-tags").textContent = t("lblTags");
+  tagsCustom.placeholder = t("tagCustomPlaceholder");
   renderDocuments();
+  if (currentTab === "contacts") renderContacts();
 }
 
 localeDeBtn.addEventListener("click", () => setLocale("de"));
@@ -562,6 +867,7 @@ async function init() {
 
   setLocale(locale);
   await loadDocuments();
+  await loadContacts();
   renderDocuments();
 }
 
