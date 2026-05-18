@@ -382,7 +382,7 @@ function buildResilienceContext(conv) {
     if (conv.resilience_subrole) ctx += ` (Sub-Rolle: ${conv.resilience_subrole})`;
     ctx += ". Frag nicht erneut nach dem Kontext, knüpf direkt an das Gespräch an.";
   } else {
-    ctx += "\nDer Arbeitskontext ist noch unklar – beginne ruhig, mit einer einzigen offenen Frage. Du musst nichts in dieser einen Antwort klären.";
+    ctx += "\nDer Arbeitskontext ist noch unklar – richte deine Antwort nach dem, was die Person geschrieben hat. Bei reinem Gruß genügt ein menschliches Zurückgrüßen. Stelle jetzt keine vorbereitete Intake-Frage zum Arbeitskontext.";
   }
   return ctx;
 }
