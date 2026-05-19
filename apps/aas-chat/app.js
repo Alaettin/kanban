@@ -671,10 +671,18 @@ function openLightbox(url) {
   dialog.showModal();
 }
 
-function showErrorBubble(errorKey) {
+function showErrorBubble(errorKey, detail) {
   const bubble = document.createElement("div");
   bubble.className = "chat-bubble error";
   bubble.textContent = t(errorKey);
+  if (detail) {
+    const small = document.createElement("small");
+    small.style.display = "block";
+    small.style.marginTop = "4px";
+    small.style.opacity = "0.75";
+    small.textContent = detail;
+    bubble.appendChild(small);
+  }
   chatMessages.appendChild(bubble);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -835,6 +843,27 @@ function addConsoleEntries(toolLog) {
   if (devConsoleOpen) renderConsole();
 }
 
+// Wird in jedem Fehler-Branch aufgerufen: Backend-toolLog (falls vorhanden) in
+// die Dev-Console einspeisen + einen synthetischen Client-Eintrag anhängen,
+// damit auch Netzwerkfehler (status=0) einen Anker im Log haben.
+function feedErrorIntoDevConsole(result, errCode, errDetail) {
+  if (result?.payload?.toolLog) addConsoleEntries(result.payload.toolLog);
+  const clientEntry = {
+    type: "console",
+    direction: "error",
+    label: `Client: HTTP ${result?.status ?? 0} ${errCode || "FETCH_FAILED"}`.trim(),
+    json: {
+      status: result?.status ?? 0,
+      error: errCode || null,
+      detail: errDetail || null,
+      fetchError: result?.error?.message || null,
+    },
+  };
+  consoleEntries.push(clientEntry);
+  rawJsonRpcEntries.push({ ...clientEntry, type: "raw_jsonrpc" });
+  if (devConsoleOpen) renderConsole();
+}
+
 function renderJsonTree(val, key) {
   const keyHtml = key !== undefined ? `<span class="jt-key">${escHtml(String(key))}</span><span class="jt-colon">: </span>` : "";
   if (val === null) return `<span class="jt-leaf">${keyHtml}<span class="jt-null">null</span></span>`;
@@ -888,8 +917,12 @@ function renderConsole() {
         <div class="console-entry-tree">${treeHtml}</div>
       </div>`;
     }
-    const dirClass = e.direction === "sent" ? "dir-sent" : "dir-received";
-    const dirLabel = e.direction === "sent" ? "SENT" : "RECV";
+    const dirClass = e.direction === "sent" ? "dir-sent"
+                   : e.direction === "error" ? "dir-error"
+                   : "dir-received";
+    const dirLabel = e.direction === "sent" ? "SENT"
+                   : e.direction === "error" ? "ERROR"
+                   : "RECV";
     const isRaw = consoleActiveTab === "raw";
     let detailHtml;
     if (isRaw) {
@@ -1138,8 +1171,13 @@ async function sendContinuation(wrapElement) {
     renderMessages();
     handleLlmResponseExtras(result.payload);
   } else {
+    console.error("[AAS Chat] continuation failed", { status: result.status, payload: result.payload });
+    const errCode = result.payload?.error || "";
+    const errDetail = result.payload?.detail || "";
+    feedErrorIntoDevConsole(result, errCode, errDetail);
     renderMessages();
-    showErrorBubble("errGeneric");
+    const composedDetail = errCode ? (errDetail ? `${errCode}: ${errDetail}` : errCode) : errDetail;
+    showErrorBubble("errGeneric", composedDetail);
   }
 
   sendBtn.disabled = !chatInput.value.trim();
@@ -1207,9 +1245,14 @@ async function sendContinuationAll(wrapElement) {
         keepGoing = false;
       }
     } else {
+      console.error("[AAS Chat] continuation-all failed", { status: result.status, payload: result.payload });
       keepGoing = false;
+      const errCode = result.payload?.error || "";
+      const errDetail = result.payload?.detail || "";
+      feedErrorIntoDevConsole(result, errCode, errDetail);
       renderMessages();
-      showErrorBubble("errGeneric");
+      const composedDetail = errCode ? (errDetail ? `${errCode}: ${errDetail}` : errCode) : errDetail;
+      showErrorBubble("errGeneric", composedDetail);
     }
   }
 
@@ -1271,9 +1314,15 @@ async function sendMessage(content) {
   } else {
     // Remove optimistic user message on error (server didn't save it for NO_API_KEY)
     const errCode = result.payload?.error || "";
+    const errDetail = result.payload?.detail || "";
     if (errCode === "NO_API_KEY") {
       messages.pop();
     }
+
+    // Always log full payload to console — beim Debuggen ist der echte Fehler
+    // sonst nicht zugänglich (Frontend zeigt nur generische Texte).
+    console.error("[AAS Chat] send failed", { status: result.status, payload: result.payload });
+    feedErrorIntoDevConsole(result, errCode, errDetail);
 
     // Render first (clears typing indicator), then show error bubble
     renderMessages();
@@ -1285,7 +1334,8 @@ async function sendMessage(content) {
     } else if (errCode === "RATE_LIMIT") {
       showErrorBubble("errRateLimit");
     } else {
-      showErrorBubble("errGeneric");
+      const composedDetail = errCode ? (errDetail ? `${errCode}: ${errDetail}` : errCode) : errDetail;
+      showErrorBubble("errGeneric", composedDetail);
     }
   }
 

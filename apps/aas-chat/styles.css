@@ -1360,6 +1360,10 @@ body.sidebar-collapsed .chat-list { display: none; }
 .console-entry-dir.dir-sent { background: #1e66f5; color: #fff; }
 .console-entry-dir.dir-received { background: #40a02b; color: #fff; }
 .console-entry-dir.dir-system { background: #6b21a8; color: #fff; }
+.console-entry-dir.dir-error { background: #d20f39; color: #fff; }
+.console-entry .console-entry-header:has(.dir-error) {
+  background: rgba(210, 15, 57, 0.08);
+}
 .console-entry-label { color: #bac2de; font-weight: 500; }
 .console-entry-json {
   display: none;

@@ -260,17 +260,24 @@ async function getPooledDtiMcpClient(userId, connectorId, role, log) {
   const client = new Client(clientInfo);
 
   if (log) log.push({ type: "console", direction: "sent", label: "Client → MCP: initialize", json: { jsonrpc: "2.0", method: "initialize", params: { protocolVersion: "2024-11-05", clientInfo, capabilities: { tools: {} } } } });
-  await client.connect(loggingTransport);
-  const serverCaps = client.getServerCapabilities?.() || {};
-  const serverInfo = client.getServerVersion?.() || {};
-  const instructions = client.getInstructions?.() || "";
-  const srvName = serverInfo.name || "dti-connector";
-  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
-  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
+  let serverCaps, serverInfo, instructions, srvName, tools;
+  try {
+    await client.connect(loggingTransport);
+    serverCaps = client.getServerCapabilities?.() || {};
+    serverInfo = client.getServerVersion?.() || {};
+    instructions = client.getInstructions?.() || "";
+    srvName = serverInfo.name || "dti-connector";
+    if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
+    if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
 
-  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
-  const { tools } = await client.listTools();
-  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+    if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
+    ({ tools } = await client.listTools());
+    if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+  } catch (e) {
+    pushErrorLog(log, "MCP (dti-connector): Connect-Fehler", { poolKey, error: e.message, connectorId, role });
+    try { client.close(); } catch {}
+    throw e;
+  }
 
   const entry = { client, loggingTransport, lastUsed: Date.now(), tools, connectorId, role, instructions };
   dtiMcpClientPool.set(poolKey, entry);
@@ -333,17 +340,24 @@ async function getPooledKbMcpClient(userId, basePrompt, resMode, resRole, resSub
   const client = new Client(clientInfo);
 
   if (log) log.push({ type: "console", direction: "sent", label: "Client → MCP: initialize", json: { jsonrpc: "2.0", method: "initialize", params: { protocolVersion: "2024-11-05", clientInfo, capabilities: { tools: {} } } } });
-  await client.connect(loggingTransport);
-  const serverCaps = client.getServerCapabilities?.() || {};
-  const serverInfo = client.getServerVersion?.() || {};
-  const instructions = client.getInstructions?.() || "";
-  const srvName = serverInfo.name || "knowledge-base";
-  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
-  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
+  let serverCaps, serverInfo, instructions, srvName, tools;
+  try {
+    await client.connect(loggingTransport);
+    serverCaps = client.getServerCapabilities?.() || {};
+    serverInfo = client.getServerVersion?.() || {};
+    instructions = client.getInstructions?.() || "";
+    srvName = serverInfo.name || "knowledge-base";
+    if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
+    if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
 
-  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
-  const { tools } = await client.listTools();
-  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+    if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
+    ({ tools } = await client.listTools());
+    if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+  } catch (e) {
+    pushErrorLog(log, "MCP (knowledge-base): Connect-Fehler", { poolKey, error: e.message, resMode: !!resMode, resRole: resRole || "" });
+    try { client.close(); } catch {}
+    throw e;
+  }
 
   const entry = { client, loggingTransport, lastUsed: Date.now(), tools, instructions };
   kbMcpClientPool.set(poolKey, entry);
@@ -452,21 +466,28 @@ async function getPooledMcpClient(userId, aasUrl, log) {
 
   // Step 1: initialize request
   if (log) log.push({ type: "console", direction: "sent", label: "Client → MCP: initialize", json: { jsonrpc: "2.0", method: "initialize", params: { protocolVersion: "2024-11-05", clientInfo, capabilities: { tools: {} } } } });
-  await client.connect(loggingTransport);
-  // Step 2: initialize response (server capabilities + instructions)
-  const serverCaps = client.getServerCapabilities?.() || {};
-  const serverInfo = client.getServerVersion?.() || {};
-  const instructions = client.getInstructions?.() || "";
-  const srvName = serverInfo.name || "MCP";
-  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
+  let serverCaps, serverInfo, instructions, srvName, tools;
+  try {
+    await client.connect(loggingTransport);
+    // Step 2: initialize response (server capabilities + instructions)
+    serverCaps = client.getServerCapabilities?.() || {};
+    serverInfo = client.getServerVersion?.() || {};
+    instructions = client.getInstructions?.() || "";
+    srvName = serverInfo.name || "MCP";
+    if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: initialize result`, json: { protocolVersion: "2024-11-05", serverInfo, capabilities: serverCaps, instructions: instructions || undefined } });
 
-  // Step 3: initialized notification
-  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
+    // Step 3: initialized notification
+    if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): initialized`, json: { jsonrpc: "2.0", method: "notifications/initialized", params: {} } });
 
-  // Step 4: fetch tools, resources, prompts
-  if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
-  const { tools } = await client.listTools();
-  if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+    // Step 4: fetch tools, resources, prompts
+    if (log) log.push({ type: "console", direction: "sent", label: `Client → MCP (${srvName}): tools/list`, json: { jsonrpc: "2.0", method: "tools/list", params: {} } });
+    ({ tools } = await client.listTools());
+    if (log) log.push({ type: "console", direction: "received", label: `MCP (${srvName}) → Client: tools/list result`, json: { tools } });
+  } catch (e) {
+    pushErrorLog(log, "MCP (aas-repository): Connect-Fehler", { poolKey, aasUrl, error: e.message });
+    try { client.close(); } catch {}
+    throw e;
+  }
 
   let resources = [];
   let prompts = [];
@@ -657,9 +678,11 @@ async function chatGroqWithTools(apiKey, model, chatHistory, allTools, mcpClient
     if (!response.ok) {
       const err = await response.text();
       const status = response.status;
+      console.error("[AAS Chat] Groq error %d:", status, err.slice(0, 300));
+      pushErrorLog(log, `LLM (Groq) → Client: HTTP ${status}`, { status, body: err.slice(0, 1000), model, round });
       if (status === 401) throw new Error("API_KEY_INVALID");
       if (status === 429) throw new Error("RATE_LIMIT");
-      throw new Error(`GROQ_ERROR_${status}: ${err}`);
+      throw new Error(`GROQ_ERROR_${status}: ${err.slice(0, 200)}`);
     }
 
     const data = await response.json();
@@ -705,9 +728,11 @@ async function chatGroqWithTools(apiKey, model, chatHistory, allTools, mcpClient
             if (re.event) latestResilienceEvent = re.event;
           } else {
             resultText = `Fehler: Tool "${fnName}" ist nicht verfügbar.`;
+            pushErrorLog(log, `MCP-Tool nicht verfügbar: ${fnName}`, { tool: fnName, source: toolSource });
           }
         } catch (e) {
           resultText = `Fehler beim Tool-Aufruf: ${e.message}`;
+          pushErrorLog(log, `MCP-Tool fehlgeschlagen: ${fnName}`, { tool: fnName, source: toolSource, error: e.message, args: fnArgs });
         }
 
         const toolResultEntry = { type: "tool_result", tool: fnName, result: resultText.slice(0, 500), source: toolSource };
@@ -802,7 +827,37 @@ function handleGeminiError(status, errText) {
   if (status === 400 && errText.includes("API_KEY_INVALID")) throw new Error("API_KEY_INVALID");
   if (status === 403) throw new Error("API_KEY_INVALID");
   if (status === 429) throw new Error("RATE_LIMIT");
+  if (status === 500 || status === 502 || status === 503 || status === 504) {
+    throw new Error(`GEMINI_TRANSIENT_${status}: ${errText.slice(0, 200)}`);
+  }
   throw new Error(`GEMINI_ERROR_${status}: ${errText.slice(0, 200)}`);
+}
+
+// Schreibt einen Error-Eintrag ins toolLog so, dass er in beiden Console-Tabs
+// (Console + Raw JSON-RPC) sichtbar wird. Wird in allen Fehlerpfaden genutzt.
+function pushErrorLog(log, label, data) {
+  if (!Array.isArray(log)) return;
+  const entry = { type: "console", direction: "error", label, json: data || {} };
+  log.push(entry);
+  log.push({ ...entry, type: "raw_jsonrpc" });
+}
+
+// 5xx-Errors von Gemini sind regelmäßig transient — 1× retry mit kurzer Pause
+// reduziert Flapping ohne den Nutzer mit Wartezeit zu belasten.
+const GEMINI_TRANSIENT_STATUS = new Set([500, 502, 503, 504]);
+async function fetchGeminiWithRetry(url, reqBody) {
+  const init = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody),
+  };
+  let response = await fetch(url, init);
+  if (!response.ok && GEMINI_TRANSIENT_STATUS.has(response.status)) {
+    console.warn("[AAS Chat] Gemini transient error %d — retry after 800ms", response.status);
+    await new Promise((r) => setTimeout(r, 800));
+    response = await fetch(url, init);
+  }
+  return response;
 }
 
 async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClients, log, systemPrompt, userId, continueState) {
@@ -833,16 +888,13 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
     log.push({ type: "console", direction: "sent", label: "Client → LLM (Gemini)", json: reqBody });
     log.push({ type: "raw_jsonrpc", direction: "sent", label: "Client → LLM (Gemini): generateContent", json: reqBody });
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reqBody),
-    });
+    const response = await fetchGeminiWithRetry(url, reqBody);
 
     if (!response.ok) {
       const err = await response.text();
       const status = response.status;
       console.error("[AAS Chat] Gemini error %d:", status, err.slice(0, 300));
+      pushErrorLog(log, `LLM (Gemini) → Client: HTTP ${status}`, { status, body: err.slice(0, 1000), model, round });
       handleGeminiError(status, err);
     }
 
@@ -868,12 +920,10 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
     // Increase maxOutputTokens and retry once to give it more space.
     if (finishReason === "MALFORMED_FUNCTION_CALL" && round === 0) {
       log.push({ type: "llm_retry", reason: "MALFORMED_FUNCTION_CALL" });
+      pushErrorLog(log, "Gemini: MALFORMED_FUNCTION_CALL — Retry läuft", { round });
       const retryBody = { ...reqBody, generationConfig: { ...reqBody.generationConfig, maxOutputTokens: 65536 } };
-      const retry = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(retryBody),
-      });
+      const retry = await fetchGeminiWithRetry(url, retryBody);
+      let retryRecoveredParts = 0;
       if (retry.ok) {
         const retryData = await retry.json();
         const retryUsage = retryData.usageMetadata;
@@ -883,18 +933,16 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
         const retryCandidate = retryData.candidates?.[0];
         if (retryCandidate?.content?.parts?.length > 0) {
           parts = retryCandidate.content.parts;
+          retryRecoveredParts = parts.length;
         }
       }
+      pushErrorLog(log, `Gemini: MALFORMED-Retry ${retryRecoveredParts > 0 ? "erfolgreich" : "fehlgeschlagen"}`, { round, retryStatus: retry.status, recoveredParts: retryRecoveredParts });
     }
 
     // Gemini 2.5 Flash can return empty responses — retry once
     if (parts.length === 0 && round === 0 && finishReason !== "MALFORMED_FUNCTION_CALL") {
       // Gemini empty parts — retry once
-      const retry = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBody),
-      });
+      const retry = await fetchGeminiWithRetry(url, reqBody);
       if (retry.ok) {
         const retryData = await retry.json();
         const retryUsage = retryData.usageMetadata;
@@ -938,9 +986,11 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
             if (re.event) latestResilienceEvent = re.event;
           } else {
             resultText = `Fehler: Tool "${name}" ist nicht verfügbar.`;
+            pushErrorLog(log, `MCP-Tool nicht verfügbar: ${name}`, { tool: name, source: toolSource });
           }
         } catch (e) {
           resultText = `Fehler beim Tool-Aufruf: ${e.message}`;
+          pushErrorLog(log, `MCP-Tool fehlgeschlagen: ${name}`, { tool: name, source: toolSource, error: e.message, args: args || {} });
         }
 
         const toolResultEntry = { type: "tool_result", tool: name, result: resultText.slice(0, 500), source: toolSource };
@@ -961,6 +1011,7 @@ async function chatGeminiWithTools(apiKey, model, chatHistory, allTools, mcpClie
     if (!reply) {
       console.warn("[AAS Chat] Gemini empty reply. finishReason:", finishReason, "parts:", JSON.stringify(parts).slice(0, 200));
       log.push({ type: "llm_response", text: "(empty)", finishReason });
+      pushErrorLog(log, "Gemini: leere Antwort — Fallback aktiv", { finishReason, blockReason: data.promptFeedback?.blockReason || null, round });
       // If a tool was successfully called, use its result as fallback reply
       const lastToolResult = [...log].reverse().find(e => e.type === "tool_result" && e.result && !e.result.startsWith("Fehler"));
       if (lastToolResult) {
@@ -1245,7 +1296,22 @@ function mountRoutes(router) {
             continuationAvailable: !!result.continuationState || undefined,
           });
         } catch (llmErr) {
-          return res.status(502).json({ error: llmErr.message || "LLM_ERROR" });
+          const errMsg = llmErr.message || "LLM_ERROR";
+          const colonIdx = errMsg.indexOf(":");
+          const code = colonIdx > 0 ? errMsg.slice(0, colonIdx) : errMsg;
+          const detail = colonIdx > 0 ? errMsg.slice(colonIdx + 1).trim() : "";
+          console.error("[AAS Chat] LLM error (continuation)", {
+            errMsg: errMsg.slice(0, 500),
+            stack: llmErr.stack?.split("\n").slice(0, 4).join(" | "),
+            provider: settings.provider,
+            model: settings.model,
+            enabledMcps: enabledMcpsCont,
+            resilienceMode: !!conv?.resilience_mode,
+            hasConnector: !!conv?.active_connector_id,
+            toolLogTail: toolLog.slice(-5),
+          });
+          pushErrorLog(toolLog, `LLM-Fehler (Continuation): ${code}`, { code, detail: detail.slice(0, 300), errMsg: errMsg.slice(0, 500) });
+          return res.status(502).json({ error: code, detail: detail.slice(0, 300), toolLog });
         }
         // Note: no finally close — pooled clients are reused
       }
@@ -1477,8 +1543,23 @@ function mountRoutes(router) {
         }
       } catch (llmErr) {
         const errMsg = llmErr.message || "LLM_ERROR";
-        console.error("[AAS Chat] LLM error:", errMsg.slice(0, 200));
-        return res.status(502).json({ error: errMsg });
+        const colonIdx = errMsg.indexOf(":");
+        const code = colonIdx > 0 ? errMsg.slice(0, colonIdx) : errMsg;
+        const detail = colonIdx > 0 ? errMsg.slice(colonIdx + 1).trim() : "";
+        console.error("[AAS Chat] LLM error", {
+          errMsg: errMsg.slice(0, 500),
+          stack: llmErr.stack?.split("\n").slice(0, 4).join(" | "),
+          provider: settings.provider,
+          model: settings.model,
+          historyLength: history.length,
+          toolCount: typeof allTools !== "undefined" ? allTools.length : 0,
+          enabledMcps,
+          resilienceMode: !!conv?.resilience_mode,
+          hasConnector: !!conv?.active_connector_id,
+          toolLogTail: toolLog.slice(-5),
+        });
+        pushErrorLog(toolLog, `LLM-Fehler: ${code}`, { code, detail: detail.slice(0, 300), errMsg: errMsg.slice(0, 500) });
+        return res.status(502).json({ error: code, detail: detail.slice(0, 300), toolLog });
       }
       // Note: no finally close — pooled clients are reused
 
@@ -1498,8 +1579,9 @@ function mountRoutes(router) {
         resilienceEvent: resilienceEvent || undefined,
         continuationAvailable: continuationStore.has(req.user.id) || undefined,
       });
-    } catch {
-      res.status(500).json({ error: "SEND_MESSAGE_FAILED" });
+    } catch (outerErr) {
+      console.error("[AAS Chat] send failed (outer)", outerErr);
+      res.status(500).json({ error: "SEND_MESSAGE_FAILED", detail: outerErr?.message?.slice(0, 300) || "", toolLog: [] });
     }
   });
 
